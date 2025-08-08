@@ -1,0 +1,25 @@
+{
+  "name": "geno-1",
+  "version": "1.0.0",
+  "description": "- Native app: `cargo run -p app-native` - Web (WASM): uses `wasm-pack` to build and a static `index.html` to run (to be added next)",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rgilks/geno-1.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/rgilks/geno-1/issues"
+  },
+  "homepage": "https://github.com/rgilks/geno-1#readme",
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "wasm-pack": "^0.13.1"
+  }
+}

@@ -1,0 +1,16 @@
+[package]
+name = "app-native"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+anyhow = { workspace = true }
+log = { workspace = true }
+wgpu = { workspace = true }
+winit = { workspace = true }
+glam = { workspace = true }
+bytemuck = { workspace = true }
+env_logger = "0.11"
+pollster = "0.3"
+app-core = { path = "../app-core" }

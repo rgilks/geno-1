@@ -1,0 +1,23 @@
+[package]
+name = "app-core"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+log = { workspace = true }
+rand = { workspace = true }
+smallvec = { workspace = true }
+fnv = { workspace = true }
+
+# math and time
+glam = { workspace = true }
+instant = { workspace = true }
+
+# shared (no wasm-specific here)
+bytemuck = { workspace = true }
+
+[features]
+default = []

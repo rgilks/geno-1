@@ -1,0 +1,59 @@
+[workspace]
+members = ["crates/app-core", "crates/app-web", "crates/app-native"]
+resolver = "2"
+# Only build native by default so `cargo build` works without wasm toolchain
+default-members = ["crates/app-native"]
+
+[workspace.package]
+authors = ["Robert Gilks"]
+edition = "2021"
+license = "MIT"
+name = "geno-1"
+version = "0.1.0"
+
+[workspace.dependencies]
+anyhow = "1.0"
+thiserror = "1.0"
+log = "0.4"
+console_log = { version = "1.0", features = ["color"] }
+console_error_panic_hook = "0.1"
+wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+wasm-bindgen-futures = "0.4"
+js-sys = "0.3"
+web-sys = { version = "0.3", features = [
+  "Window",
+  "Document",
+  "HtmlCanvasElement",
+  "Element",
+  "EventTarget",
+  "MouseEvent",
+  "KeyboardEvent",
+  "CanvasRenderingContext2d",
+  "AudioContext",
+  "AudioDestinationNode",
+  "AudioListener",
+  "OscillatorNode",
+  "OscillatorType",
+  "GainNode",
+  "AudioNode",
+  "AudioParam",
+  "PannerNode",
+  "PanningModelType",
+  "DistanceModelType",
+] }
+rand = "0.8"
+smallvec = "1.13"
+fnv = "1.0"
+
+glam = { version = "0.27", features = ["bytemuck"] }
+bytemuck = { version = "1.16", features = ["derive"] }
+instant = "0.1"
+
+wgpu = { version = "0.19" }
+winit = { version = "0.29" }
+
+
+[profile.release]
+opt-level = "z"
+codegen-units = 1
+lto = true

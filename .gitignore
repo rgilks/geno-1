@@ -1,0 +1,24 @@
+# Rust
+/target
+**/target
+
+# wasm-pack output
+/pkg
+crates/**/pkg
+wasm-pack.log
+
+# Node
+/node_modules
+**/node_modules
+npm-debug.log*
+yarn-error.log
+
+# Build outputs
+/dist
+crates/**/dist
+
+# OS
+.DS_Store
+
+# Logs
+*.log
