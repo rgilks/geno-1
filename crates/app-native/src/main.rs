@@ -400,23 +400,21 @@ fn main() {
                 event: WindowEvent::CloseRequested,
                 ..
             } => elwt.exit(),
-            Event::AboutToWait => {
-                match state.render() {
-                    Ok(_) => {
-                        state.window.request_redraw();
-                        if let Some(ref mut n) = frames_left {
-                            if *n == 0 {
-                                elwt.exit();
-                            } else {
-                                *n -= 1;
-                            }
+            Event::AboutToWait => match state.render() {
+                Ok(_) => {
+                    state.window.request_redraw();
+                    if let Some(ref mut n) = frames_left {
+                        if *n == 0 {
+                            elwt.exit();
+                        } else {
+                            *n -= 1;
                         }
                     }
-                    Err(wgpu::SurfaceError::Lost) => state.resize(state.window.inner_size()),
-                    Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
-                    Err(_) => {}
                 }
-            }
+                Err(wgpu::SurfaceError::Lost) => state.resize(state.window.inner_size()),
+                Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
+                Err(_) => {}
+            },
             _ => {}
         })
         .unwrap();

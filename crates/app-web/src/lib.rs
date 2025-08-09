@@ -254,6 +254,8 @@ async fn init() -> anyhow::Result<()> {
                     let paused = Rc::new(RefCell::new(false));
                     // Master mute state for all voices (start muted)
                     let master_muted = Rc::new(RefCell::new(true));
+                    // Camera orbit toggle (enabled by default)
+                    let orbit_enabled = Rc::new(RefCell::new(true));
                     let voice_gains = Rc::new(voice_gains);
 
                     // ---------------- Interaction state ----------------
@@ -425,6 +427,7 @@ async fn init() -> anyhow::Result<()> {
                         let engine_k = engine.clone();
                         let paused_k = paused.clone();
                         let master_muted_k = master_muted.clone();
+                        let orbit_enabled_k = orbit_enabled.clone();
                         let voice_gains_k = voice_gains.clone();
                         let window = web::window().unwrap();
                         let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
@@ -566,6 +569,38 @@ async fn init() -> anyhow::Result<()> {
                                         }
                                     }
                                 }
+                                // Orbit toggle
+                                "o" | "O" => {
+                                    let mut ob = orbit_enabled_k.borrow_mut();
+                                    *ob = !*ob;
+                                    log::info!("[keys] orbit={}", *ob);
+                                    // If hint visible, refresh its content
+                                    if let Some(win) = web::window() {
+                                        if let Some(doc) = win.document() {
+                                            if let Ok(Some(el)) = doc.query_selector(".hint") {
+                                                if el.get_attribute("data-visible").as_deref()
+                                                    == Some("1")
+                                                {
+                                                    let paused_now = *paused_k.borrow();
+                                                    let muted_now = *master_muted_k.borrow();
+                                                    let bpm_now = engine_k.borrow().params.bpm;
+                                                    if let Some(div) =
+                                                        el.dyn_ref::<web::HtmlElement>()
+                                                    {
+                                                        let content = format!(
+                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
+                                                            bpm_now,
+                                                            if paused_now { "yes" } else { "no" },
+                                                            if muted_now { "yes" } else { "no" },
+                                                            if *ob { "yes" } else { "no" }
+                                                        );
+                                                        div.set_inner_html(&content);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 _ => {}
                             }
                         })
@@ -669,6 +704,9 @@ async fn init() -> anyhow::Result<()> {
                     let hover_tick = hover_index.clone();
                     let canvas_for_tick = canvas_for_click_inner.clone();
                     let voice_gains_tick = voice_gains.clone();
+                    // Optional slow camera orbit
+                    let mut orbit_t: f32 = 0.0;
+                    let orbit_tick = orbit_enabled.clone();
                     let tick: Rc<RefCell<Option<Closure<dyn FnMut()>>>> =
                         Rc::new(RefCell::new(None));
                     let tick_clone = tick.clone();
@@ -763,6 +801,16 @@ async fn init() -> anyhow::Result<()> {
                             ];
 
                             if let Some(g) = &mut gpu {
+                                // Optional slow orbit
+                                if *orbit_tick.borrow() {
+                                    orbit_t += dt_sec * 0.1; // rad/s
+                                    let r = 6.0f32;
+                                    let eye =
+                                        Vec3::new(r * orbit_t.cos(), 0.0, r * orbit_t.sin());
+                                    g.set_camera(eye, Vec3::ZERO);
+                                } else {
+                                    g.set_camera(Vec3::new(0.0, 0.0, CAMERA_Z), Vec3::ZERO);
+                                }
                                 // Keep WebGPU surface sized to canvas backing size
                                 let w = canvas_for_tick.width();
                                 let h = canvas_for_tick.height();
@@ -907,6 +955,8 @@ struct GpuState<'a> {
     width: u32,
     height: u32,
     clear_color: wgpu::Color,
+    cam_eye: Vec3,
+    cam_target: Vec3,
 }
 
 impl<'a> GpuState<'a> {
@@ -1097,6 +1147,8 @@ impl<'a> GpuState<'a> {
                 b: 0.08,
                 a: 1.0,
             },
+            cam_eye: Vec3::new(0.0, 0.0, CAMERA_Z),
+            cam_target: Vec3::ZERO,
         })
     }
     fn set_ambient_clear(&mut self, energy01: f32) {
@@ -1109,6 +1161,11 @@ impl<'a> GpuState<'a> {
             b: (0.08 + boost * 0.5) as f64,
             a: 1.0,
         };
+    }
+
+    fn set_camera(&mut self, eye: Vec3, target: Vec3) {
+        self.cam_eye = eye;
+        self.cam_target = target;
     }
 
     fn resize_if_needed(&mut self, width: u32, height: u32) {
@@ -1127,8 +1184,8 @@ impl<'a> GpuState<'a> {
     fn view_proj(&self) -> [[f32; 4]; 4] {
         let aspect = self.width as f32 / self.height as f32;
         let proj = Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect, 0.1, 100.0);
-        // Camera a bit back to see three markers comfortably
-        let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 6.0), Vec3::ZERO, Vec3::Y);
+        // Camera configurable; defaults set in constructor
+        let view = Mat4::look_at_rh(self.cam_eye, self.cam_target, Vec3::Y);
         (proj * view).to_cols_array_2d()
     }
 
