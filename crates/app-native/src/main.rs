@@ -5,7 +5,7 @@ use wgpu::util::DeviceExt;
 use winit::{event::*, event_loop::EventLoop, window::WindowBuilder};
 
 use app_core::{
-    EngineParams, MusicEngine, VoiceConfig, Waveform, C_MAJOR_PENTATONIC, BASE_SCALE,
+    EngineParams, MusicEngine, VoiceConfig, Waveform, BASE_SCALE, C_MAJOR_PENTATONIC,
     DEFAULT_VOICE_COLORS, DEFAULT_VOICE_POSITIONS, SPREAD,
 };
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
@@ -407,6 +407,14 @@ fn main() {
 
 // ---------------- Native audio (cpal) ----------------
 
+#[derive(Clone, Copy)]
+enum WaveKind {
+    Sine,
+    Square,
+    Saw,
+    Triangle,
+}
+
 #[derive(Clone)]
 struct ActiveOscillator {
     amplitude: f32,
@@ -416,6 +424,9 @@ struct ActiveOscillator {
     samples_emitted: u32,
     attack_samples: u32,
     release_samples: u32,
+    wave: WaveKind,
+    left_gain: f32,
+    right_gain: f32,
 }
 
 struct AudioState {
@@ -485,7 +496,19 @@ fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>) -> Option<cpal::Stream> 
                             let total = (ev.duration_sec * sr) as u32;
                             let attack = (0.02 * sr) as u32;
                             let release = (0.02 * sr) as u32;
-                            // Map to sine for now; extend to waveform later
+                            // Determine waveform for this voice
+                            let wave = match engine.configs[ev.voice_index].waveform {
+                                Waveform::Sine => WaveKind::Sine,
+                                Waveform::Square => WaveKind::Square,
+                                Waveform::Saw => WaveKind::Saw,
+                                Waveform::Triangle => WaveKind::Triangle,
+                            };
+                            // Stereo pan from voice X position (engine-space)
+                            let pos_x = engine.voices[ev.voice_index].position.x;
+                            let pan = (pos_x / 1.5).clamp(-1.0, 1.0); // -1 left .. 1 right
+                            let angle = (pan + 1.0) * std::f32::consts::FRAC_PI_4; // 0..pi/2
+                            let left_gain = angle.cos();
+                            let right_gain = angle.sin();
                             guard.oscillators.push(ActiveOscillator {
                                 amplitude: ev.velocity.min(1.0),
                                 phase: 0.0,
@@ -494,6 +517,9 @@ fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>) -> Option<cpal::Stream> 
                                 samples_emitted: 0,
                                 attack_samples: attack.min(total),
                                 release_samples: release.min(total),
+                                wave,
+                                left_gain,
+                                right_gain,
                             });
                         }
                         drop(guard);
@@ -544,8 +570,29 @@ fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>) -> Option<cpal::Stream> 
     Some(stream)
 }
 
-fn mix_sample(oscillators: &mut Vec<ActiveOscillator>) -> f32 {
-    let mut s = 0.0f32;
+fn render_wave_sample(phase: f32, wave: WaveKind) -> f32 {
+    match wave {
+        WaveKind::Sine => phase.sin(),
+        WaveKind::Square => if phase.sin() >= 0.0 { 1.0 } else { -1.0 },
+        WaveKind::Saw => {
+            // Map phase 0..2PI to -1..1
+            let t = phase / (2.0 * std::f32::consts::PI);
+            (2.0 * (t - t.floor())) * 2.0 - 1.0
+        }
+        WaveKind::Triangle => {
+            // Triangle from saw
+            let saw = {
+                let t = phase / (2.0 * std::f32::consts::PI);
+                (2.0 * (t - t.floor())) * 2.0 - 1.0
+            };
+            (2.0 / std::f32::consts::PI) * (saw.asin())
+        }
+    }
+}
+
+fn mix_sample_stereo(oscillators: &mut Vec<ActiveOscillator>) -> (f32, f32) {
+    let mut left = 0.0f32;
+    let mut right = 0.0f32;
     let mut i = 0usize;
     while i < oscillators.len() {
         let osc = &mut oscillators[i];
@@ -560,8 +607,10 @@ fn mix_sample(oscillators: &mut Vec<ActiveOscillator>) -> f32 {
             1.0
         };
         let amp = osc.amplitude * a;
-        let sample = osc.phase.sin() * amp;
-        s += sample;
+        let raw = render_wave_sample(osc.phase, osc.wave) * amp;
+        // equal-power stereo distribution
+        left += raw * osc.left_gain;
+        right += raw * osc.right_gain;
         osc.phase += osc.phase_inc;
         if osc.phase > 2.0 * std::f32::consts::PI {
             osc.phase -= 2.0 * std::f32::consts::PI;
@@ -573,7 +622,7 @@ fn mix_sample(oscillators: &mut Vec<ActiveOscillator>) -> f32 {
         }
         i += 1;
     }
-    s.tanh()
+    (left.tanh(), right.tanh())
 }
 
 fn build_stream_f32(
@@ -590,12 +639,16 @@ fn build_stream_f32(
             let oscillators = &mut guard.oscillators;
             let mut frame = 0usize;
             while frame < data.len() {
-                let s = mix_sample(oscillators);
-                for ch in 0..channels {
-                    let idx = frame + ch;
-                    if idx < data.len() {
-                        data[idx] = s;
+                let (l, r) = mix_sample_stereo(oscillators);
+                if channels >= 2 {
+                    if frame + 0 < data.len() {
+                        data[frame + 0] = l;
                     }
+                    if frame + 1 < data.len() {
+                        data[frame + 1] = r;
+                    }
+                } else if frame < data.len() {
+                    data[frame] = 0.5 * (l + r);
                 }
                 frame += channels;
             }
@@ -619,13 +672,18 @@ fn build_stream_i16(
             let oscillators = &mut guard.oscillators;
             let mut frame = 0usize;
             while frame < data.len() {
-                let s = mix_sample(oscillators);
-                let v = (s * i16::MAX as f32) as i16;
-                for ch in 0..channels {
-                    let idx = frame + ch;
-                    if idx < data.len() {
-                        data[idx] = v;
+                let (l, r) = mix_sample_stereo(oscillators);
+                let vl = (l * i16::MAX as f32) as i16;
+                let vr = (r * i16::MAX as f32) as i16;
+                if channels >= 2 {
+                    if frame + 0 < data.len() {
+                        data[frame + 0] = vl;
                     }
+                    if frame + 1 < data.len() {
+                        data[frame + 1] = vr;
+                    }
+                } else if frame < data.len() {
+                    data[frame] = ((vl as i32 + vr as i32) / 2) as i16;
                 }
                 frame += channels;
             }
@@ -649,13 +707,19 @@ fn build_stream_u16(
             let oscillators = &mut guard.oscillators;
             let mut frame = 0usize;
             while frame < data.len() {
-                let s = mix_sample(oscillators);
-                let v = ((s * 0.5 + 0.5).clamp(0.0, 1.0) * u16::MAX as f32) as u16;
-                for ch in 0..channels {
-                    let idx = frame + ch;
-                    if idx < data.len() {
-                        data[idx] = v;
+                let (l, r) = mix_sample_stereo(oscillators);
+                let vl = (((l * 0.5 + 0.5).clamp(0.0, 1.0)) * u16::MAX as f32) as u16;
+                let vr = (((r * 0.5 + 0.5).clamp(0.0, 1.0)) * u16::MAX as f32) as u16;
+                if channels >= 2 {
+                    if frame + 0 < data.len() {
+                        data[frame + 0] = vl;
                     }
+                    if frame + 1 < data.len() {
+                        data[frame + 1] = vr;
+                    }
+                } else if frame < data.len() {
+                    let mix = ((vl as u32 + vr as u32) / 2) as u16;
+                    data[frame] = mix;
                 }
                 frame += channels;
             }
