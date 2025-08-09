@@ -5,8 +5,8 @@ use wgpu::util::DeviceExt;
 use winit::{event::*, event_loop::EventLoop, window::WindowBuilder};
 
 use app_core::{
-    EngineParams, MusicEngine, VoiceConfig, Waveform, BASE_SCALE, C_MAJOR_PENTATONIC,
-    DEFAULT_VOICE_COLORS, DEFAULT_VOICE_POSITIONS, SPREAD,
+    z_offset_vec3, EngineParams, MusicEngine, VoiceConfig, Waveform, BASE_SCALE,
+    C_MAJOR_PENTATONIC, DEFAULT_VOICE_COLORS, DEFAULT_VOICE_POSITIONS, PICK_SPHERE_RADIUS, SPREAD,
 };
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use glam::{Mat4, Vec3, Vec4};
@@ -371,8 +371,35 @@ fn main() {
         pulses: [0.0, 0.0, 0.0],
     }));
 
-    // Start native audio output (sine synth driven by MusicEngine)
-    let _audio_stream = start_audio_engine(Arc::clone(&shared_state));
+    // Build shared music engine (used by audio thread and input)
+    let voice_configs = vec![
+        VoiceConfig {
+            color_rgb: DEFAULT_VOICE_COLORS[0],
+            waveform: Waveform::Sine,
+            base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[0]),
+        },
+        VoiceConfig {
+            color_rgb: DEFAULT_VOICE_COLORS[1],
+            waveform: Waveform::Saw,
+            base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[1]),
+        },
+        VoiceConfig {
+            color_rgb: DEFAULT_VOICE_COLORS[2],
+            waveform: Waveform::Triangle,
+            base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[2]),
+        },
+    ];
+    let engine = Arc::new(Mutex::new(MusicEngine::new(
+        voice_configs,
+        EngineParams {
+            bpm: 110.0,
+            scale: C_MAJOR_PENTATONIC,
+        },
+        42,
+    )));
+
+    // Start native audio output (synth driven by MusicEngine)
+    let _audio_stream = start_audio_engine(Arc::clone(&shared_state), Arc::clone(&engine));
 
     let event_loop = EventLoop::new().expect("event loop");
     let window = WindowBuilder::new()
@@ -390,6 +417,9 @@ fn main() {
         None
     };
 
+    // Hover state for simple parity (highlight only)
+    let mut hover: Option<usize> = None;
+
     event_loop
         .run(move |event, elwt| match event {
             Event::WindowEvent {
@@ -400,6 +430,70 @@ fn main() {
                 event: WindowEvent::CloseRequested,
                 ..
             } => elwt.exit(),
+            Event::WindowEvent {
+                event: WindowEvent::CursorMoved { position, .. },
+                ..
+            } => {
+                let sz = state.window.inner_size();
+                let (w, h) = (sz.width.max(1) as f32, sz.height.max(1) as f32);
+                let x = position.x as f32;
+                let y = position.y as f32;
+                // Build pick ray
+                let ndc_x = (2.0 * x / w) - 1.0;
+                let ndc_y = 1.0 - (2.0 * y / h);
+                let aspect = w / h;
+                let proj = Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect, 0.1, 100.0);
+                let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 6.0), Vec3::ZERO, Vec3::Y);
+                let inv = (proj * view).inverse();
+                let p_near = inv * Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
+                let p_far = inv * Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
+                let _p0: Vec3 = p_near.truncate() / p_near.w;
+                let p1: Vec3 = p_far.truncate() / p_far.w;
+                let ro = Vec3::new(0.0, 0.0, 6.0);
+                let rd = (p1 - ro).normalize();
+                // Intersect against shared positions
+                let z_off = z_offset_vec3();
+                let spread = SPREAD;
+                let mut best: Option<(usize, f32)> = None;
+                {
+                    let vis = state.shared.lock().unwrap();
+                    for (i, pos) in vis.positions.iter().enumerate() {
+                        let center_world = (*pos) * spread + z_off;
+                        // ray-sphere
+                        let oc = ro - center_world;
+                        let b = oc.dot(rd);
+                        let c = oc.dot(oc) - PICK_SPHERE_RADIUS * PICK_SPHERE_RADIUS;
+                        let disc = b * b - c;
+                        if disc < 0.0 {
+                            continue;
+                        }
+                        let t = -b - disc.sqrt();
+                        if t >= 0.0 {
+                            match best {
+                                Some((_, bt)) if t >= bt => {}
+                                _ => best = Some((i, t)),
+                            }
+                        }
+                    }
+                }
+                let new_hover = best.map(|(i, _)| i);
+                if new_hover != hover {
+                    // update colors to highlight hovered voice
+                    let mut vis = state.shared.lock().unwrap();
+                    if let Some(prev) = hover {
+                        // restore base color
+                        let base = DEFAULT_VOICE_COLORS[prev];
+                        vis.colors[prev] = Vec4::new(base[0], base[1], base[2], 1.0);
+                    }
+                    if let Some(i) = new_hover {
+                        // brighten
+                        vis.colors[i].x = (vis.colors[i].x * 1.4).min(1.0);
+                        vis.colors[i].y = (vis.colors[i].y * 1.4).min(1.0);
+                        vis.colors[i].z = (vis.colors[i].z * 1.4).min(1.0);
+                    }
+                    hover = new_hover;
+                }
+            }
             Event::AboutToWait => match state.render() {
                 Ok(_) => {
                     state.window.request_redraw();
@@ -449,7 +543,7 @@ struct AudioState {
     oscillators: Vec<ActiveOscillator>,
 }
 
-fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>) -> Option<cpal::Stream> {
+fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>, shared_engine: Arc<Mutex<MusicEngine>>) -> Option<cpal::Stream> {
     let host = cpal::default_host();
     let device = host.default_output_device()?;
     let config = device.default_output_config().ok()?;
@@ -468,31 +562,14 @@ fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>) -> Option<cpal::Stream> 
         thread::Builder::new()
             .name("music-scheduler".into())
             .spawn(move || {
-                let voice_configs = vec![
-                    VoiceConfig {
-                        color_rgb: DEFAULT_VOICE_COLORS[0],
-                        waveform: Waveform::Sine,
-                        base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[0]),
-                    },
-                    VoiceConfig {
-                        color_rgb: DEFAULT_VOICE_COLORS[1],
-                        waveform: Waveform::Saw,
-                        base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[1]),
-                    },
-                    VoiceConfig {
-                        color_rgb: DEFAULT_VOICE_COLORS[2],
-                        waveform: Waveform::Triangle,
-                        base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[2]),
-                    },
-                ];
-                let mut engine = MusicEngine::new(
-                    voice_configs,
-                    EngineParams {
-                        bpm: 110.0,
-                        scale: C_MAJOR_PENTATONIC,
-                    },
-                    42,
-                );
+                let shared = shared_engine.clone();
+                let mut engine = {
+                    let guard = shared.lock().unwrap();
+                    // Rebuild a local engine snapshot from shared configs/params/state
+                    let mut e = MusicEngine::new(guard.configs.clone(), guard.params.clone(), 42);
+                    e.voices = guard.voices.clone();
+                    e
+                };
                 let start_instant = Instant::now();
                 let mut last = start_instant;
                 let mut events = Vec::new();
@@ -503,6 +580,11 @@ fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>) -> Option<cpal::Stream> 
                     let now_sec = start_instant.elapsed().as_secs_f64();
                     events.clear();
                     engine.tick(dt, now_sec, &mut events);
+                    // Apply any changes back to shared engine voices (positions/mute/solo)
+                    {
+                        let mut guard = shared.lock().unwrap();
+                        guard.voices = engine.voices.clone();
+                    }
 
                     if !events.is_empty() {
                         let mut guard = state_clone.lock().unwrap();

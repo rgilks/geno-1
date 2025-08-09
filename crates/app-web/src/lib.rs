@@ -63,7 +63,7 @@ async fn init() -> anyhow::Result<()> {
                         if show {
                             // Default content (before full engine/UI attach)
                             div.set_inner_html(
-                                "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute\nBPM: 110 • Paused: no • Muted: yes",
+                                "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: 110 • Paused: no • Muted: yes • Orbit: yes",
                             );
                             let _ = el.set_attribute("style", "");
                         } else {
@@ -456,14 +456,16 @@ async fn init() -> anyhow::Result<()> {
                                                 {
                                                     let bpm_now = engine_k.borrow().params.bpm;
                                                     let muted_now = *master_muted_k.borrow();
+                                                    let orbit_now = *orbit_enabled_k.borrow();
                                                     if let Some(div) =
                                                         el.dyn_ref::<web::HtmlElement>()
                                                     {
                                                         let content = format!(
-                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute\nBPM: {:.0} • Paused: {} • Muted: {}",
+                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
                                                             bpm_now,
                                                             if *p { "yes" } else { "no" },
-                                                            if muted_now { "yes" } else { "no" }
+                                                            if muted_now { "yes" } else { "no" },
+                                                            if orbit_now { "yes" } else { "no" }
                                                     );
                                                         div.set_inner_html(&content);
                                                     }
@@ -488,14 +490,16 @@ async fn init() -> anyhow::Result<()> {
                                                 {
                                                     let paused_now = *paused_k.borrow();
                                                     let muted_now = *master_muted_k.borrow();
+                                                    let orbit_now = *orbit_enabled_k.borrow();
                                                     if let Some(div) =
                                                         el.dyn_ref::<web::HtmlElement>()
                                                     {
                                                         let content = format!(
-                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute\nBPM: {:.0} • Paused: {} • Muted: {}",
+                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
                                                             new_bpm,
                                                             if paused_now { "yes" } else { "no" },
-                                                            if muted_now { "yes" } else { "no" }
+                                                            if muted_now { "yes" } else { "no" },
+                                                            if orbit_now { "yes" } else { "no" }
                                                     );
                                                         div.set_inner_html(&content);
                                                     }
@@ -519,14 +523,16 @@ async fn init() -> anyhow::Result<()> {
                                                 {
                                                     let paused_now = *paused_k.borrow();
                                                     let muted_now = *master_muted_k.borrow();
+                                                    let orbit_now = *orbit_enabled_k.borrow();
                                                     if let Some(div) =
                                                         el.dyn_ref::<web::HtmlElement>()
                                                     {
                                                         let content = format!(
-                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute\nBPM: {:.0} • Paused: {} • Muted: {}",
+                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
                                                             new_bpm,
                                                             if paused_now { "yes" } else { "no" },
-                                                            if muted_now { "yes" } else { "no" }
+                                                            if muted_now { "yes" } else { "no" },
+                                                            if orbit_now { "yes" } else { "no" }
                                                     );
                                                         div.set_inner_html(&content);
                                                     }
@@ -553,14 +559,16 @@ async fn init() -> anyhow::Result<()> {
                                                 {
                                                     let paused_now = *paused_k.borrow();
                                                     let bpm_now = engine_k.borrow().params.bpm;
+                                                    let orbit_now = *orbit_enabled_k.borrow();
                                                     if let Some(div) =
                                                         el.dyn_ref::<web::HtmlElement>()
                                                     {
                                                         let content = format!(
-                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute\nBPM: {:.0} • Paused: {} • Muted: {}",
+                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
                                                             bpm_now,
                                                             if paused_now { "yes" } else { "no" },
-                                                            if *muted { "yes" } else { "no" }
+                                                            if *muted { "yes" } else { "no" },
+                                                            if orbit_now { "yes" } else { "no" }
                                                         );
                                                         div.set_inner_html(&content);
                                                     }
@@ -805,8 +813,7 @@ async fn init() -> anyhow::Result<()> {
                                 if *orbit_tick.borrow() {
                                     orbit_t += dt_sec * 0.1; // rad/s
                                     let r = 6.0f32;
-                                    let eye =
-                                        Vec3::new(r * orbit_t.cos(), 0.0, r * orbit_t.sin());
+                                    let eye = Vec3::new(r * orbit_t.cos(), 0.0, r * orbit_t.sin());
                                     g.set_camera(eye, Vec3::ZERO);
                                 } else {
                                     g.set_camera(Vec3::new(0.0, 0.0, CAMERA_Z), Vec3::ZERO);
