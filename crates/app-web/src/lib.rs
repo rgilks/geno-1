@@ -416,7 +416,7 @@ async fn init() -> anyhow::Result<()> {
                         closure.forget();
                     }
 
-                    // Keyboard controls: H toggle help, R reseed all, Space pause, +/- bpm adjust
+                    // Keyboard controls: R reseed all, Space pause, +/- bpm adjust
                     {
                         let engine_k = engine.clone();
                         let paused_k = paused.clone();
@@ -426,43 +426,6 @@ async fn init() -> anyhow::Result<()> {
                         let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
                             let key = ev.key();
                             match key.as_str() {
-                                // Toggle help overlay visibility
-                                "h" | "H" => {
-                                    if let Some(win) = web::window() {
-                                        if let Some(doc) = win.document() {
-                                            if let Ok(Some(el)) = doc.query_selector(".hint") {
-                                                let cur = el.get_attribute("data-visible");
-                                                let new_visible = match cur.as_deref() {
-                                                    Some("1") => "0",
-                                                    _ => "1",
-                                                };
-                                                let _ =
-                                                    el.set_attribute("data-visible", new_visible);
-                                                if new_visible == "1" {
-                                                    // Compose dynamic hint content with BPM and paused state
-                                                    let paused_now = *paused_k.borrow();
-                                                    let muted_now = *master_muted_k.borrow();
-                                                    let bpm_now = engine_k.borrow().params.bpm;
-                                                    if let Some(div) =
-                                                        el.dyn_ref::<web::HtmlElement>()
-                                                    {
-                                                        let content = format!(
-                                                        "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute\nBPM: {:.0} • Paused: {} • Muted: {}",
-                                                        bpm_now,
-                                                        if paused_now { "yes" } else { "no" },
-                                                        if muted_now { "yes" } else { "no" }
-                                                    );
-                                                        div.set_inner_html(&content);
-                                                    }
-                                                    let _ = el.set_attribute("style", "");
-                                                } else {
-                                                    let _ =
-                                                        el.set_attribute("style", "display:none");
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
                                 // Reseed all voices
                                 "r" | "R" => {
                                     let voice_len = engine_k.borrow().voices.len();
