@@ -42,7 +42,7 @@ impl Default for EngineParams {
     fn default() -> Self {
         Self {
             bpm: 110.0,
-            scale: &C_MAJOR_PENTATONIC,
+            scale: C_MAJOR_PENTATONIC,
         }
     }
 }

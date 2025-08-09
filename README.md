@@ -27,6 +27,12 @@
 - Open: visit `http://localhost:8080`
 - Dev shortcut: `npm run dev:web` then `npm run open:web`
 
+### Pre-commit Check
+
+- Run all checks and tests locally: `npm run check`
+  - Rust: `cargo fmt --check`, `cargo clippy` (deny warnings), `cargo build -p app-native`
+  - Web: build, serve, and execute the headless browser test
+
 ### Deploy (Cloudflare Workers)
 
 This repo is configured to deploy via Cloudflare Workers; headers (COOP/COEP/CORP) are set in `worker.js`.

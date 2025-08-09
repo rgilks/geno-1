@@ -15,7 +15,9 @@ impl Camera {
     pub fn projection_matrix(&self) -> Mat4 {
         Mat4::perspective_rh(self.fovy_radians, self.aspect, self.znear, self.zfar)
     }
-    pub fn view_matrix(&self) -> Mat4 { Mat4::look_at_rh(self.eye, self.target, self.up) }
+    pub fn view_matrix(&self) -> Mat4 {
+        Mat4::look_at_rh(self.eye, self.target, self.up)
+    }
 }
 
 #[derive(Clone, Debug, Default)]

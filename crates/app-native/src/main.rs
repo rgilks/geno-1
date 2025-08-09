@@ -32,7 +32,6 @@ struct VisState {
 
 struct GpuState<'w> {
     window: &'w winit::window::Window,
-    instance: wgpu::Instance,
     surface: wgpu::Surface<'w>,
     device: wgpu::Device,
     queue: wgpu::Queue,
@@ -55,7 +54,7 @@ impl<'w> GpuState<'w> {
     ) -> anyhow::Result<Self> {
         let size = window.inner_size();
         let instance = wgpu::Instance::default();
-        let surface = unsafe { instance.create_surface(window) }?;
+        let surface = instance.create_surface(window)?;
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions {
                 power_preference: wgpu::PowerPreference::HighPerformance,
@@ -212,7 +211,6 @@ impl<'w> GpuState<'w> {
 
         Ok(Self {
             window,
-            instance,
             surface,
             device,
             queue,
@@ -366,7 +364,7 @@ fn main() {
 
     let mut state =
         pollster::block_on(GpuState::new(&window, Arc::clone(&shared_state))).expect("gpu");
-    let start = Instant::now();
+    let _start = Instant::now();
 
     event_loop
         .run(move |event, elwt| match event {
@@ -393,7 +391,6 @@ fn main() {
 
 #[derive(Clone)]
 struct ActiveOscillator {
-    frequency_hz: f32,
     amplitude: f32,
     phase: f32,     // radians
     phase_inc: f32, // radians per sample
@@ -472,7 +469,6 @@ fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>) -> Option<cpal::Stream> 
                             let release = (0.02 * sr) as u32;
                             // Map to sine for now; extend to waveform later
                             guard.oscillators.push(ActiveOscillator {
-                                frequency_hz: ev.frequency_hz,
                                 amplitude: ev.velocity.min(1.0),
                                 phase: 0.0,
                                 phase_inc: 2.0 * std::f32::consts::PI * ev.frequency_hz / sr,
@@ -487,7 +483,7 @@ fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>) -> Option<cpal::Stream> 
                         let mut vis = vis_clone.lock().unwrap();
                         for ev in &events {
                             let i = ev.voice_index.min(2);
-                            vis.pulses[i] = (vis.pulses[i] + ev.velocity as f32).min(1.5);
+                            vis.pulses[i] = (vis.pulses[i] + ev.velocity).min(1.5);
                         }
                     }
                     std::thread::sleep(Duration::from_millis(15));
