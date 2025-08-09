@@ -752,7 +752,29 @@ fn mix_sample_stereo(oscillators: &mut Vec<ActiveOscillator>) -> (f32, f32) {
         }
         i += 1;
     }
-    (left.tanh(), right.tanh())
+    // Return linear mix; master saturation is applied downstream
+    (left, right)
+}
+
+fn saturate_sample_arctan(input: f32, drive: f32) -> f32 {
+    // Soft, analog-like symmetrical arctan curve
+    (2.0 / std::f32::consts::PI) * (drive * input).atan()
+}
+
+fn apply_master_saturation(left: f32, right: f32) -> (f32, f32) {
+    // Tuned for subtle warmth and gentle compression
+    let drive = 1.6f32; // input drive into shaper
+    let wet = 0.35f32; // wet mix amount
+    let pre_gain = 0.9f32; // headroom before shaping
+    let post_gain = 1.05f32; // slight makeup gain
+
+    let l_in = left * pre_gain;
+    let r_in = right * pre_gain;
+    let l_sat = saturate_sample_arctan(l_in, drive);
+    let r_sat = saturate_sample_arctan(r_in, drive);
+    let l_out = (wet * l_sat + (1.0 - wet) * l_in) * post_gain;
+    let r_out = (wet * r_sat + (1.0 - wet) * r_in) * post_gain;
+    (l_out.clamp(-1.0, 1.0), r_out.clamp(-1.0, 1.0))
 }
 
 fn build_stream_f32(
@@ -769,7 +791,8 @@ fn build_stream_f32(
             let oscillators = &mut guard.oscillators;
             let mut frame = 0usize;
             while frame < data.len() {
-                let (l, r) = mix_sample_stereo(oscillators);
+                let (l_raw, r_raw) = mix_sample_stereo(oscillators);
+                let (l, r) = apply_master_saturation(l_raw, r_raw);
                 if channels >= 2 {
                     if frame < data.len() {
                         data[frame] = l;
@@ -802,9 +825,10 @@ fn build_stream_i16(
             let oscillators = &mut guard.oscillators;
             let mut frame = 0usize;
             while frame < data.len() {
-                let (l, r) = mix_sample_stereo(oscillators);
-                let vl = (l * i16::MAX as f32) as i16;
-                let vr = (r * i16::MAX as f32) as i16;
+                let (l_raw, r_raw) = mix_sample_stereo(oscillators);
+                let (l, r) = apply_master_saturation(l_raw, r_raw);
+                let vl = (l.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                let vr = (r.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
                 if channels >= 2 {
                     if frame < data.len() {
                         data[frame] = vl;
@@ -837,7 +861,8 @@ fn build_stream_u16(
             let oscillators = &mut guard.oscillators;
             let mut frame = 0usize;
             while frame < data.len() {
-                let (l, r) = mix_sample_stereo(oscillators);
+                let (l_raw, r_raw) = mix_sample_stereo(oscillators);
+                let (l, r) = apply_master_saturation(l_raw, r_raw);
                 let vl = (((l * 0.5 + 0.5).clamp(0.0, 1.0)) * u16::MAX as f32) as u16;
                 let vr = (((r * 0.5 + 0.5).clamp(0.0, 1.0)) * u16::MAX as f32) as u16;
                 if channels >= 2 {

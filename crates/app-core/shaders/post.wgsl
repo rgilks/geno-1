@@ -97,6 +97,19 @@ fn hash2(p: vec2<f32>) -> f32 {
     return fract(sin(h) * 43758.5453123);
 }
 
+// Simple FBM using sin/cos mixing for soft, wispy noise
+fn fbm(p: vec2<f32>) -> f32 {
+    var a = 0.0;
+    var b = 0.5;
+    var f = p;
+    for (var i = 0; i < 5; i = i + 1) {
+        a += b * sin(f.x) * cos(f.y);
+        f *= 2.17;
+        b *= 0.55;
+    }
+    return a;
+}
+
 // COMPOSITE: tone-map HDR + add bloom + color grading and grain
 @fragment
 fn fs_composite(inp: VsOut) -> @location(0) vec4<f32> {
@@ -110,16 +123,41 @@ fn fs_composite(inp: VsOut) -> @location(0) vec4<f32> {
     let hue = vec3<f32>(sin(t * 1.2) + 1.0, sin(t * 1.5 + 2.0) + 1.0, sin(t * 1.8 + 4.0) + 1.0) * 0.05 * ambient;
     base *= (vec3<f32>(1.0) + hue);
 
+    // Darken exposure slightly before tonemapping to give a deeper look
+    base *= 0.9;
+
     // Tonemap
     var mapped = aces_tonemap(base);
 
-    // Vignette
+    // Contrast and gamma to increase punch without blowing highlights
+    let contrast = 0.15; // positive increases contrast
+    mapped = clamp((mapped - vec3<f32>(0.5)) * (1.0 + contrast) + vec3<f32>(0.5), vec3<f32>(0.0), vec3<f32>(1.0));
+    mapped = pow(mapped, vec3<f32>(1.07));
+
+    // Stronger vignette for moodier edges
     let vig = vignette(inp.uv);
-    mapped *= mix(1.0, 0.85, vig);
+    mapped *= mix(1.0, 0.75, vig);
+
+    // Smoky darkening using low-frequency FBM modulated by radius
+    let uv = inp.uv;
+    let r = length(uv - 0.5);
+    let smokeField = 0.5 + 0.5 * fbm(uv * 2.6 + vec2<f32>(u_post.time * 0.05, -u_post.time * 0.04));
+    let smokeField2 = 0.5 + 0.5 * fbm((uv.yx + vec2<f32>(0.17, -0.09)) * 3.1 + vec2<f32>(-u_post.time * 0.035, u_post.time * 0.045));
+    let smoke = clamp(0.5 * smokeField + 0.5 * smokeField2, 0.0, 1.0);
+    let radial = smoothstep(0.2, 0.95, r);
+    let smokeStrength = 0.18; // overall intensity
+    let k = smokeStrength * radial * smoke;
+    // Darken multiplicatively; tiny bluish tint in the darkening
+    let smokeTint = vec3<f32>(0.03, 0.04, 0.06);
+    mapped = mapped * (1.0 - k) + smokeTint * (k * 0.25);
 
     // Film grain
     let noise = hash2(inp.uv * u_post.resolution + u_post.time);
-    mapped += (noise - 0.5) * 0.02;
+    mapped += (noise - 0.5) * 0.022;
+
+    // Slight desaturation for a smokier palette
+    let luma = luminance(mapped);
+    mapped = mix(vec3<f32>(luma), mapped, 0.9);
 
     return vec4<f32>(mapped, 1.0);
 }

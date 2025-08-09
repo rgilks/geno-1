@@ -203,10 +203,59 @@ async fn init() -> anyhow::Result<()> {
                         }
                     };
                     master_gain.gain().set_value(0.8);
-                    if let Err(e) = master_gain.connect_with_audio_node(&audio_ctx.destination()) {
-                        log::error!("connect error: {:?}", e);
-                        return;
+                    // Subtle master saturation (arctan) with wet/dry mix
+                    let sat_pre = match web::GainNode::new(&audio_ctx) {
+                        Ok(g) => g,
+                        Err(e) => {
+                            log::error!("sat pre GainNode error: {:?}", e);
+                            return;
+                        }
+                    };
+                    sat_pre.gain().set_value(0.9);
+
+                    let saturator = match web::WaveShaperNode::new(&audio_ctx) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            log::error!("WaveShaperNode error: {:?}", e);
+                            return;
+                        }
+                    };
+                    // Build arctan curve
+                    let curve_len: u32 = 2048;
+                    let drive: f32 = 1.6;
+                    let mut curve: Vec<f32> = Vec::with_capacity(curve_len as usize);
+                    for i in 0..curve_len {
+                        let x = (i as f32 / (curve_len - 1) as f32) * 2.0 - 1.0;
+                        curve.push((2.0 / std::f32::consts::PI) * (drive * x).atan());
                     }
+                    // web-sys binding copies from the slice into a Float32Array under the hood
+                    saturator.set_curve(Some(curve.as_mut_slice()));
+
+                    let sat_wet = match web::GainNode::new(&audio_ctx) {
+                        Ok(g) => g,
+                        Err(e) => {
+                            log::error!("sat wet GainNode error: {:?}", e);
+                            return;
+                        }
+                    };
+                    sat_wet.gain().set_value(0.35);
+
+                    let sat_dry = match web::GainNode::new(&audio_ctx) {
+                        Ok(g) => g,
+                        Err(e) => {
+                            log::error!("sat dry GainNode error: {:?}", e);
+                            return;
+                        }
+                    };
+                    sat_dry.gain().set_value(0.65);
+
+                    // Route master -> [dry,dst] and master -> pre -> shaper -> wet -> dst
+                    let _ = master_gain.connect_with_audio_node(&sat_pre);
+                    let _ = sat_pre.connect_with_audio_node(&saturator);
+                    let _ = saturator.connect_with_audio_node(&sat_wet);
+                    let _ = sat_wet.connect_with_audio_node(&audio_ctx.destination());
+                    let _ = master_gain.connect_with_audio_node(&sat_dry);
+                    let _ = sat_dry.connect_with_audio_node(&audio_ctx.destination());
 
                     // Global lush reverb (Convolver) and tempo-synced dark delay bus
                     // Reverb input and wet level
@@ -864,15 +913,23 @@ async fn init() -> anyhow::Result<()> {
                     let reverb_wet_tick = Rc::new(reverb_wet).clone();
                     let delay_wet_tick = Rc::new(delay_wet).clone();
                     let delay_feedback_tick = Rc::new(delay_feedback).clone();
+                    // Master saturation controls (pre-gain acts as drive; wet/dry for mix)
+                    let sat_pre_tick = Rc::new(sat_pre).clone();
+                    let sat_wet_tick = Rc::new(sat_wet).clone();
+                    let sat_dry_tick = Rc::new(sat_dry).clone();
                     // Optional slow camera orbit
                     let mut orbit_t: f32 = 0.0;
                     let orbit_tick = orbit_enabled.clone();
                     let tick: Rc<RefCell<Option<Closure<dyn FnMut()>>>> =
                         Rc::new(RefCell::new(None));
                     let tick_clone = tick.clone();
-                    // State for mouse-driven swirl energy
+                    // State for mouse-driven swirl energy and an inertial swirl center
                     let mut prev_uv: [f32; 2] = [0.5, 0.5];
                     let mut swirl_energy: f32 = 0.0;
+                    // Inertial swirl center with momentum (spring-damper model)
+                    let mut swirl_pos: [f32; 2] = [0.5, 0.5];
+                    let mut swirl_vel: [f32; 2] = [0.0, 0.0];
+                    let mut swirl_initialized: bool = false;
                     *tick.borrow_mut() = Some(Closure::wrap(Box::new(move || {
                         let now = Instant::now();
                         let dt = now - last_instant;
@@ -906,21 +963,78 @@ async fn init() -> anyhow::Result<()> {
                                 (ms.x / w).clamp(0.0, 1.0),
                                 (1.0 - (ms.y / h)).clamp(0.0, 1.0),
                             ];
+                            // Inertial swirl: critically-damped spring (slightly underdamped) toward mouse UV
+                            if !swirl_initialized {
+                                swirl_pos = uv;
+                                swirl_vel = [0.0, 0.0];
+                                swirl_initialized = true;
+                            } else {
+                                // Spring parameters (omega controls responsiveness)
+                                // Slower, more obvious inertia
+                                let omega = 1.1_f32; // rad/s (lower = slower follow)
+                                let k = omega * omega;
+                                let c = 2.0 * omega * 0.5; // underdamped for visible overshoot
+                                                           // Spring toward target
+                                let dx = uv[0] - swirl_pos[0];
+                                let dy = uv[1] - swirl_pos[1];
+                                let ax = k * dx - c * swirl_vel[0];
+                                let ay = k * dy - c * swirl_vel[1];
+                                swirl_vel[0] += ax * dt_sec;
+                                swirl_vel[1] += ay * dt_sec;
+                                // Integrate with a cap on per-frame displacement for extra lag
+                                let mut nx = swirl_pos[0] + swirl_vel[0] * dt_sec;
+                                let mut ny = swirl_pos[1] + swirl_vel[1] * dt_sec;
+                                let sdx = nx - swirl_pos[0];
+                                let sdy = ny - swirl_pos[1];
+                                let step = (sdx * sdx + sdy * sdy).sqrt();
+                                let max_step = 0.50_f32 * dt_sec; // UV units per sec
+                                if step > max_step {
+                                    let inv = 1.0 / (step + 1e-6);
+                                    nx = swirl_pos[0] + sdx * inv * max_step;
+                                    ny = swirl_pos[1] + sdy * inv * max_step;
+                                }
+                                swirl_pos[0] = nx;
+                                swirl_pos[1] = ny;
+                                // Keep within UV bounds
+                                swirl_pos[0] = swirl_pos[0].clamp(0.0, 1.0);
+                                swirl_pos[1] = swirl_pos[1].clamp(0.0, 1.0);
+                            }
+                            // Pointer motion contributes energy; velocity of swirl adds momentum feel
                             let du = uv[0] - prev_uv[0];
                             let dv = uv[1] - prev_uv[1];
-                            let speed = ((du * du + dv * dv).sqrt() / (dt_sec + 1e-5)).min(10.0);
-                            let target =
-                                ((speed * 0.25) + if ms.down { 0.6 } else { 0.0 }).clamp(0.0, 1.0);
+                            let pointer_speed =
+                                ((du * du + dv * dv).sqrt() / (dt_sec + 1e-5)).min(10.0);
+                            let swirl_speed =
+                                (swirl_vel[0] * swirl_vel[0] + swirl_vel[1] * swirl_vel[1]).sqrt();
+                            let target = ((pointer_speed * 0.2)
+                                + (swirl_speed * 0.35)
+                                + if ms.down { 0.5 } else { 0.0 })
+                            .clamp(0.0, 1.0);
                             swirl_energy = 0.85 * swirl_energy + 0.15 * target;
                             prev_uv = uv;
                             drop(ms);
 
                             // Apply global FX modulation based on swirl_energy
                             let _ = reverb_wet_tick.gain().set_value(0.35 + 0.65 * swirl_energy);
-                            let _ = delay_wet_tick.gain().set_value(0.20 + 0.80 * swirl_energy);
-                            let _ = delay_feedback_tick
-                                .gain()
-                                .set_value(0.45 + 0.45 * swirl_energy);
+                            // Opposite-corner delay emphasis: top-left (0,1) and bottom-right (1,0)
+                            let echo = (uv[0] - uv[1]).abs();
+                            let delay_wet_val =
+                                (0.15 + 0.55 * swirl_energy + 0.30 * echo).clamp(0.0, 1.0);
+                            let delay_fb_val =
+                                (0.35 + 0.35 * swirl_energy + 0.25 * echo).clamp(0.0, 0.95);
+                            let _ = delay_wet_tick.gain().set_value(delay_wet_val);
+                            let _ = delay_feedback_tick.gain().set_value(delay_fb_val);
+
+                            // Map mouse UV across the canvas to master saturation amount.
+                            // Bottom-left (uv≈[0,0]) = clean; top-right (uv≈[1,1]) = fizzed out.
+                            let fizz = ((uv[0] + uv[1]) * 0.5).clamp(0.0, 1.0);
+                            // Drive via pre-gain before the waveshaper; tune range for taste
+                            let drive = (0.6 + 2.4 * fizz).clamp(0.2, 3.0);
+                            let _ = sat_pre_tick.gain().set_value(drive);
+                            // Wet/dry crossfade keeps perceived loudness steadier
+                            let wet = (0.15 + 0.85 * fizz).clamp(0.0, 1.0);
+                            let _ = sat_wet_tick.gain().set_value(wet);
+                            let _ = sat_dry_tick.gain().set_value(1.0 - wet);
 
                             for i in 0..voice_panners.len() {
                                 let pos = engine_tick.borrow().voices[i].position;
@@ -1085,9 +1199,14 @@ async fn init() -> anyhow::Result<()> {
 
                             if let Some(g) = &mut gpu {
                                 g.set_camera(cam_eye, cam_target);
-                                // Feed mouse position persistently; movement boosts strength
-                                let strength = 0.35 + 1.0 * swirl_energy;
-                                g.set_swirl(uv, strength, true);
+                                // Feed inertial swirl center; boost strength with inertia
+                                let speed_norm = ((swirl_vel[0] * swirl_vel[0]
+                                    + swirl_vel[1] * swirl_vel[1])
+                                    .sqrt()
+                                    / 1.0)
+                                    .clamp(0.0, 1.0);
+                                let strength = 0.28 + 0.85 * swirl_energy + 0.15 * speed_norm;
+                                g.set_swirl(swirl_pos, strength, true);
                                 // Keep WebGPU surface sized to canvas backing size
                                 let w = canvas_for_tick.width();
                                 let h = canvas_for_tick.height();

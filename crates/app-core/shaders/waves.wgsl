@@ -68,21 +68,69 @@ fn sd_segment(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
     return length(pa - ba * h);
 }
 
-fn wireframe_bg(p: vec2<f32>) -> f32 {
-    var d = 1e9;
-    let centers = array<vec2<f32>, 3>(
+// Returns a stylized intensity (0..1) for animated rings and lines.
+// It adds subtle orbital drift, pulsing radii, and moving dash highlights.
+fn wireframe_styled(p: vec2<f32>, t: f32) -> f32 {
+    var m = 0.0;
+
+    // --- Animated concentric rings ---
+    let base_centers = array<vec2<f32>, 3>(
         vec2<f32>(0.62, 0.28),
         vec2<f32>(0.80, 0.44),
         vec2<f32>(0.70, 0.72),
     );
-    let radii = array<f32, 3>(0.28, 0.18, 0.12);
+    let base_radii = array<f32, 3>(0.28, 0.18, 0.12);
     for (var i = 0; i < 3; i = i + 1) {
-        d = min(d, abs(length(p - centers[i]) - radii[i]));
+        let w = 0.7 + 0.3 * f32(i);
+        let c = base_centers[i] + 0.01 * vec2<f32>(
+            sin(t * (0.8 + 0.1 * f32(i)) + 3.0 * f32(i)),
+            cos(t * (0.7 + 0.13 * f32(i)) + 1.7 * f32(i)),
+        );
+        let r = base_radii[i] + 0.03 * sin(t * (0.9 + 0.17 * f32(i)) + 2.1 * f32(i)) + 0.015 * sin(5.0 * t + 0.7 * f32(i));
+
+        let v = p - c;
+        let ed = abs(length(v) - r);
+        let ang = atan2(v.y, v.x);
+        // Angular dash pattern that orbits over time
+        let dash = 0.5 + 0.5 * sin(ang * 14.0 - t * (1.6 + 0.2 * f32(i)) + f32(i));
+        let thickness = mix(0.010, 0.004, 0.5 + 0.5 * sin(t * 1.2 + f32(i)));
+        let mask = smoothstep(thickness, 0.0, ed) * pow(dash, 1.1);
+        m = max(m, mask * w);
     }
-    d = min(d, sd_segment(p, vec2<f32>(0.55, 0.20), vec2<f32>(0.85, 0.50)));
-    d = min(d, sd_segment(p, vec2<f32>(0.62, 0.28), vec2<f32>(0.80, 0.44)));
-    d = min(d, sd_segment(p, vec2<f32>(0.72, 0.70), vec2<f32>(0.86, 0.52)));
-    return d;
+
+    // --- Elegant connecting lines with traveling glints ---
+    let segs_a = array<vec2<f32>, 3>(
+        vec2<f32>(0.55, 0.20),
+        vec2<f32>(0.62, 0.28),
+        vec2<f32>(0.72, 0.70),
+    );
+    let segs_b = array<vec2<f32>, 3>(
+        vec2<f32>(0.85, 0.50),
+        vec2<f32>(0.80, 0.44),
+        vec2<f32>(0.86, 0.52),
+    );
+    for (var i = 0; i < 3; i = i + 1) {
+        // slight endpoint drift
+        let a = segs_a[i] + 0.01 * vec2<f32>(sin(t * 0.6 + f32(i)), cos(t * 0.7 + 2.1 * f32(i)));
+        let b = segs_b[i] + 0.01 * vec2<f32>(cos(t * 0.5 + 1.3 * f32(i)), sin(t * 0.65 + f32(i)));
+
+        // Distance to the segment
+        let pa = p - a;
+        let ba = b - a;
+        let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
+        let q = a + ba * h;
+        let ed = length(p - q);
+
+        // Position along the segment for dash animation
+        let along = h; // 0..1 along the segment
+        let dash = 0.5 + 0.5 * sin(along * 30.0 - t * (2.3 + 0.2 * f32(i)));
+        let glint = smoothstep(0.96, 1.0, sin(along * 6.28318 - t * 1.8 + f32(i)));
+        let thickness = 0.006;
+        let mask = smoothstep(thickness, 0.0, ed) * (0.65 * dash + 0.35 * glint);
+        m = max(m, mask * (0.85 + 0.15 * f32(i)));
+    }
+
+    return clamp(m, 0.0, 1.0);
 }
 
 @fragment
@@ -92,13 +140,9 @@ fn fs_waves(inp: VsOut) -> @location(0) vec4<f32> {
     let cuv0 = (uv - 0.5) * vec2<f32>(aspect, 1.0);
     let t = u.time;
 
-    // Background wireframe
+    // Background base only (remove decorative rings/lines for clarity)
     let gold = vec3<f32>(1.00, 0.86, 0.46);
-    let d = wireframe_bg(uv);
     var col = vec3<f32>(0.04, 0.055, 0.10);
-    let line = smoothstep(0.012, 0.002, d);
-    // Make wireframe more visible; it will bloom subtly
-    col += gold * line * (0.30 + 0.60 * u.ambient);
 
     // Three layered waves with parallax
     for (var L = 0; L < 3; L = L + 1) {

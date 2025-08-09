@@ -35,6 +35,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Sync listener orientation with camera
 - [x] Visual polish (colors, easing, subtle glow, vignette)
 - [x] Prefer SRGB surface format where available (e.g., BGRA8UnormSrgb)
+- [x] Inertial pointer swirl (spring-damper) for water-like motion
 
 ## Interaction & UI (Web)
 
@@ -45,6 +46,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
   - [x] Dynamic hint overlay shows BPM, paused, and muted state
 - [ ] 3D in-scene icon controls replacing keyboard (post-v1)
 - [x] Clamp drag radius to a sensible range to avoid losing objects
+- [x] Mouse-driven FX mapping: corner-based saturation; opposite-corner delay
 
 ## Cross-Platform / Native
 
