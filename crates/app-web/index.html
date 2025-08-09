@@ -41,8 +41,15 @@
     <canvas id="app-canvas" width="1280" height="720"></canvas>
     <div class="hint">Click the canvas to start audio</div>
     <script type="module">
-      import init from "./pkg/app_web.js";
-      init();
+      const v = Date.now();
+      console.log("[index] dynamic import cache-bust tag:", v);
+      import(`./pkg/app_web.js?v=${v}`).then((m) => {
+        console.log(
+          "[index] wasm entry loaded url:",
+          new URL(`./pkg/app_web.js?v=${v}`, window.location.href).toString()
+        );
+        return m.default();
+      });
     </script>
   </body>
 </html>
