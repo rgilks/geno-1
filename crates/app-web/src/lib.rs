@@ -2,7 +2,7 @@
 use app_core::{
     z_offset_vec3, EngineParams, MusicEngine, VoiceConfig, Waveform, BASE_SCALE,
     C_MAJOR_PENTATONIC, DEFAULT_VOICE_COLORS, DEFAULT_VOICE_POSITIONS, ENGINE_DRAG_MAX_RADIUS,
-    PICK_SPHERE_RADIUS, SCALE_PULSE_MULTIPLIER, SPREAD,
+    PICK_SPHERE_RADIUS, SCALE_PULSE_MULTIPLIER, SPREAD, midi_to_hz,
 };
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use instant::Instant;
@@ -466,6 +466,10 @@ async fn init() -> anyhow::Result<()> {
                     let orbit_enabled = Rc::new(RefCell::new(true));
                     let voice_gains = Rc::new(voice_gains);
 
+                    // Queued ripple UV from pointer taps (read by render tick)
+                    let queued_ripple_uv: Rc<RefCell<Option<[f32; 2]>>> =
+                        Rc::new(RefCell::new(None));
+
                     // ---------------- Interaction state ----------------
                     #[derive(Default, Clone, Copy)]
                     struct MouseState {
@@ -856,12 +860,18 @@ async fn init() -> anyhow::Result<()> {
                         closure.forget();
                     }
 
-                    // Mouseup: click actions or end drag
+                    // Mouseup: click actions or end drag; also trigger background tap note+ripple
                     {
                         let hover_m = hover_index.clone();
                         let drag_m = drag_state.clone();
                         let mouse_m = mouse_state.clone();
                         let engine_m = engine.clone();
+                        let voice_gains_click = voice_gains.clone();
+                        let delay_sends_click = delay_sends.clone();
+                        let reverb_sends_click = reverb_sends.clone();
+                        let canvas_click = canvas_for_click_inner.clone();
+                        let audio_ctx_click = audio_ctx.clone();
+                        let ripple_queue = queued_ripple_uv.clone();
                         let closure = Closure::wrap(Box::new(move |ev: web::PointerEvent| {
                             let was_dragging = drag_m.borrow().active;
                             if was_dragging {
@@ -881,7 +891,56 @@ async fn init() -> anyhow::Result<()> {
                                     // noisy click debug log removed
                                 }
                             } else {
-                                // noisy click debug log removed
+                                // Background click: synth one-shot via WebAudio and request a ripple
+                                let rect = canvas_click.get_bounding_client_rect();
+                                let x_css = ev.client_x() as f32 - rect.left() as f32;
+                                let y_css = ev.client_y() as f32 - rect.top() as f32;
+                                let w = rect.width() as f32;
+                                let h = rect.height() as f32;
+                                if w > 0.0 && h > 0.0 {
+                                    let uvx = (x_css / w).clamp(0.0, 1.0);
+                                    let uvy = (1.0 - (y_css / h)).clamp(0.0, 1.0);
+                                    // Map X to [C4..C6]
+                                    let midi = 60.0 + uvx * 24.0;
+                                    let freq = midi_to_hz(midi as f32);
+                                    // Velocity from Y
+                                    let vel = (0.35 + 0.65 * uvy) as f32;
+                                    // Choose nearest voice by x for waveform and spatialization
+                                    let eng = engine_m.borrow();
+                                    let mut best_i = 0usize;
+                                    let mut best_dx = f32::MAX;
+                                    for (i, v) in eng.voices.iter().enumerate() {
+                                        let vx = (v.position.x / 3.0).clamp(-1.0, 1.0) * 0.5 + 0.5;
+                                        let dx = (uvx - vx).abs();
+                                        if dx < best_dx { best_dx = dx; best_i = i; }
+                                    }
+                                    drop(eng);
+                                    if let Ok(src) = web::OscillatorNode::new(&audio_ctx_click) {
+                                        match engine_m.borrow().configs[best_i].waveform {
+                                            Waveform::Sine => src.set_type(web::OscillatorType::Sine),
+                                            Waveform::Square => src.set_type(web::OscillatorType::Square),
+                                            Waveform::Saw => src.set_type(web::OscillatorType::Sawtooth),
+                                            Waveform::Triangle => src.set_type(web::OscillatorType::Triangle),
+                                        }
+                                        src.frequency().set_value(freq);
+                                        if let Ok(g) = web::GainNode::new(&audio_ctx_click) {
+                                            g.gain().set_value(0.0);
+                                            let now = audio_ctx_click.current_time();
+                                            let t0 = now + 0.005;
+                                            let dur = 0.35 + 0.25 * (1.0 - uvy as f64);
+                                            let _ = g.gain().linear_ramp_to_value_at_time(vel, t0 + 0.02);
+                                            let _ = g.gain().linear_ramp_to_value_at_time(0.0, t0 + dur);
+                                            let _ = src.connect_with_audio_node(&g);
+                                            let _ = g.connect_with_audio_node(&voice_gains_click[best_i]);
+                                            let _ = g.connect_with_audio_node(&delay_sends_click[best_i]);
+                                            let _ = g.connect_with_audio_node(&reverb_sends_click[best_i]);
+                                            let _ = src.start_with_when(t0);
+                                            let _ = src.stop_with_when(t0 + dur + 0.05);
+                                        }
+                                    }
+                                    // Save desired ripple UV for next render tick
+                                    *ripple_queue.borrow_mut() = Some([uvx, uvy]);
+                                }
                             }
                             // noisy pointer up debug log removed
                             mouse_m.borrow_mut().down = false;
@@ -1199,6 +1258,10 @@ async fn init() -> anyhow::Result<()> {
 
                             if let Some(g) = &mut gpu {
                                 g.set_camera(cam_eye, cam_target);
+                                // If a ripple UV was queued by pointerup, apply it now
+                                if let Some(uv) = queued_ripple_uv.borrow_mut().take() {
+                                    g.set_ripple(uv, 1.0);
+                                }
                                 // Feed inertial swirl center; boost strength with inertia
                                 let speed_norm = ((swirl_vel[0] * swirl_vel[0]
                                     + swirl_vel[1] * swirl_vel[1])
@@ -1360,6 +1423,9 @@ struct WavesUniforms {
     swirl_uv: [f32; 2],
     swirl_strength: f32,
     swirl_active: f32,
+    ripple_uv: [f32; 2],
+    ripple_t0: f32,
+    ripple_amp: f32,
 }
 
 #[repr(C)]
@@ -1422,6 +1488,10 @@ struct GpuState<'a> {
     swirl_uv: [f32; 2],
     swirl_strength: f32,
     swirl_active: f32,
+    // Click/tap ripple state
+    ripple_uv: [f32; 2],
+    ripple_t0: f32,
+    ripple_amp: f32,
 }
 
 impl<'a> GpuState<'a> {
@@ -1999,6 +2069,9 @@ impl<'a> GpuState<'a> {
             swirl_uv: [0.5, 0.5],
             swirl_strength: 0.0,
             swirl_active: 0.0,
+            ripple_uv: [0.5, 0.5],
+            ripple_t0: -1.0,
+            ripple_amp: 0.0,
         })
     }
     fn set_ambient_clear(&mut self, energy01: f32) {
@@ -2023,6 +2096,13 @@ impl<'a> GpuState<'a> {
         self.swirl_uv = uv;
         self.swirl_strength = strength;
         self.swirl_active = if active { 1.0 } else { 0.0 };
+    }
+
+    fn set_ripple(&mut self, uv: [f32; 2], amp: f32) {
+        self.ripple_uv = uv;
+        self.ripple_amp = amp.clamp(0.0, 1.5);
+        // Anchor ripple start to current accumulated time so shader can compute age
+        self.ripple_t0 = self.time_accum;
     }
 
     fn resize_if_needed(&mut self, width: u32, height: u32) {
@@ -2272,6 +2352,9 @@ impl<'a> GpuState<'a> {
                 ],
                 swirl_strength: if self.swirl_active > 0.5 { 1.4 } else { 0.0 },
                 swirl_active: self.swirl_active,
+                ripple_uv: self.ripple_uv,
+                ripple_t0: self.ripple_t0,
+                ripple_amp: self.ripple_amp,
             };
             self.queue
                 .write_buffer(&self.waves_uniform_buffer, 0, bytemuck::bytes_of(&w));

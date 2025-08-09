@@ -21,6 +21,10 @@ struct WaveUniforms {
     swirl_uv: vec2<f32>,
     swirl_strength: f32,
     swirl_active: f32,
+    // Click/tap ripple parameters
+    ripple_uv: vec2<f32>,
+    ripple_t0: f32,
+    ripple_amp: f32,
 };
 
 @group(0) @binding(0) var<uniform> u: WaveUniforms;
@@ -189,6 +193,16 @@ fn fs_waves(inp: VsOut) -> @location(0) vec4<f32> {
             h += (0.65 + 0.9 * pulse) * exp(-2.2 * dd) * sin(14.0 * dd - 2.0 * tt);
             h += 0.22 * (1.0 / (1.0 + 6.0 * dd)) * sin(7.0 * (cuv.x - p.x) + 1.5 * tt);
         }
+
+        // Additive radial ripple from clicks/taps
+        // Convert stored ripple uv into cuv-space considering aspect and parallax
+        let ruv_c = (u.ripple_uv - 0.5) * vec2<f32>(aspect, 1.0) * par;
+        let rv = cuv - ruv_c;
+        let rr = length(rv);
+        let age = max(0.0, t - u.ripple_t0);
+        let ripple_env = u.ripple_amp * exp(-2.0 * age) * exp(-3.0 * rr);
+        // Expanding wavefront moving outward over time
+        h += ripple_env * sin(18.0 * rr - 6.0 * age);
         let e = 0.002;
         let hx = h - (0.55 * sin(6.0 * (cuv.x - e) - 1.4 * tt) + 0.35 * sin(10.0 * (cuv.x - e) + 0.9 * tt + 0.8 * cuv.y) + 0.25 * fbm((cuv - vec2<f32>(e, 0.0)) * 2.5 + vec2<f32>(0.2 * tt, -0.15 * tt)));
         let hy = h - (0.55 * sin(6.0 * cuv.x - 1.4 * tt) + 0.35 * sin(10.0 * cuv.x + 0.9 * tt + 0.8 * (cuv.y - e)) + 0.25 * fbm((cuv - vec2<f32>(0.0, e)) * 2.5 + vec2<f32>(0.2 * tt, -0.15 * tt)));
@@ -215,6 +229,11 @@ fn fs_waves(inp: VsOut) -> @location(0) vec4<f32> {
             let dd = distance(cuv, p);
             lay += gold * exp(-40.0 * dd * dd) * 0.45;
         }
+
+        // Subtle emissive ring for ripple
+        let ring = smoothstep(0.010, 0.002, abs(rr - (0.20 * age + 0.02)));
+        let ring_emiss = clamp(u.ripple_amp * exp(-1.4 * age) * ring, 0.0, 1.0);
+        lay += gold * ring_emiss * 0.6;
         let a = mix(0.55, 0.28, depth / 2.0);
         col = col * (1.0 - a) + lay * a;
     }

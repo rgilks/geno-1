@@ -51,7 +51,7 @@ Controls in browser:
 - Drag a circle to move a voice in XZ plane (updates spatialization)
 - Click a voice: mute; Shift+Click: reseed; Alt+Click: solo
 - Keys: R (reseed all), Space (pause/resume), + / - (tempo), M (master mute), O (orbit on/off)
- - Mouse position maps to master saturation and delay; moving the pointer leaves a “water-like” trailing swirl in visuals
+- Mouse position maps to master saturation and delay; moving the pointer leaves a “water-like” trailing swirl in visuals
 
 Headless test:
 
