@@ -856,15 +856,23 @@ async fn init() -> anyhow::Result<()> {
                     let engine_tick = engine.clone();
                     let hover_tick = hover_index.clone();
                     let canvas_for_tick = canvas_for_click_inner.clone();
+                    let mouse_tick = mouse_state.clone();
                     let voice_gains_tick = voice_gains.clone();
                     let delay_sends_tick = delay_sends.clone();
                     let reverb_sends_tick = reverb_sends.clone();
+                    // Global effect controls accessible during tick
+                    let reverb_wet_tick = Rc::new(reverb_wet).clone();
+                    let delay_wet_tick = Rc::new(delay_wet).clone();
+                    let delay_feedback_tick = Rc::new(delay_feedback).clone();
                     // Optional slow camera orbit
                     let mut orbit_t: f32 = 0.0;
                     let orbit_tick = orbit_enabled.clone();
                     let tick: Rc<RefCell<Option<Closure<dyn FnMut()>>>> =
                         Rc::new(RefCell::new(None));
                     let tick_clone = tick.clone();
+                    // State for mouse-driven swirl energy
+                    let mut prev_uv: [f32; 2] = [0.5, 0.5];
+                    let mut swirl_energy: f32 = 0.0;
                     *tick.borrow_mut() = Some(Closure::wrap(Box::new(move || {
                         let now = Instant::now();
                         let dt = now - last_instant;
@@ -890,6 +898,30 @@ async fn init() -> anyhow::Result<()> {
                                 // Exponential decay for smoother falloff
                                 *p *= (1.0 - (dt_sec * 1.8).min(0.9));
                             }
+                            // Mouse-driven swirl effect intensity (visual + global audio whoosh)
+                            let w = canvas_for_tick.width().max(1) as f32;
+                            let h = canvas_for_tick.height().max(1) as f32;
+                            let ms = mouse_tick.borrow();
+                            let uv = [
+                                (ms.x / w).clamp(0.0, 1.0),
+                                (1.0 - (ms.y / h)).clamp(0.0, 1.0),
+                            ];
+                            let du = uv[0] - prev_uv[0];
+                            let dv = uv[1] - prev_uv[1];
+                            let speed = ((du * du + dv * dv).sqrt() / (dt_sec + 1e-5)).min(10.0);
+                            let target = ((speed * 0.25) + if ms.down { 0.6 } else { 0.0 })
+                                .clamp(0.0, 1.0);
+                            swirl_energy = 0.85 * swirl_energy + 0.15 * target;
+                            prev_uv = uv;
+                            drop(ms);
+
+                            // Apply global FX modulation based on swirl_energy
+                            let _ = reverb_wet_tick.gain().set_value(0.35 + 0.65 * swirl_energy);
+                            let _ = delay_wet_tick.gain().set_value(0.20 + 0.80 * swirl_energy);
+                            let _ = delay_feedback_tick
+                                .gain()
+                                .set_value(0.45 + 0.45 * swirl_energy);
+
                             for i in 0..voice_panners.len() {
                                 let pos = engine_tick.borrow().voices[i].position;
                                 voice_panners[i].set_position(
@@ -900,9 +932,14 @@ async fn init() -> anyhow::Result<()> {
                                 // Direct sound↔visual link: map position to per-voice mix and fx
                                 let dist = (pos.x * pos.x + pos.z * pos.z).sqrt();
                                 // Delay send increases with |x|, reverb with radial distance
-                                let d_amt = (0.15 + 0.85 * pos.x.abs().min(1.0)).clamp(0.0, 1.0);
-                                let r_amt =
-                                    (0.25 + 0.75 * (dist / 2.5).clamp(0.0, 1.0)).clamp(0.0, 1.2);
+                                let mut d_amt = (0.15 + 0.85 * pos.x.abs().min(1.0))
+                                    .clamp(0.0, 1.0);
+                                let mut r_amt = (0.25 + 0.75 * (dist / 2.5).clamp(0.0, 1.0))
+                                    .clamp(0.0, 1.2);
+                                // Boost sends with swirl energy for pronounced movement effect
+                                let boost = 1.0 + 0.8 * swirl_energy;
+                                d_amt = (d_amt * boost).clamp(0.0, 1.2);
+                                r_amt = (r_amt * boost).clamp(0.0, 1.5);
                                 delay_sends_tick[i].gain().set_value(d_amt);
                                 reverb_sends_tick[i].gain().set_value(r_amt);
                                 // Subtle level change with proximity to center (prevents clipping)
@@ -944,16 +981,17 @@ async fn init() -> anyhow::Result<()> {
                             let e_ref = engine_tick.borrow();
                             let z_offset = z_offset_vec3();
                             let spread = SPREAD;
-                            let mut positions: Vec<Vec3> = vec![
-                                e_ref.voices[0].position * spread + z_offset,
-                                e_ref.voices[1].position * spread + z_offset,
-                                e_ref.voices[2].position * spread + z_offset,
-                            ];
-                            let mut colors: Vec<Vec4> = vec![
-                                Vec4::from((Vec3::from(e_ref.configs[0].color_rgb), 1.0)),
-                                Vec4::from((Vec3::from(e_ref.configs[1].color_rgb), 1.0)),
-                                Vec4::from((Vec3::from(e_ref.configs[2].color_rgb), 1.0)),
-                            ];
+                            // Pre-allocate to avoid per-frame reallocations
+                            let ring_count = 48usize;
+                            let mut positions: Vec<Vec3> =
+                                Vec::with_capacity(3 + ring_count * 3 + 16);
+                            positions.push(e_ref.voices[0].position * spread + z_offset);
+                            positions.push(e_ref.voices[1].position * spread + z_offset);
+                            positions.push(e_ref.voices[2].position * spread + z_offset);
+                            let mut colors: Vec<Vec4> = Vec::with_capacity(3 + ring_count * 3 + 16);
+                            colors.push(Vec4::from((Vec3::from(e_ref.configs[0].color_rgb), 1.0)));
+                            colors.push(Vec4::from((Vec3::from(e_ref.configs[1].color_rgb), 1.0)));
+                            colors.push(Vec4::from((Vec3::from(e_ref.configs[2].color_rgb), 1.0)));
                             let hovered = *hover_tick.borrow();
                             for i in 0..3 {
                                 if e_ref.voices[i].muted {
@@ -968,15 +1006,14 @@ async fn init() -> anyhow::Result<()> {
                                     colors[i].z = (colors[i].z * 1.4).min(1.0);
                                 }
                             }
-                            let mut scales: Vec<f32> = vec![
-                                BASE_SCALE + ps[0] * SCALE_PULSE_MULTIPLIER,
-                                BASE_SCALE + ps[1] * SCALE_PULSE_MULTIPLIER,
-                                BASE_SCALE + ps[2] * SCALE_PULSE_MULTIPLIER,
-                            ];
+                            let mut scales: Vec<f32> =
+                                Vec::with_capacity(3 + ring_count * 3 + 16);
+                            scales.push(BASE_SCALE + ps[0] * SCALE_PULSE_MULTIPLIER);
+                            scales.push(BASE_SCALE + ps[1] * SCALE_PULSE_MULTIPLIER);
+                            scales.push(BASE_SCALE + ps[2] * SCALE_PULSE_MULTIPLIER);
 
                             // Orbiting ring particles around each voice center
                             let two_pi = std::f32::consts::PI * 2.0;
-                            let ring_count = 48usize;
                             for vi in 0..3 {
                                 let center = positions[vi];
                                 let base_col = Vec3::from(e_ref.configs[vi].color_rgb);
@@ -1049,6 +1086,8 @@ async fn init() -> anyhow::Result<()> {
 
                             if let Some(g) = &mut gpu {
                                 g.set_camera(cam_eye, cam_target);
+                                // Feed mouse-driven swirl into GPU uniforms
+                                g.set_swirl(uv, 1.0, swirl_energy > 0.05);
                                 // Keep WebGPU surface sized to canvas backing size
                                 let w = canvas_for_tick.width();
                                 let h = canvas_for_tick.height();
