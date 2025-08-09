@@ -15,6 +15,8 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys as web;
 // (DeviceExt no longer needed; legacy vertex buffers removed)
 
+mod ui;
+
 // Rendering/picking shared constants to keep math consistent
 const CAMERA_Z: f32 = 6.0;
 
@@ -52,25 +54,7 @@ async fn init() -> anyhow::Result<()> {
         let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
             let key = ev.key();
             if key == "h" || key == "H" {
-                if let Ok(Some(el)) = document.query_selector(".hint") {
-                    let cur = el.get_attribute("data-visible");
-                    let show = match cur.as_deref() {
-                        Some("1") => false,
-                        _ => true,
-                    };
-                    let _ = el.set_attribute("data-visible", if show { "1" } else { "0" });
-                    if let Some(div) = el.dyn_ref::<web::HtmlElement>() {
-                        if show {
-                            // Default content (before full engine/UI attach)
-                            div.set_inner_html(
-                                "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: 110 • Paused: no",
-                            );
-                            let _ = el.set_attribute("style", "");
-                        } else {
-                            let _ = el.set_attribute("style", "display:none");
-                        }
-                    }
-                }
+                ui::toggle_hint_visibility(&document);
                 ev.prevent_default();
             }
         }) as Box<dyn FnMut(_)>);
