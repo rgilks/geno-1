@@ -12,9 +12,9 @@ not_found_handling = "single-page-application"
 [vars]
 ENVIRONMENT = "production"
 
-# [[routes]]
-# pattern = "your-subdomain.yourdomain.tld/*"
-# zone_name = "yourdomain.tld"
+[[routes]]
+pattern = "geno-1.tre.systems/*"
+zone_name = "tre.systems"
 
 [build]
 command = "npm run build:web"

@@ -40,6 +40,8 @@ Headless test:
 
 - GitHub Actions workflow runs on push/PR to main:
   - Builds the web bundle and executes the headless browser test
+  - On push to `main`, deploys to Cloudflare Workers via Wrangler
+  - Requires repo secrets: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
   - Workflow file: `.github/workflows/web-ci.yml`
 
 ### Run (Native)
