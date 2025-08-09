@@ -8,6 +8,7 @@
   - 3 voices, spatial audio (Web Audio + PannerNode)
   - Lush ambient effects: global Convolver reverb and dark feedback Delay bus with per-voice sends and a master bus
   - Mouse-driven FX: corner-based saturation (clean ↔ fizz) and opposite-corner delay emphasis; visuals have inertial swirl motion and click ripples
+  - Note-driven visuals use attack/release smoothing for organic response (no abrupt jumps)
   - Start overlay to initialize audio (Click Start; canvas-click fallback)
   - Drag voices in XZ plane; click to mute, Shift+Click reseed, Alt+Click solo
 - Keyboard: R (reseed all), Space (pause), + / - (tempo)

@@ -951,6 +951,9 @@ async fn init() -> anyhow::Result<()> {
                     let mut swirl_pos: [f32; 2] = [0.5, 0.5];
                     let mut swirl_vel: [f32; 2] = [0.0, 0.0];
                     let mut swirl_initialized: bool = false;
+                    // Per-voice energy accumulator for organic pulse smoothing
+                    // This soaks up instantaneous note events and lets visuals chase it smoothly
+                    let mut pulse_energy: [f32; 3] = [0.0, 0.0, 0.0];
                     *tick.borrow_mut() = Some(Closure::wrap(Box::new(move || {
                         let now = Instant::now();
                         let dt = now - last_instant;
@@ -967,14 +970,29 @@ async fn init() -> anyhow::Result<()> {
 
                         {
                             let mut ps = pulses_tick.borrow_mut();
+                            let n = ps.len().min(3);
+                            // Accumulate note energy per voice (cap to keep visuals tame)
                             for ev in &note_events {
-                                // Smooth in the pulse so visuals don't jump
-                                let target = (ps[ev.voice_index] + ev.velocity as f32).min(1.5);
-                                ps[ev.voice_index] = 0.7 * ps[ev.voice_index] + 0.3 * target;
+                                if ev.voice_index < n {
+                                    pulse_energy[ev.voice_index] = (pulse_energy[ev.voice_index]
+                                        + ev.velocity as f32)
+                                        .min(1.8);
+                                }
                             }
-                            for p in ps.iter_mut() {
-                                // Exponential decay for smoother falloff
-                                *p *= 1.0 - (dt_sec * 1.8).min(0.9);
+                            // Energy decays at a fixed rate; independent of output smoothing
+                            let energy_decay = (-dt_sec * 1.6).exp();
+                            for i in 0..n {
+                                pulse_energy[i] *= energy_decay;
+                            }
+                            // Output pulses chase energy with attack/release time constants
+                            let tau_up = 0.10_f32; // faster rise
+                            let tau_down = 0.45_f32; // slower fall for organic tails
+                            let alpha_up = 1.0 - (-dt_sec / tau_up).exp();
+                            let alpha_down = 1.0 - (-dt_sec / tau_down).exp();
+                            for i in 0..n {
+                                let target = pulse_energy[i].clamp(0.0, 1.5);
+                                let alpha = if target > ps[i] { alpha_up } else { alpha_down };
+                                ps[i] += (target - ps[i]) * alpha;
                             }
                             // Mouse-driven swirl effect intensity (visual + global audio whoosh)
                             let w = canvas_for_tick.width().max(1) as f32;
@@ -1176,7 +1194,7 @@ async fn init() -> anyhow::Result<()> {
 
                             // Compute camera eye
                             let cam_eye = Vec3::new(0.0, 0.0, CAMERA_Z);
-                           
+
                             let cam_target = Vec3::ZERO;
                             // Sync AudioListener position + orientation to camera
                             let fwd = (cam_target - cam_eye).normalize();

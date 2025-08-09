@@ -32,6 +32,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 - [x] Instanced rendering of voice markers (circle mask, emissive pulse)
 - [x] Audio-reactive pulses on note events
+- [x] Attack/release smoothing of note-driven pulses to eliminate jittery jumps
 - [x] Ambient visuals (ambient waves background with swirl and click ripples; optional analyser-driven spectrum dots)
 - [x] Sync listener orientation with camera
 - [x] Visual polish (colors, easing, subtle glow, vignette)
