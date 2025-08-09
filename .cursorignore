@@ -1,0 +1,29 @@
+# Build artifacts and caches
+/target/
+**/target/
+
+# Node modules and caches
+/node_modules/
+**/node_modules/
+
+# Wasm-pack output
+/crates/app-web/pkg/
+**/pkg/
+
+# Temporary files
+*.log
+.DS_Store
+Thumbs.db
+
+# Editor/OS
+.vscode/
+.idea/
+
+# Coverage and test outputs
+coverage/
+*.lcov
+
+# Misc
+*.tmp
+*.swp
+*.swo
