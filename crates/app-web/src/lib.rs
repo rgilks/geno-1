@@ -9,6 +9,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use web_sys as web;
+use wgpu::util::DeviceExt;
 
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
@@ -38,6 +39,33 @@ async fn init() -> anyhow::Result<()> {
         .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
 
     // Avoid grabbing a 2D context here to allow WebGPU to acquire the canvas
+
+    // Maintain canvas internal pixel size to match CSS size * devicePixelRatio
+    {
+        let window = web::window().unwrap();
+        let dpr = window.device_pixel_ratio();
+        let rect = canvas.get_bounding_client_rect();
+        let width = (rect.width() * dpr) as u32;
+        let height = (rect.height() * dpr) as u32;
+        canvas.set_width(width.max(1));
+        canvas.set_height(height.max(1));
+        // Listen for window resize and update canvas backing size
+        let canvas_resize = canvas.clone();
+        let resize_closure = Closure::wrap(Box::new(move || {
+            if let Some(w) = web::window() {
+                let dpr = w.device_pixel_ratio();
+                let rect = canvas_resize.get_bounding_client_rect();
+                let w_px = (rect.width() * dpr) as u32;
+                let h_px = (rect.height() * dpr) as u32;
+                canvas_resize.set_width(w_px.max(1));
+                canvas_resize.set_height(h_px.max(1));
+            }
+        }) as Box<dyn FnMut()>);
+        window
+            .add_event_listener_with_callback("resize", resize_closure.as_ref().unchecked_ref())
+            .ok();
+        resize_closure.forget();
+    }
 
     // Prepare a clone for use inside the click closure
     let canvas_for_click = canvas.clone();
@@ -240,8 +268,11 @@ async fn init() -> anyhow::Result<()> {
                         // Compute hover or drag update
                         let (ro, rd) = project_to_ray(pos.x, pos.y);
                         let mut best = None::<(usize, f32)>;
+                        let spread = 1.8f32;
+                        let z_offset = Vec3::new(0.0, 0.0, -4.0);
                         for (i, v) in engine_m.borrow().voices.iter().enumerate() {
-                            if let Some(t) = ray_sphere(ro, rd, v.position, 0.6) {
+                            let center_world = v.position * spread + z_offset;
+                            if let Some(t) = ray_sphere(ro, rd, center_world, 0.8) {
                                 if t >= 0.0 {
                                     match best {
                                         Some((_, bt)) if t >= bt => {}
@@ -258,16 +289,17 @@ async fn init() -> anyhow::Result<()> {
                             if denom.abs() > 1e-4 {
                                 let t = n.dot(plane_p - ro) / denom;
                                 if t >= 0.0 {
-                                    let hit = ro + rd * t;
+                                    let hit_world = ro + rd * t;
+                                    let eng_pos = (hit_world - z_offset) / spread;
                                     let mut eng = engine_m.borrow_mut();
                                     let vi = drag_m.borrow().voice;
-                                    eng.set_voice_position(vi, Vec3::new(hit.x, 0.0, hit.z));
-                                    log::info!(
-                                        "[drag] voice {} -> pos=({:.2},{:.2},{:.2})",
+                                    eng.set_voice_position(
                                         vi,
-                                        hit.x,
-                                        0.0,
-                                        hit.z
+                                        Vec3::new(eng_pos.x, 0.0, eng_pos.z),
+                                    );
+                                    log::info!(
+                                        "[drag] voice {} -> world=({:.2},{:.2},{:.2}) engine=({:.2},{:.2},{:.2})",
+                                        vi, hit_world.x, hit_world.y, hit_world.z, eng_pos.x, 0.0, eng_pos.z
                                     );
                                 }
                             }
@@ -349,13 +381,16 @@ async fn init() -> anyhow::Result<()> {
                     closure.forget();
                 }
 
-                // Scheduler + renderer loop
+                // Scheduler + renderer loop driven by requestAnimationFrame
                 let mut last_instant = Instant::now();
                 let mut note_events = Vec::new();
                 let pulses_tick = pulses.clone();
                 let engine_tick = engine.clone();
                 let hover_tick = hover_index.clone();
-                let tick = Closure::wrap(Box::new(move || {
+                let canvas_for_tick = canvas_for_click.clone();
+                let tick: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
+                let tick_clone = tick.clone();
+                *tick.borrow_mut() = Some(Closure::wrap(Box::new(move || {
                     let now = Instant::now();
                     let dt = now - last_instant;
                     last_instant = now;
@@ -380,10 +415,12 @@ async fn init() -> anyhow::Result<()> {
                             voice_panners[i].set_position(pos.x as f64, pos.y as f64, pos.z as f64);
                         }
                         let e_ref = engine_tick.borrow();
-                        let mut positions: Vec<Vec3> = vec![
-                            e_ref.voices[0].position,
-                            e_ref.voices[1].position,
-                            e_ref.voices[2].position,
+                        let z_offset = Vec3::new(0.0, 0.0, -4.0);
+                        let spread = 1.8f32;
+                        let positions: Vec<Vec3> = vec![
+                            e_ref.voices[0].position * spread + z_offset,
+                            e_ref.voices[1].position * spread + z_offset,
+                            e_ref.voices[2].position * spread + z_offset,
                         ];
                         let mut colors: Vec<Vec4> = vec![
                             Vec4::from((Vec3::from(e_ref.configs[0].color_rgb), 1.0)),
@@ -404,8 +441,13 @@ async fn init() -> anyhow::Result<()> {
                                 colors[i].z = (colors[i].z * 1.4).min(1.0);
                             }
                         }
-                        let mut scales: Vec<f32> =
-                            vec![1.0 + ps[0] * 0.6, 1.0 + ps[1] * 0.6, 1.0 + ps[2] * 0.6];
+                        let scales: Vec<f32> =
+                            vec![1.6 + ps[0] * 0.4, 1.6 + ps[1] * 0.4, 1.6 + ps[2] * 0.4];
+
+                        // Keep WebGPU surface sized to canvas backing size
+                        let w = canvas_for_tick.width();
+                        let h = canvas_for_tick.height();
+                        gpu.resize_if_needed(w, h);
                         if let Err(e) = gpu.render(&positions, &colors, &scales) {
                             log::error!("render error: {:?}", e);
                         }
@@ -443,15 +485,24 @@ async fn init() -> anyhow::Result<()> {
                         let _ = src.start_with_when(t0);
                         let _ = src.stop_with_when(t0 + ev.duration_sec as f64 + 0.02);
                     }
-                }) as Box<dyn FnMut()>);
 
-                let _ = web::window()
-                    .unwrap()
-                    .set_interval_with_callback_and_timeout_and_arguments_0(
-                        tick.as_ref().unchecked_ref(),
-                        16,
+                    // Schedule next frame
+                    if let Some(w) = web::window() {
+                        let _ = w.request_animation_frame(
+                            tick_clone
+                                .borrow()
+                                .as_ref()
+                                .unwrap()
+                                .as_ref()
+                                .unchecked_ref(),
+                        );
+                    }
+                }) as Box<dyn FnMut()>));
+                if let Some(w) = web::window() {
+                    let _ = w.request_animation_frame(
+                        tick.borrow().as_ref().unwrap().as_ref().unchecked_ref(),
                     );
-                tick.forget();
+                }
             });
         }) as Box<dyn FnMut()>);
         canvas
@@ -468,8 +519,16 @@ async fn init() -> anyhow::Result<()> {
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
-    mvp: [[f32; 4]; 4],
+    view_proj: [[f32; 4]; 4],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct InstanceData {
+    pos: [f32; 3],
+    scale: f32,
     color: [f32; 4],
+    pulse: f32,
 }
 
 struct GpuState<'a> {
@@ -479,6 +538,8 @@ struct GpuState<'a> {
     config: wgpu::SurfaceConfiguration,
     pipeline: wgpu::RenderPipeline,
     uniform_buffer: wgpu::Buffer,
+    quad_vb: wgpu::Buffer,
+    instance_vb: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
     format: wgpu::TextureFormat,
     width: u32,
@@ -504,7 +565,8 @@ impl<'a> GpuState<'a> {
             .request_device(
                 &wgpu::DeviceDescriptor {
                     required_features: wgpu::Features::empty(),
-                    required_limits: wgpu::Limits::downlevel_defaults(),
+                    // Use default limits on web to avoid passing unknown fields to older WebGPU impls
+                    required_limits: wgpu::Limits::default(),
                     memory_hints: wgpu::MemoryHints::Performance,
                     label: None,
                 },
@@ -527,25 +589,44 @@ impl<'a> GpuState<'a> {
         surface.configure(&device, &config);
 
         let shader_src = r#"
-struct VsOut { @builtin(position) pos: vec4<f32> };
-struct Uniforms { mvp: mat4x4<f32>, color: vec4<f32> };
+struct VsOut {
+  @builtin(position) pos: vec4<f32>,
+  @location(0) color: vec4<f32>,
+  @location(1) local: vec2<f32>,
+  @location(2) pulse: f32,
+};
+struct Uniforms { view_proj: mat4x4<f32> };
 @group(0) @binding(0) var<uniform> u: Uniforms;
 
 @vertex
-fn vs_main(@builtin(vertex_index) idx: u32) -> VsOut {
-    var positions = array<vec2<f32>,3>(
-        vec2<f32>(-0.5, -0.5),
-        vec2<f32>( 0.5, -0.5),
-        vec2<f32>( 0.0,  0.5)
-    );
-    let p = positions[idx];
-    var out: VsOut;
-    out.pos = u.mvp * vec4<f32>(p, 0.0, 1.0);
-    return out;
+fn vs_main(
+  @location(0) v_pos: vec2<f32>,
+  @location(1) i_pos: vec3<f32>,
+  @location(2) i_scale: f32,
+  @location(3) i_color: vec4<f32>,
+  @location(4) i_pulse: f32,
+) -> VsOut {
+  let local_scaled = vec4<f32>(v_pos * i_scale, 0.0, 1.0);
+  let world = vec4<f32>(i_pos, 1.0) + local_scaled;
+  var out: VsOut;
+  out.pos = u.view_proj * world;
+  out.color = i_color;
+  out.local = v_pos; // unscaled local for shape mask
+  out.pulse = i_pulse;
+  return out;
 }
 
 @fragment
-fn fs_main() -> @location(0) vec4<f32> { return u.color; }
+fn fs_main(inf: VsOut) -> @location(0) vec4<f32> {
+  // Circular mask within the quad (unit circle of radius 0.5)
+  let r = length(inf.local);
+  let shape_alpha = 1.0 - smoothstep(0.48, 0.5, r);
+
+  // Emissive pulse boosts brightness subtly
+  let emissive = 0.7 * clamp(inf.pulse, 0.0, 1.5);
+  let rgb = inf.color.rgb * (1.0 + emissive);
+  return vec4<f32>(rgb, shape_alpha * inf.color.a);
+}
 "#;
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
@@ -555,6 +636,22 @@ fn fs_main() -> @location(0) vec4<f32> { return u.color; }
             label: Some("uniforms"),
             size: std::mem::size_of::<Uniforms>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        // Quad vertex buffer (two triangles)
+        let quad_vertices: [f32; 12] = [
+            -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5,
+        ];
+        let quad_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("quad_vb"),
+            contents: bytemuck::cast_slice(&quad_vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        // Instance buffer (capacity for 32 instances)
+        let instance_vb = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("instance_vb"),
+            size: (std::mem::size_of::<InstanceData>() * 32) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
         let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -583,13 +680,53 @@ fn fs_main() -> @location(0) vec4<f32> { return u.color; }
             bind_group_layouts: &[&bgl],
             push_constant_ranges: &[],
         });
+        let vertex_buffers = [
+            // slot 0: quad positions
+            wgpu::VertexBufferLayout {
+                array_stride: (std::mem::size_of::<f32>() * 2) as u64,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &[wgpu::VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x2,
+                    offset: 0,
+                    shader_location: 0,
+                }],
+            },
+            // slot 1: instance data
+            wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<InstanceData>() as u64,
+                step_mode: wgpu::VertexStepMode::Instance,
+                attributes: &[
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x3,
+                        offset: 0,
+                        shader_location: 1,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32,
+                        offset: 12,
+                        shader_location: 2,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 16,
+                        shader_location: 3,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32,
+                        offset: 32,
+                        shader_location: 4,
+                    },
+                ],
+            },
+        ];
+
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[],
+                buffers: &vertex_buffers,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             primitive: wgpu::PrimitiveState::default(),
@@ -616,6 +753,8 @@ fn fs_main() -> @location(0) vec4<f32> { return u.color; }
             config,
             pipeline,
             uniform_buffer,
+            quad_vb,
+            instance_vb,
             bind_group,
             format,
             width,
@@ -636,30 +775,15 @@ fn fs_main() -> @location(0) vec4<f32> { return u.color; }
         }
     }
 
-    fn mvp_for(&self, pos: Vec3, scale: f32) -> [[f32; 4]; 4] {
+    fn view_proj(&self) -> [[f32; 4]; 4] {
         let aspect = self.width as f32 / self.height as f32;
         let proj = Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect, 0.1, 100.0);
-        let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 3.0), Vec3::ZERO, Vec3::Y);
-        // Apply translation first, then scale: model = T * S
-        let model = Mat4::from_translation(pos) * Mat4::from_scale(Vec3::splat(scale));
-        (proj * view * model).to_cols_array_2d()
+        // Camera a bit back to see three markers comfortably
+        let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 6.0), Vec3::ZERO, Vec3::Y);
+        (proj * view).to_cols_array_2d()
     }
 
-    fn draw_instance(
-        &mut self,
-        rpass: &mut wgpu::RenderPass<'_>,
-        mvp: [[f32; 4]; 4],
-        color: [f32; 4],
-    ) {
-        self.queue.write_buffer(
-            &self.uniform_buffer,
-            0,
-            bytemuck::bytes_of(&Uniforms { mvp, color }),
-        );
-        rpass.set_pipeline(&self.pipeline);
-        rpass.set_bind_group(0, &self.bind_group, &[]);
-        rpass.draw(0..3, 0..1);
-    }
+    // draw_instance no longer used with instanced path
 
     fn render(
         &mut self,
@@ -677,32 +801,59 @@ fn fs_main() -> @location(0) vec4<f32> { return u.color; }
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("encoder"),
             });
-        {
-            let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("rpass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color {
-                            r: 0.03,
-                            g: 0.04,
-                            b: 0.08,
-                            a: 1.0,
-                        }),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
+        // Write view-projection
+        self.queue.write_buffer(
+            &self.uniform_buffer,
+            0,
+            bytemuck::bytes_of(&Uniforms {
+                view_proj: self.view_proj(),
+            }),
+        );
+        // Write instance data
+        let mut instance_data: Vec<InstanceData> = Vec::with_capacity(positions.len());
+        for i in 0..positions.len() {
+            let pulse_amount = if i < 3 {
+                // guard
+                // derive from scale relative to base 1.6
+                (scales[i] - 1.6).max(0.0) / 0.4
+            } else {
+                0.0
+            };
+            instance_data.push(InstanceData {
+                pos: positions[i].to_array(),
+                scale: scales[i],
+                color: colors[i].to_array(),
+                pulse: pulse_amount,
             });
-            for i in 0..positions.len() {
-                let mvp = self.mvp_for(positions[i], scales[i]);
-                let color = colors[i].to_array();
-                self.draw_instance(&mut rpass, mvp, color);
-            }
         }
+        self.queue
+            .write_buffer(&self.instance_vb, 0, bytemuck::cast_slice(&instance_data));
+
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("rpass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: &view,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(wgpu::Color {
+                        r: 0.03,
+                        g: 0.04,
+                        b: 0.08,
+                        a: 1.0,
+                    }),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        rpass.set_pipeline(&self.pipeline);
+        rpass.set_bind_group(0, &self.bind_group, &[]);
+        rpass.set_vertex_buffer(0, self.quad_vb.slice(..));
+        rpass.set_vertex_buffer(1, self.instance_vb.slice(..));
+        rpass.draw(0..6, 0..(positions.len() as u32));
+        drop(rpass);
         self.queue.submit(Some(encoder.finish()));
         frame.present();
         Ok(())

@@ -44,6 +44,7 @@ impl<'w> GpuState<'w> {
                 &wgpu::DeviceDescriptor {
                     required_features: wgpu::Features::empty(),
                     required_limits: wgpu::Limits::default(),
+                    memory_hints: wgpu::MemoryHints::Performance,
                     label: None,
                 },
                 None,
@@ -129,21 +130,24 @@ fn fs_main() -> @location(0) vec4<f32> {
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
-                entry_point: "vs_main",
+                entry_point: Some("vs_main"),
                 buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             primitive: wgpu::PrimitiveState::default(),
             depth_stencil: None,
             multisample: wgpu::MultisampleState::default(),
             fragment: Some(wgpu::FragmentState {
                 module: &shader,
-                entry_point: "fs_main",
+                entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
                     format,
                     blend: Some(wgpu::BlendState::ALPHA_BLENDING),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
             }),
+            cache: None,
             multiview: None,
         });
 

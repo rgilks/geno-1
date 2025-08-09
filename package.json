@@ -11,7 +11,7 @@
     "dev:web": "npm run build:web && npm run serve:web",
     "open:web": "open http://localhost:8080",
     "build:native": "cargo build -p app-native",
-    "run:native": "cargo run -p app-native",
+    "native": "cargo run -p app-native",
     "build:all": "npm run build:native && npm run build:web",
     "clean": "cargo clean && rm -rf crates/app-web/pkg"
   },
