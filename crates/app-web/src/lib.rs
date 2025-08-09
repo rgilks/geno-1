@@ -402,6 +402,12 @@ async fn init() -> anyhow::Result<()> {
                     if let Some(a) = &analyser {
                         a.set_fft_size(256);
                     }
+                    // Reusable buffer for analyser to avoid per-frame allocations/GC pauses
+                    let analyser_buf: Rc<RefCell<Vec<f32>>> = Rc::new(RefCell::new(Vec::new()));
+                    if let Some(a) = &analyser {
+                        let bins = a.frequency_bin_count() as usize;
+                        analyser_buf.borrow_mut().resize(bins, 0.0);
+                    }
 
                     // Pause state (stops scheduling new notes but keeps rendering)
                     let paused = Rc::new(RefCell::new(false));
@@ -924,14 +930,19 @@ async fn init() -> anyhow::Result<()> {
                             }
                             // Optional analyser-driven mild ambient pulse
                             if let Some(a) = &analyser {
-                                let bins = a.frequency_bin_count();
-                                let mut freq = vec![0.0_f32; bins as usize];
-                                a.get_float_frequency_data(&mut freq);
+                                let bins = a.frequency_bin_count() as usize;
+                                {
+                                    let mut buf = analyser_buf.borrow_mut();
+                                    if buf.len() != bins {
+                                        buf.resize(bins, 0.0);
+                                    }
+                                    a.get_float_frequency_data(&mut buf);
+                                }
                                 // Use low-frequency bin energy to adjust background subtly
                                 let mut sum = 0.0f32;
                                 let take = (bins.min(16)) as u32;
                                 for i in 0..take {
-                                    let v = freq[i as usize]; // in dBFS (-inf..0)
+                                    let v = analyser_buf.borrow()[i as usize]; // in dBFS (-inf..0)
                                                               // map dB to 0..1 roughly
                                     let lin = ((v + 100.0) / 100.0).clamp(0.0, 1.0);
                                     sum += lin;
@@ -1005,15 +1016,20 @@ async fn init() -> anyhow::Result<()> {
                                 let bins = a.frequency_bin_count() as usize;
                                 let dots = bins.min(16);
                                 if dots > 0 {
-                                    let mut freq = vec![0.0_f32; bins];
-                                    a.get_float_frequency_data(&mut freq);
+                                    {
+                                        let mut buf = analyser_buf.borrow_mut();
+                                        if buf.len() != bins {
+                                            buf.resize(bins, 0.0);
+                                        }
+                                        a.get_float_frequency_data(&mut buf);
+                                    }
                                     let _w = canvas_for_tick.width().max(1) as f32;
                                     let _h = canvas_for_tick.height().max(1) as f32;
                                     // place dots near bottom of view in world space
                                     // map x from -2.8..2.8 and y slightly below origin
                                     let z = z_offset.z;
                                     for i in 0..dots {
-                                        let v_db = freq[i];
+                                        let v_db = analyser_buf.borrow()[i];
                                         let lin = ((v_db + 100.0) / 100.0).clamp(0.0, 1.0);
                                         let x = -2.8 + (i as f32) * (5.6 / (dots as f32 - 1.0));
                                         let y = -1.8;

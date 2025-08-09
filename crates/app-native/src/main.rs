@@ -26,7 +26,7 @@ struct InstanceData {
     pulse: f32,
 }
 
-#[derive(Default)]
+#[derive(Default, Clone)]
 struct VisState {
     positions: [Vec3; 3],
     colors: [Vec4; 3],
@@ -48,6 +48,8 @@ struct GpuState<'w> {
     height: u32,
     last_frame: Instant,
     shared: Arc<Mutex<VisState>>,
+    // Local snapshot to render when shared state is locked by audio thread
+    last_vis_snapshot: VisState,
 }
 
 impl<'w> GpuState<'w> {
@@ -212,6 +214,9 @@ impl<'w> GpuState<'w> {
             multiview: None,
         });
 
+        // Take an initial snapshot of visual state (non-blocking best-effort)
+        let initial_snapshot = shared.lock().map(|v| v.clone()).unwrap_or_default();
+
         Ok(Self {
             window,
             surface,
@@ -227,6 +232,7 @@ impl<'w> GpuState<'w> {
             height: size.height,
             last_frame: Instant::now(),
             shared,
+            last_vis_snapshot: initial_snapshot,
         })
     }
 
@@ -267,35 +273,46 @@ impl<'w> GpuState<'w> {
             }),
         );
 
-        // Build instance data from shared state
-        let mut vis = self.shared.lock().unwrap();
-        // decay pulses
+        // Build instance data from shared state without blocking the render thread.
+        // If the mutex is held by the audio scheduler, render using the last snapshot.
         let dt_sec = dt.as_secs_f32();
-        for p in vis.pulses.iter_mut() {
-            *p = (*p - dt_sec * 1.5).max(0.0);
-        }
+        let vis_local: VisState = if let Ok(mut vis) = self.shared.try_lock() {
+            // Decay pulses in shared state and copy snapshot
+            for p in vis.pulses.iter_mut() {
+                *p = (*p - dt_sec * 1.5).max(0.0);
+            }
+            let snapshot = vis.clone();
+            self.last_vis_snapshot = snapshot.clone();
+            snapshot
+        } else {
+            // Decay locally; avoid writing back to shared state
+            for p in self.last_vis_snapshot.pulses.iter_mut() {
+                *p = (*p - dt_sec * 1.5).max(0.0);
+            }
+            self.last_vis_snapshot.clone()
+        };
+
         let z_offset = app_core::z_offset_vec3();
         let spread = SPREAD;
         let positions = [
-            vis.positions[0] * spread + z_offset,
-            vis.positions[1] * spread + z_offset,
-            vis.positions[2] * spread + z_offset,
+            vis_local.positions[0] * spread + z_offset,
+            vis_local.positions[1] * spread + z_offset,
+            vis_local.positions[2] * spread + z_offset,
         ];
         let scales = [
-            BASE_SCALE + vis.pulses[0] * app_core::SCALE_PULSE_MULTIPLIER,
-            BASE_SCALE + vis.pulses[1] * app_core::SCALE_PULSE_MULTIPLIER,
-            BASE_SCALE + vis.pulses[2] * app_core::SCALE_PULSE_MULTIPLIER,
+            BASE_SCALE + vis_local.pulses[0] * app_core::SCALE_PULSE_MULTIPLIER,
+            BASE_SCALE + vis_local.pulses[1] * app_core::SCALE_PULSE_MULTIPLIER,
+            BASE_SCALE + vis_local.pulses[2] * app_core::SCALE_PULSE_MULTIPLIER,
         ];
         let mut instances: Vec<InstanceData> = Vec::with_capacity(3);
         for i in 0..3 {
             instances.push(InstanceData {
                 pos: positions[i].to_array(),
                 scale: scales[i],
-                color: vis.colors[i].to_array(),
-                pulse: vis.pulses[i],
+                color: vis_local.colors[i].to_array(),
+                pulse: vis_local.pulses[i],
             });
         }
-        drop(vis);
         self.queue
             .write_buffer(&self.instance_vb, 0, bytemuck::cast_slice(&instances));
 
@@ -628,13 +645,16 @@ fn start_audio_engine(
                         }
                         drop(guard);
                         // Kick visual pulses
-                        let mut vis = vis_clone.lock().unwrap();
-                        for ev in &events {
-                            let i = ev.voice_index.min(2);
-                            vis.pulses[i] = (vis.pulses[i] + ev.velocity).min(1.5);
+                        // Try to update visual pulses without blocking; if busy, skip this tick
+                        if let Ok(mut vis) = vis_clone.try_lock() {
+                            for ev in &events {
+                                let i = ev.voice_index.min(2);
+                                vis.pulses[i] = (vis.pulses[i] + ev.velocity).min(1.5);
+                            }
                         }
                     }
-                    std::thread::sleep(Duration::from_millis(15));
+                    // Small sleep to limit CPU without inducing long stalls
+                    std::thread::sleep(Duration::from_millis(8));
                 }
             })
             .ok()?;
