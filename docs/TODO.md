@@ -22,7 +22,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Generative scheduler at tempo (eighth-note grid), 3 voices
 - [x] Controls: BPM, reseed voice/all, mute, solo (click/keys)
 - [x] Distance attenuation via `PannerNode` with drag movement
-- [ ] Optional `AnalyserNode` to drive ambient visuals
+- [x] Optional `AnalyserNode` to drive ambient visuals
 - [ ] Optional AudioWorklet path (future)
 
 ## Visual Engine (Web)
@@ -48,8 +48,8 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 - [x] Native window via `winit` and rendering via `wgpu`
 - [x] Basic native audio via `cpal` with envelopes
-- [ ] Map native audio to per-voice waveforms (currently sine only)
-- [ ] Stereo panning by X based on voice position
+- [x] Map native audio to per-voice waveforms (currently sine only)
+- [x] Stereo panning by X based on voice position
 - [ ] Native input parity (hover, drag, click)
 
 ## Error Handling & UX
@@ -66,7 +66,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 ## Code Hygiene
 
 - [x] Resolve minor warnings in `app-web` (unused `mut`, unused `format` field)
-- [ ] Centralize color/theme constants and object sizes
+- [x] Centralize color/theme constants and object sizes
 
 ## Testing & DX
 
