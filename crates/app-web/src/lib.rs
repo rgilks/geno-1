@@ -731,7 +731,6 @@ struct GpuState<'a> {
     quad_vb: wgpu::Buffer,
     instance_vb: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
-    format: wgpu::TextureFormat,
     width: u32,
     height: u32,
 }
@@ -766,7 +765,7 @@ impl<'a> GpuState<'a> {
             .map_err(|e| anyhow::anyhow!(format!("request_device error: {:?}", e)))?;
         let caps = surface.get_capabilities(&adapter);
         let format = caps.formats[0];
-        let mut config = wgpu::SurfaceConfiguration {
+        let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
             width,
@@ -946,7 +945,6 @@ fn fs_main(inf: VsOut) -> @location(0) vec4<f32> {
             quad_vb,
             instance_vb,
             bind_group,
-            format,
             width,
             height,
         })

@@ -10,6 +10,8 @@ edition = "2021"
 license = "MIT"
 name = "geno-1"
 version = "0.1.0"
+description = "Generative 3D music visualizer using Rust, WebGPU (wgpu v24), and WebAudio"
+repository = "https://github.com/rgilks/geno-1"
 
 [workspace.dependencies]
 anyhow = "1.0"

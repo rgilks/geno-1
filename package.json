@@ -5,14 +5,14 @@
   "main": "index.js",
   "scripts": {
     "test": "npm run test:web",
-    "build:web": "cd crates/app-web && wasm-pack build --target web --out-dir pkg --out-name app_web --release && cp env.js pkg/env.js",
+    "build:web": "cd crates/app-web && cp ../../LICENSE LICENSE && wasm-pack build --target web --out-dir pkg --out-name app_web --release && cp env.js pkg/env.js",
     "build:web:dev": "cd crates/app-web && wasm-pack build --target web --out-dir pkg --out-name app_web && cp env.js pkg/env.js",
     "serve:web": "cd crates/app-web && http-server -p 8080 -c-1 .",
     "dev:web": "npm run build:web && npm run serve:web",
     "open:web": "open http://localhost:8080",
     "start:web": "node server.js",
     "test:web": "node web-test.js",
-    "ci:web": "npm run build:web && node server.js & sleep 1 && node web-test.js",
+    "ci:web": "npm run build:web && node server.js & SERVER_PID=$!; sleep 1; node web-test.js; kill $SERVER_PID",
     "build:native": "cargo build -p app-native",
     "native": "cargo run -p app-native",
     "build:all": "npm run build:native && npm run build:web",
@@ -24,7 +24,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
   "bugs": {
     "url": "https://github.com/rgilks/geno-1/issues"

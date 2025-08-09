@@ -10,9 +10,9 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Headless web test (Puppeteer) scripted interactions
 - [x] CI workflow to build web and run headless test
 - [x] CI: handle Ubuntu 24.04 ALSA rename (install `libasound2t64` with fallback)
-- [ ] Add LICENSE file matching workspace `license = "MIT"`
-- [ ] Fill optional `description`/`repository` fields in crate manifests
-- [ ] Add README workflow badge (done) and keep CI green
+- [x] Add LICENSE file matching workspace `license = "MIT"`
+- [x] Fill optional `description`/`repository` fields in crate manifests
+- [x] Add README workflow badge (done) and keep CI green
 
 ## Audio Engine (Web)
 
@@ -53,7 +53,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 ## Error Handling & UX
 
-- [ ] Graceful message if `navigator.gpu` not available (WebGPU unsupported)
+- [x] Graceful message if `navigator.gpu` not available (WebGPU unsupported)
 - [ ] Graceful message if `AudioContext` fails to initialize (permissions)
 
 ## Performance & Quality
@@ -64,7 +64,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 ## Code Hygiene
 
-- [ ] Resolve minor warnings in `app-web` (unused `mut`, unused `format` field)
+- [x] Resolve minor warnings in `app-web` (unused `mut`, unused `format` field)
 - [ ] Centralize color/theme constants and object sizes
 
 ## Testing & DX
@@ -77,7 +77,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 - [ ] Add hosting instructions (GitHub Pages/static hosting)
 - [ ] Optional: GitHub Pages workflow to publish `crates/app-web` artifacts
-- [ ] Optional: production server/worker if needed
+- [x] Optional: production server/worker if needed
 
 ---
 

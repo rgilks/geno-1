@@ -3,6 +3,8 @@ name = "app-native"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+description = "Native desktop front-end (winit + wgpu) for geno-1"
+repository = "https://github.com/rgilks/geno-1"
 
 [dependencies]
 anyhow = { workspace = true }

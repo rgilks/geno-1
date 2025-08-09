@@ -3,6 +3,8 @@ name = "app-web"
 version = "0.1.0"
 edition = "2021"
 license = "MIT"
+description = "Web front-end (WASM) using WebGPU and WebAudio for geno-1"
+repository = "https://github.com/rgilks/geno-1"
 
 [lib]
 crate-type = ["cdylib", "rlib"]
