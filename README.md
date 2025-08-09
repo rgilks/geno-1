@@ -8,7 +8,7 @@
   - 3 voices, spatial audio (Web Audio + PannerNode)
   - Start overlay to initialize audio (Click Start; canvas-click fallback)
   - Drag voices in XZ plane; click to mute, Shift+Click reseed, Alt+Click solo
-  - Keyboard: R (reseed all), Space (pause), + / - (tempo), M (master mute)
+  - Keyboard: R (reseed all), Space (pause), + / - (tempo), M (master mute), O (orbit on/off)
   - Starts muted by default; press M to unmute
   - Dynamic hint shows current BPM, paused, and muted state
 - Native front-end renders and plays basic synthesized audio (parity improving)
@@ -47,7 +47,7 @@ Controls in browser:
 - Click Start to initialize audio (canvas click also works)
 - Drag a circle to move a voice in XZ plane (updates spatialization)
 - Click a voice: mute; Shift+Click: reseed; Alt+Click: solo
-- Keys: R (reseed all), Space (pause/resume), + / - (tempo), M (master mute)
+- Keys: R (reseed all), Space (pause/resume), + / - (tempo), M (master mute), O (orbit on/off)
 
 Headless test:
 

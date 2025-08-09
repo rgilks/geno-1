@@ -12,7 +12,7 @@
     "open:web": "open http://localhost:8080",
     "start:web": "node server.js",
     "test:web": "node web-test.js",
-    "ci:web": "npm run build:web && node server.js & SERVER_PID=$!; sleep 1; node web-test.js; kill $SERVER_PID",
+    "ci:web": "npm run build:web && node server.js & SERVER_PID=$!; sleep 1; node web-test.js; kill $SERVER_PID 2>/dev/null || true",
     "build:native": "cargo build -p app-native",
     "native": "cargo run -p app-native",
     "native:smoke": "SMOKE_TEST=1 cargo run -p app-native",

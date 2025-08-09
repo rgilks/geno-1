@@ -81,6 +81,12 @@ server.listen(PORT, HOST, () => {
   console.log(`Dev server: http://${HOST}:${PORT}`);
 });
 server.on("error", (err) => {
+  // Gracefully handle port-in-use to allow CI to rely on an already running server
+  if (err && err.code === "EADDRINUSE") {
+    console.error("Server error: EADDRINUSE (port already in use); continuing");
+    // Do not exit with failure; web-test may connect to the already running server
+    return;
+  }
   console.error("Server error:", err);
   process.exit(1);
 });

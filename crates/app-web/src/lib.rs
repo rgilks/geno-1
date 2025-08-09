@@ -447,7 +447,7 @@ async fn init() -> anyhow::Result<()> {
                                 " " => {
                                     let mut p = paused_k.borrow_mut();
                                     *p = !*p;
-                                    log::info!("[keys] paused={} ", *p);
+                                    log::info!("[keys] paused={}", *p);
                                     // If hint visible, refresh its content
                                     if let Some(win) = web::window() {
                                         if let Some(doc) = win.document() {
@@ -779,7 +779,7 @@ async fn init() -> anyhow::Result<()> {
                             let e_ref = engine_tick.borrow();
                             let z_offset = z_offset_vec3();
                             let spread = SPREAD;
-                            let positions: Vec<Vec3> = vec![
+                            let mut positions: Vec<Vec3> = vec![
                                 e_ref.voices[0].position * spread + z_offset,
                                 e_ref.voices[1].position * spread + z_offset,
                                 e_ref.voices[2].position * spread + z_offset,
@@ -803,11 +803,36 @@ async fn init() -> anyhow::Result<()> {
                                     colors[i].z = (colors[i].z * 1.4).min(1.0);
                                 }
                             }
-                            let scales: Vec<f32> = vec![
+                            let mut scales: Vec<f32> = vec![
                                 BASE_SCALE + ps[0] * SCALE_PULSE_MULTIPLIER,
                                 BASE_SCALE + ps[1] * SCALE_PULSE_MULTIPLIER,
                                 BASE_SCALE + ps[2] * SCALE_PULSE_MULTIPLIER,
                             ];
+
+                            // Optional analyser-driven dot spectrum row
+                            if let Some(a) = &analyser {
+                                let bins = a.frequency_bin_count() as usize;
+                                let dots = bins.min(16);
+                                if dots > 0 {
+                                    let mut freq = vec![0.0_f32; bins];
+                                    a.get_float_frequency_data(&mut freq);
+                                    let _w = canvas_for_tick.width().max(1) as f32;
+                                    let _h = canvas_for_tick.height().max(1) as f32;
+                                    // place dots near bottom of view in world space
+                                    // map x from -2.8..2.8 and y slightly below origin
+                                    let z = z_offset.z;
+                                    for i in 0..dots {
+                                        let v_db = freq[i];
+                                        let lin = ((v_db + 100.0) / 100.0).clamp(0.0, 1.0);
+                                        let x = -2.8 + (i as f32) * (5.6 / (dots as f32 - 1.0));
+                                        let y = -1.8;
+                                        positions.push(Vec3::new(x, y, z));
+                                        let c = Vec3::new(0.25 + 0.5 * lin, 0.6 + 0.3 * lin, 0.9);
+                                        colors.push(Vec4::from((c, 0.95)));
+                                        scales.push(0.18 + lin * 0.35);
+                                    }
+                                }
+                            }
 
                             // Compute camera eye for orbit or fixed
                             let mut cam_eye = Vec3::new(0.0, 0.0, CAMERA_Z);
@@ -819,8 +844,11 @@ async fn init() -> anyhow::Result<()> {
                             let cam_target = Vec3::ZERO;
                             // Sync AudioListener position + orientation to camera
                             let fwd = (cam_target - cam_eye).normalize();
-                            listener_for_tick
-                                .set_position(cam_eye.x as f64, cam_eye.y as f64, cam_eye.z as f64);
+                            listener_for_tick.set_position(
+                                cam_eye.x as f64,
+                                cam_eye.y as f64,
+                                cam_eye.z as f64,
+                            );
                             let _ = listener_for_tick.set_orientation(
                                 fwd.x as f64,
                                 fwd.y as f64,

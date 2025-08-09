@@ -31,7 +31,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Audio-reactive pulses on note events
 - [ ] Ambient visuals (particles/spectrum bars/lights)
 - [x] Optional camera orbit (toggle 'O')
-- [ ] Sync listener orientation with camera
+ - [x] Sync listener orientation with camera
 - [ ] Visual polish (colors, easing, subtle glow)
 - [x] Prefer SRGB surface format where available (e.g., BGRA8UnormSrgb)
 
