@@ -174,7 +174,7 @@ async fn init() -> anyhow::Result<()> {
                             base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[2]),
                         },
                     ];
-                    log::info!("[gesture] starting systems after click");
+                    // starting systems after click
                     let engine = Rc::new(RefCell::new(MusicEngine::new(
                         voice_configs,
                         EngineParams {
@@ -478,18 +478,12 @@ async fn init() -> anyhow::Result<()> {
                                 ms.x = pos.x;
                                 ms.y = pos.y;
                             }
-                            let is_active = drag_m.borrow().active;
+                            let _is_active = drag_m.borrow().active;
                             // Store pointer position; render() converts to uv for swirl uniforms
                             let mut ms = mouse_state_m.borrow_mut();
                             ms.x = pos.x;
                             ms.y = pos.y;
-                            log::info!(
-                                "[move] pid={} pos=({:.1},{:.1}) active={}",
-                                ev.pointer_id(),
-                                pos.x,
-                                pos.y,
-                                is_active
-                            );
+                            // noisy move debug log removed
                             // Compute hover or drag update
                             let width = canvas_mouse.width() as f32;
                             let height = canvas_mouse.height() as f32;
@@ -554,13 +548,10 @@ async fn init() -> anyhow::Result<()> {
                                             vi,
                                             Vec3::new(eng_pos.x, 0.0, eng_pos.z),
                                         );
-                                        log::info!(
-                                            "[drag] voice {} -> world=({:.2},{:.2},{:.2}) engine=({:.2},{:.2},{:.2}) t={:.3} plane_z={:.2}",
-                                            vi, hit_world.x, hit_world.y, hit_world.z, eng_pos.x, 0.0, eng_pos.z, t, plane_z
-                                        );
+                                        // noisy drag debug log removed
                                     }
                                 } else {
-                                    log::info!("[drag] ray parallel to z-plane (rd.z~0)");
+                                    // noisy drag-parallel debug log removed
                                 }
                                 // While dragging, boost swirl strength (used during render)
                             } else {
@@ -605,13 +596,13 @@ async fn init() -> anyhow::Result<()> {
                                     for i in 0..voice_len {
                                         eng.reseed_voice(i, None);
                                     }
-                                    log::info!("[keys] reseeded all voices");
+                                    // noisy key debug log removed
                                 }
                                 // Pause/resume scheduling
                                 " " => {
                                     let mut p = paused_k.borrow_mut();
                                     *p = !*p;
-                                    log::info!("[keys] paused={}", *p);
+                                    // noisy key debug log removed
                                     // If hint visible, refresh its content
                                     if let Some(win) = web::window() {
                                         if let Some(doc) = win.document() {
@@ -645,7 +636,7 @@ async fn init() -> anyhow::Result<()> {
                                     let mut eng = engine_k.borrow_mut();
                                     let new_bpm = (eng.params.bpm + 5.0).min(240.0);
                                     eng.set_bpm(new_bpm);
-                                    log::info!("[keys] bpm -> {:.1}", new_bpm);
+                                    // noisy key debug log removed
                                     // If hint visible, refresh its content
                                     if let Some(win) = web::window() {
                                         if let Some(doc) = win.document() {
@@ -678,7 +669,7 @@ async fn init() -> anyhow::Result<()> {
                                     let mut eng = engine_k.borrow_mut();
                                     let new_bpm = (eng.params.bpm - 5.0).max(40.0);
                                     eng.set_bpm(new_bpm);
-                                    log::info!("[keys] bpm -> {:.1}", new_bpm);
+                                    // noisy key debug log removed
                                     // If hint visible, refresh its content
                                     if let Some(win) = web::window() {
                                         if let Some(doc) = win.document() {
@@ -712,7 +703,7 @@ async fn init() -> anyhow::Result<()> {
                                     *muted = !*muted;
                                     let new_val = if *muted { 0.0 } else { 0.8 };
                                     master_gain_k.gain().set_value(new_val);
-                                    log::info!("[keys] master muted={}", *muted);
+                                    // noisy key debug log removed
                                     // If hint visible, refresh its content
                                     if let Some(win) = web::window() {
                                         if let Some(doc) = win.document() {
@@ -744,7 +735,7 @@ async fn init() -> anyhow::Result<()> {
                                 "o" | "O" => {
                                     let mut ob = orbit_enabled_k.borrow_mut();
                                     *ob = !*ob;
-                                    log::info!("[keys] orbit={}", *ob);
+                                    // noisy key debug log removed
                                     // If hint visible, refresh its content
                                     if let Some(win) = web::window() {
                                         if let Some(doc) = win.document() {
@@ -803,12 +794,7 @@ async fn init() -> anyhow::Result<()> {
                             }
                             mouse_m.borrow_mut().down = true;
                             let _ = canvas_target.set_pointer_capture(ev.pointer_id());
-                            log::info!(
-                                "[down] pid={} shift={} alt={}",
-                                ev.pointer_id(),
-                                ev.shift_key(),
-                                ev.alt_key()
-                            );
+                            // noisy pointer down debug log removed
                             ev.prevent_default();
                         })
                             as Box<dyn FnMut(_)>);
@@ -837,22 +823,18 @@ async fn init() -> anyhow::Result<()> {
                                 let alt = ev.alt_key();
                                 if alt {
                                     engine_m.borrow_mut().toggle_solo(i);
-                                    log::info!("[click] solo voice {}", i);
+                                    // noisy click debug log removed
                                 } else if shift {
                                     engine_m.borrow_mut().reseed_voice(i, None);
-                                    log::info!("[click] reseed voice {}", i);
+                                    // noisy click debug log removed
                                 } else {
                                     engine_m.borrow_mut().toggle_mute(i);
-                                    log::info!("[click] toggle mute voice {}", i);
+                                    // noisy click debug log removed
                                 }
                             } else {
-                                log::info!("[click] mouseup with no hit");
+                                // noisy click debug log removed
                             }
-                            log::info!(
-                                "[up] pid={} was_dragging={}",
-                                ev.pointer_id(),
-                                was_dragging
-                            );
+                            // noisy pointer up debug log removed
                             mouse_m.borrow_mut().down = false;
                             ev.prevent_default();
                         })
@@ -943,7 +925,7 @@ async fn init() -> anyhow::Result<()> {
                                 let take = (bins.min(16)) as u32;
                                 for i in 0..take {
                                     let v = analyser_buf.borrow()[i as usize]; // in dBFS (-inf..0)
-                                                              // map dB to 0..1 roughly
+                                                                               // map dB to 0..1 roughly
                                     let lin = ((v + 100.0) / 100.0).clamp(0.0, 1.0);
                                     sum += lin;
                                 }
