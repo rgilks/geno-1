@@ -6,12 +6,28 @@ use winit::{event::*, event_loop::EventLoop, window::WindowBuilder};
 
 use app_core::{EngineParams, MusicEngine, VoiceConfig, Waveform, C_MAJOR_PENTATONIC};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use glam::Vec3;
+use glam::{Mat4, Vec3, Vec4};
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
+    view_proj: [[f32; 4]; 4],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+struct InstanceData {
+    pos: [f32; 3],
+    scale: f32,
     color: [f32; 4],
+    pulse: f32,
+}
+
+#[derive(Default)]
+struct VisState {
+    positions: [Vec3; 3],
+    colors: [Vec4; 3],
+    pulses: [f32; 3],
 }
 
 struct GpuState<'w> {
@@ -21,13 +37,22 @@ struct GpuState<'w> {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    render_pipeline: wgpu::RenderPipeline,
+    pipeline: wgpu::RenderPipeline,
     uniform_buffer: wgpu::Buffer,
+    quad_vb: wgpu::Buffer,
+    instance_vb: wgpu::Buffer,
     bind_group: wgpu::BindGroup,
+    width: u32,
+    height: u32,
+    last_frame: Instant,
+    shared: Arc<Mutex<VisState>>,
 }
 
 impl<'w> GpuState<'w> {
-    async fn new(window: &'w winit::window::Window) -> anyhow::Result<Self> {
+    async fn new(
+        window: &'w winit::window::Window,
+        shared: Arc<Mutex<VisState>>,
+    ) -> anyhow::Result<Self> {
         let size = window.inner_size();
         let instance = wgpu::Instance::default();
         let surface = unsafe { instance.create_surface(window) }?;
@@ -66,23 +91,40 @@ impl<'w> GpuState<'w> {
         surface.configure(&device, &config);
 
         let shader_source = r#"
-@vertex
-fn vs_main(@builtin(vertex_index) idx: u32) -> @builtin(position) vec4<f32> {
-    var pos = array<vec2<f32>, 3>(
-        vec2<f32>(-0.5, -0.5),
-        vec2<f32>( 0.5, -0.5),
-        vec2<f32>( 0.0,  0.5),
-    );
-    let p = pos[idx];
-    return vec4<f32>(p, 0.0, 1.0);
-}
-
-struct Uniforms { color: vec4<f32> };
+struct VsOut {
+  @builtin(position) pos: vec4<f32>,
+  @location(0) color: vec4<f32>,
+  @location(1) local: vec2<f32>,
+  @location(2) pulse: f32,
+};
+struct Uniforms { view_proj: mat4x4<f32> };
 @group(0) @binding(0) var<uniform> uniforms: Uniforms;
 
+@vertex
+fn vs_main(
+  @location(0) v_pos: vec2<f32>,
+  @location(1) i_pos: vec3<f32>,
+  @location(2) i_scale: f32,
+  @location(3) i_color: vec4<f32>,
+  @location(4) i_pulse: f32,
+) -> VsOut {
+  let local_scaled = vec4<f32>(v_pos * i_scale, 0.0, 1.0);
+  let world = vec4<f32>(i_pos, 1.0) + local_scaled;
+  var out: VsOut;
+  out.pos = uniforms.view_proj * world;
+  out.color = i_color;
+  out.local = v_pos;
+  out.pulse = i_pulse;
+  return out;
+}
+
 @fragment
-fn fs_main() -> @location(0) vec4<f32> {
-    return uniforms.color;
+fn fs_main(inf: VsOut) -> @location(0) vec4<f32> {
+  let r = length(inf.local);
+  let shape_alpha = 1.0 - smoothstep(0.48, 0.5, r);
+  let emissive = 0.7 * clamp(inf.pulse, 0.0, 1.5);
+  let rgb = inf.color.rgb * (1.0 + emissive);
+  return vec4<f32>(rgb, shape_alpha * inf.color.a);
 }
 "#;
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -90,18 +132,32 @@ fn fs_main() -> @location(0) vec4<f32> {
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
 
-        let uniform_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+        let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("uniforms"),
-            contents: bytemuck::bytes_of(&Uniforms {
-                color: [0.1, 0.6, 0.9, 1.0],
-            }),
+            size: std::mem::size_of::<Uniforms>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        // Quad vertices for two triangles
+        let quad_vertices: [f32; 12] = [
+            -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5,
+        ];
+        let quad_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("quad_vb"),
+            contents: bytemuck::cast_slice(&quad_vertices),
+            usage: wgpu::BufferUsages::VERTEX,
+        });
+        let instance_vb = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("instance_vb"),
+            size: (std::mem::size_of::<InstanceData>() * 32) as u64,
+            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
         });
         let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("bgl"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
+                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
                 ty: wgpu::BindingType::Buffer {
                     ty: wgpu::BufferBindingType::Uniform,
                     has_dynamic_offset: false,
@@ -125,13 +181,52 @@ fn fs_main() -> @location(0) vec4<f32> {
             push_constant_ranges: &[],
         });
 
-        let render_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("rp"),
+        let vertex_buffers = [
+            // slot 0: quad positions
+            wgpu::VertexBufferLayout {
+                array_stride: (std::mem::size_of::<f32>() * 2) as u64,
+                step_mode: wgpu::VertexStepMode::Vertex,
+                attributes: &[wgpu::VertexAttribute {
+                    format: wgpu::VertexFormat::Float32x2,
+                    offset: 0,
+                    shader_location: 0,
+                }],
+            },
+            // slot 1: instance data
+            wgpu::VertexBufferLayout {
+                array_stride: std::mem::size_of::<InstanceData>() as u64,
+                step_mode: wgpu::VertexStepMode::Instance,
+                attributes: &[
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x3,
+                        offset: 0,
+                        shader_location: 1,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32,
+                        offset: 12,
+                        shader_location: 2,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32x4,
+                        offset: 16,
+                        shader_location: 3,
+                    },
+                    wgpu::VertexAttribute {
+                        format: wgpu::VertexFormat::Float32,
+                        offset: 32,
+                        shader_location: 4,
+                    },
+                ],
+            },
+        ];
+        let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("pipeline"),
             layout: Some(&pipeline_layout),
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[],
+                buffers: &vertex_buffers,
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             primitive: wgpu::PrimitiveState::default(),
@@ -158,9 +253,15 @@ fn fs_main() -> @location(0) vec4<f32> {
             device,
             queue,
             config,
-            render_pipeline,
+            pipeline,
             uniform_buffer,
+            quad_vb,
+            instance_vb,
             bind_group,
+            width: size.width,
+            height: size.height,
+            last_frame: Instant::now(),
+            shared,
         })
     }
 
@@ -168,24 +269,70 @@ fn fs_main() -> @location(0) vec4<f32> {
         if new_size.width == 0 || new_size.height == 0 {
             return;
         }
+        self.width = new_size.width;
+        self.height = new_size.height;
         self.config.width = new_size.width;
         self.config.height = new_size.height;
         self.surface.configure(&self.device, &self.config);
     }
 
-    fn render(&mut self, t: f32) -> Result<(), wgpu::SurfaceError> {
+    fn view_proj(&self) -> [[f32; 4]; 4] {
+        let aspect = self.width as f32 / self.height as f32;
+        let proj = Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect, 0.1, 100.0);
+        let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 6.0), Vec3::ZERO, Vec3::Y);
+        (proj * view).to_cols_array_2d()
+    }
+
+    fn render(&mut self) -> Result<(), wgpu::SurfaceError> {
+        let now = Instant::now();
+        let dt = now - self.last_frame;
+        self.last_frame = now;
+
         let frame = self.surface.get_current_texture()?;
         let view = frame
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
 
-        // Animate color
-        let color = [0.2 + 0.8 * (0.5 + 0.5 * (t).sin()), 0.4, 0.9, 1.0];
+        // Update uniforms (view-proj)
         self.queue.write_buffer(
             &self.uniform_buffer,
             0,
-            bytemuck::bytes_of(&Uniforms { color }),
+            bytemuck::bytes_of(&Uniforms {
+                view_proj: self.view_proj(),
+            }),
         );
+
+        // Build instance data from shared state
+        let mut vis = self.shared.lock().unwrap();
+        // decay pulses
+        let dt_sec = dt.as_secs_f32();
+        for p in vis.pulses.iter_mut() {
+            *p = (*p - dt_sec * 1.5).max(0.0);
+        }
+        let z_offset = Vec3::new(0.0, 0.0, -4.0);
+        let spread = 1.8f32;
+        let positions = [
+            vis.positions[0] * spread + z_offset,
+            vis.positions[1] * spread + z_offset,
+            vis.positions[2] * spread + z_offset,
+        ];
+        let scales = [
+            1.6 + vis.pulses[0] * 0.4,
+            1.6 + vis.pulses[1] * 0.4,
+            1.6 + vis.pulses[2] * 0.4,
+        ];
+        let mut instances: Vec<InstanceData> = Vec::with_capacity(3);
+        for i in 0..3 {
+            instances.push(InstanceData {
+                pos: positions[i].to_array(),
+                scale: scales[i],
+                color: vis.colors[i].to_array(),
+                pulse: vis.pulses[i],
+            });
+        }
+        drop(vis);
+        self.queue
+            .write_buffer(&self.instance_vb, 0, bytemuck::cast_slice(&instances));
 
         let mut encoder = self
             .device
@@ -212,9 +359,11 @@ fn fs_main() -> @location(0) vec4<f32> {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            rpass.set_pipeline(&self.render_pipeline);
+            rpass.set_pipeline(&self.pipeline);
             rpass.set_bind_group(0, &self.bind_group, &[]);
-            rpass.draw(0..3, 0..1);
+            rpass.set_vertex_buffer(0, self.quad_vb.slice(..));
+            rpass.set_vertex_buffer(1, self.instance_vb.slice(..));
+            rpass.draw(0..6, 0..3);
         }
         self.queue.submit(Some(encoder.finish()));
         frame.present();
@@ -227,8 +376,23 @@ fn main() {
         .filter_level(log::LevelFilter::Info)
         .init();
 
+    // Shared visual state between scheduler and renderer
+    let shared_state = Arc::new(Mutex::new(VisState {
+        positions: [
+            Vec3::new(-1.0, 0.0, 0.0),
+            Vec3::new(1.0, 0.0, 0.0),
+            Vec3::new(0.0, 0.0, -1.0),
+        ],
+        colors: [
+            Vec4::new(0.9, 0.3, 0.3, 1.0),
+            Vec4::new(0.3, 0.9, 0.4, 1.0),
+            Vec4::new(0.3, 0.5, 0.9, 1.0),
+        ],
+        pulses: [0.0, 0.0, 0.0],
+    }));
+
     // Start native audio output (sine synth driven by MusicEngine)
-    let _audio_stream = start_audio_engine();
+    let _audio_stream = start_audio_engine(Arc::clone(&shared_state));
 
     let event_loop = EventLoop::new().expect("event loop");
     let window = WindowBuilder::new()
@@ -236,7 +400,8 @@ fn main() {
         .build(&event_loop)
         .expect("window");
 
-    let mut state = pollster::block_on(GpuState::new(&window)).expect("gpu");
+    let mut state =
+        pollster::block_on(GpuState::new(&window, Arc::clone(&shared_state))).expect("gpu");
     let start = Instant::now();
 
     event_loop
@@ -249,15 +414,12 @@ fn main() {
                 event: WindowEvent::CloseRequested,
                 ..
             } => elwt.exit(),
-            Event::AboutToWait => {
-                let t = start.elapsed().as_secs_f32();
-                match state.render(t) {
-                    Ok(_) => state.window.request_redraw(),
-                    Err(wgpu::SurfaceError::Lost) => state.resize(state.window.inner_size()),
-                    Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
-                    Err(_) => {}
-                }
-            }
+            Event::AboutToWait => match state.render() {
+                Ok(_) => state.window.request_redraw(),
+                Err(wgpu::SurfaceError::Lost) => state.resize(state.window.inner_size()),
+                Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
+                Err(_) => {}
+            },
             _ => {}
         })
         .unwrap();
@@ -282,7 +444,7 @@ struct AudioState {
     oscillators: Vec<ActiveOscillator>,
 }
 
-fn start_audio_engine() -> Option<cpal::Stream> {
+fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>) -> Option<cpal::Stream> {
     let host = cpal::default_host();
     let device = host.default_output_device()?;
     let config = device.default_output_config().ok()?;
@@ -297,6 +459,7 @@ fn start_audio_engine() -> Option<cpal::Stream> {
     // Scheduler thread producing notes using MusicEngine
     {
         let state_clone = Arc::clone(&state);
+        let vis_clone = Arc::clone(&shared_vis);
         thread::Builder::new()
             .name("music-scheduler".into())
             .spawn(move || {
@@ -354,6 +517,13 @@ fn start_audio_engine() -> Option<cpal::Stream> {
                                 attack_samples: attack.min(total),
                                 release_samples: release.min(total),
                             });
+                        }
+                        drop(guard);
+                        // Kick visual pulses
+                        let mut vis = vis_clone.lock().unwrap();
+                        for ev in &events {
+                            let i = ev.voice_index.min(2);
+                            vis.pulses[i] = (vis.pulses[i] + ev.velocity as f32).min(1.5);
                         }
                     }
                     std::thread::sleep(Duration::from_millis(15));
