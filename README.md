@@ -1,5 +1,7 @@
 ## Generative 3D Music Visualizer (Rust + WebGPU + WebAudio)
 
+[![Web build and headless test](https://github.com/rgilks/geno-1/actions/workflows/web-ci.yml/badge.svg)](https://github.com/rgilks/geno-1/actions/workflows/web-ci.yml)
+
 ### Project status
 
 - Web front-end (WASM) is running with:
@@ -52,5 +54,6 @@ Headless test:
 - `app-web`: web WASM front-end with WebGPU + WebAudio
 
 ### Docs
+
 - Project Spec: `docs/SPEC.md`
 - Project TODO: `docs/TODO.md`
