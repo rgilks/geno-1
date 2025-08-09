@@ -35,7 +35,12 @@ fn fs_main(inf: VsOut) -> @location(0) vec4<f32> {
 
   // Emissive pulse boosts brightness subtly
     let emissive = 0.7 * clamp(inf.pulse, 0.0, 1.5);
-    let rgb = inf.color.rgb * (1.0 + emissive);
+    var rgb = inf.color.rgb * (1.0 + emissive);
+
+    // Subtle outer glow/halo based on radius
+    let halo = smoothstep(0.75, 0.55, r) * 0.12; // outer ring brightness
+    rgb += halo * inf.color.rgb;
+
     return vec4<f32>(rgb, shape_alpha * inf.color.a);
 }
 

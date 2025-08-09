@@ -154,6 +154,7 @@ async fn init() -> anyhow::Result<()> {
                     };
                     let listener = audio_ctx.listener();
                     listener.set_position(0.0, 0.0, 1.5);
+                    let listener_for_tick = listener.clone();
 
                     // Music engine
                     let voice_configs = vec![
@@ -808,16 +809,29 @@ async fn init() -> anyhow::Result<()> {
                                 BASE_SCALE + ps[2] * SCALE_PULSE_MULTIPLIER,
                             ];
 
+                            // Compute camera eye for orbit or fixed
+                            let mut cam_eye = Vec3::new(0.0, 0.0, CAMERA_Z);
+                            if *orbit_tick.borrow() {
+                                orbit_t += dt_sec * 0.1; // rad/s
+                                let r = 6.0f32;
+                                cam_eye = Vec3::new(r * orbit_t.cos(), 0.0, r * orbit_t.sin());
+                            }
+                            let cam_target = Vec3::ZERO;
+                            // Sync AudioListener position + orientation to camera
+                            let fwd = (cam_target - cam_eye).normalize();
+                            listener_for_tick
+                                .set_position(cam_eye.x as f64, cam_eye.y as f64, cam_eye.z as f64);
+                            let _ = listener_for_tick.set_orientation(
+                                fwd.x as f64,
+                                fwd.y as f64,
+                                fwd.z as f64,
+                                0.0,
+                                1.0,
+                                0.0,
+                            );
+
                             if let Some(g) = &mut gpu {
-                                // Optional slow orbit
-                                if *orbit_tick.borrow() {
-                                    orbit_t += dt_sec * 0.1; // rad/s
-                                    let r = 6.0f32;
-                                    let eye = Vec3::new(r * orbit_t.cos(), 0.0, r * orbit_t.sin());
-                                    g.set_camera(eye, Vec3::ZERO);
-                                } else {
-                                    g.set_camera(Vec3::new(0.0, 0.0, CAMERA_Z), Vec3::ZERO);
-                                }
+                                g.set_camera(cam_eye, cam_target);
                                 // Keep WebGPU surface sized to canvas backing size
                                 let w = canvas_for_tick.width();
                                 let h = canvas_for_tick.height();

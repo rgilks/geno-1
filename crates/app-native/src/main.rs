@@ -480,13 +480,11 @@ fn main() {
                 if new_hover != hover {
                     // update colors to highlight hovered voice
                     let mut vis = state.shared.lock().unwrap();
-                    if let Some(prev) = hover {
-                        // restore base color
-                        let base = DEFAULT_VOICE_COLORS[prev];
-                        vis.colors[prev] = Vec4::new(base[0], base[1], base[2], 1.0);
+                    // restore all to base first then apply hover brighten for determinism
+                    for (i, base) in DEFAULT_VOICE_COLORS.iter().enumerate() {
+                        vis.colors[i] = Vec4::new(base[0], base[1], base[2], 1.0);
                     }
                     if let Some(i) = new_hover {
-                        // brighten
                         vis.colors[i].x = (vis.colors[i].x * 1.4).min(1.0);
                         vis.colors[i].y = (vis.colors[i].y * 1.4).min(1.0);
                         vis.colors[i].z = (vis.colors[i].z * 1.4).min(1.0);
@@ -543,7 +541,18 @@ struct AudioState {
     oscillators: Vec<ActiveOscillator>,
 }
 
-fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>, shared_engine: Arc<Mutex<MusicEngine>>) -> Option<cpal::Stream> {
+fn compute_equal_power_gains(pos_x_engine: f32) -> (f32, f32) {
+    // Map engine-space X (roughly -1..1 typical) into pan -1..1
+    let pan = (pos_x_engine / 1.5).clamp(-1.0, 1.0);
+    // Equal-power panning
+    let angle = (pan + 1.0) * std::f32::consts::FRAC_PI_4; // 0..pi/2
+    (angle.cos(), angle.sin())
+}
+
+fn start_audio_engine(
+    shared_vis: Arc<Mutex<VisState>>,
+    shared_engine: Arc<Mutex<MusicEngine>>,
+) -> Option<cpal::Stream> {
     let host = cpal::default_host();
     let device = host.default_output_device()?;
     let config = device.default_output_config().ok()?;
@@ -579,12 +588,13 @@ fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>, shared_engine: Arc<Mutex
                     last = now;
                     let now_sec = start_instant.elapsed().as_secs_f64();
                     events.clear();
-                    engine.tick(dt, now_sec, &mut events);
-                    // Apply any changes back to shared engine voices (positions/mute/solo)
+                    // Pull latest voice state from shared engine to reflect input changes
                     {
-                        let mut guard = shared.lock().unwrap();
-                        guard.voices = engine.voices.clone();
+                        if let Ok(guard) = shared.lock() {
+                            engine.voices = guard.voices.clone();
+                        }
                     }
+                    engine.tick(dt, now_sec, &mut events);
 
                     if !events.is_empty() {
                         let mut guard = state_clone.lock().unwrap();
@@ -602,10 +612,7 @@ fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>, shared_engine: Arc<Mutex
                             };
                             // Stereo pan from voice X position (engine-space)
                             let pos_x = engine.voices[ev.voice_index].position.x;
-                            let pan = (pos_x / 1.5).clamp(-1.0, 1.0); // -1 left .. 1 right
-                            let angle = (pan + 1.0) * std::f32::consts::FRAC_PI_4; // 0..pi/2
-                            let left_gain = angle.cos();
-                            let right_gain = angle.sin();
+                            let (left_gain, right_gain) = compute_equal_power_gains(pos_x);
                             guard.oscillators.push(ActiveOscillator {
                                 amplitude: ev.velocity.min(1.0),
                                 phase: 0.0,
