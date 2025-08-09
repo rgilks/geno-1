@@ -16,6 +16,7 @@ use web_sys as web;
 // (DeviceExt no longer needed; legacy vertex buffers removed)
 
 mod input;
+mod render;
 mod ui;
 
 // Rendering/picking shared constants to keep math consistent
@@ -497,30 +498,12 @@ async fn init() -> anyhow::Result<()> {
                             ms.y = pos.y;
                             // noisy move debug log removed
                             // Compute hover or drag update
-                            let width = canvas_mouse.width() as f32;
-                            let height = canvas_mouse.height() as f32;
-                            let ndc_x = (2.0 * pos.x / width) - 1.0;
-                            let ndc_y = 1.0 - (2.0 * pos.y / height);
-                            let aspect = width / height.max(1.0);
-                            let proj = Mat4::perspective_rh(
-                                std::f32::consts::FRAC_PI_4,
-                                aspect,
-                                0.1,
-                                100.0,
+                            let (ro, rd) = render::screen_to_world_ray(
+                                &canvas_mouse,
+                                pos.x,
+                                pos.y,
+                                CAMERA_Z,
                             );
-                            let view = Mat4::look_at_rh(
-                                Vec3::new(0.0, 0.0, CAMERA_Z),
-                                Vec3::ZERO,
-                                Vec3::Y,
-                            );
-                            let inv = (proj * view).inverse();
-                            let p_near = inv * Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
-                            let p_far = inv * Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
-                            let _p0: Vec3 = p_near.truncate() / p_near.w;
-                            let p1: Vec3 = p_far.truncate() / p_far.w;
-                            // Ray origin from camera eye to improve drag intersection stability
-                            let ro = Vec3::new(0.0, 0.0, CAMERA_Z);
-                            let rd = (p1 - ro).normalize();
                             let mut best = None::<(usize, f32)>;
                             let spread = SPREAD;
                             let z_offset = z_offset_vec3();
