@@ -573,7 +573,13 @@ fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>) -> Option<cpal::Stream> 
 fn render_wave_sample(phase: f32, wave: WaveKind) -> f32 {
     match wave {
         WaveKind::Sine => phase.sin(),
-        WaveKind::Square => if phase.sin() >= 0.0 { 1.0 } else { -1.0 },
+        WaveKind::Square => {
+            if phase.sin() >= 0.0 {
+                1.0
+            } else {
+                -1.0
+            }
+        }
         WaveKind::Saw => {
             // Map phase 0..2PI to -1..1
             let t = phase / (2.0 * std::f32::consts::PI);
@@ -641,8 +647,8 @@ fn build_stream_f32(
             while frame < data.len() {
                 let (l, r) = mix_sample_stereo(oscillators);
                 if channels >= 2 {
-                    if frame + 0 < data.len() {
-                        data[frame + 0] = l;
+                    if frame < data.len() {
+                        data[frame] = l;
                     }
                     if frame + 1 < data.len() {
                         data[frame + 1] = r;
@@ -676,8 +682,8 @@ fn build_stream_i16(
                 let vl = (l * i16::MAX as f32) as i16;
                 let vr = (r * i16::MAX as f32) as i16;
                 if channels >= 2 {
-                    if frame + 0 < data.len() {
-                        data[frame + 0] = vl;
+                    if frame < data.len() {
+                        data[frame] = vl;
                     }
                     if frame + 1 < data.len() {
                         data[frame + 1] = vr;
@@ -711,8 +717,8 @@ fn build_stream_u16(
                 let vl = (((l * 0.5 + 0.5).clamp(0.0, 1.0)) * u16::MAX as f32) as u16;
                 let vr = (((r * 0.5 + 0.5).clamp(0.0, 1.0)) * u16::MAX as f32) as u16;
                 if channels >= 2 {
-                    if frame + 0 < data.len() {
-                        data[frame + 0] = vl;
+                    if frame < data.len() {
+                        data[frame] = vl;
                     }
                     if frame + 1 < data.len() {
                         data[frame + 1] = vr;

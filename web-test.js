@@ -85,6 +85,16 @@ const puppeteer = require("puppeteer");
     logs.some((l) => l.includes("[gesture] starting systems after click")) &&
     !logs.some((l) => l.includes("WebGPU init error"));
   if (engineStarted) {
+    // Ensure hint is visible so key handlers refresh its content
+    await page.evaluate(() => {
+      const el = document.querySelector(".hint");
+      if (el) {
+        el.setAttribute("data-visible", "1");
+        el.setAttribute("style", "");
+      }
+    });
+    await new Promise((r) => setTimeout(r, 80));
+
     // Reseed all
     await page.keyboard.press("KeyR");
     await new Promise((r) => setTimeout(r, 120));
@@ -101,16 +111,51 @@ const puppeteer = require("puppeteer");
       logs.some((l) => l.includes("[keys] paused=false"));
     if (!sawPause) throw new Error("missing pause/resume logs");
 
-    // Tempo up/down
+    // Tempo up
     await page.keyboard.down("Shift");
     await page.keyboard.press("Equal");
     await page.keyboard.up("Shift");
     await new Promise((r) => setTimeout(r, 120));
+    // Assert hint reflects BPM increase
+    let hintAfterUp = await page.evaluate(() => {
+      const el = document.querySelector(".hint");
+      return el ? el.textContent || "" : "";
+    });
+    if (!/BPM:\s*115/.test(hintAfterUp))
+      throw new Error("hint BPM not 115 after +");
+
+    // Tempo down
     await page.keyboard.press("Minus");
-    const sawBpm =
-      logs.some((l) => /\[keys\] bpm -> 115\.0/.test(l)) &&
-      logs.some((l) => /\[keys\] bpm -> 110\.0/.test(l));
-    if (!sawBpm) throw new Error("missing bpm change logs");
+    await new Promise((r) => setTimeout(r, 120));
+    let hintAfterDown = await page.evaluate(() => {
+      const el = document.querySelector(".hint");
+      return el ? el.textContent || "" : "";
+    });
+    if (!/BPM:\s*110/.test(hintAfterDown))
+      throw new Error("hint BPM not 110 after -");
+
+    // Master mute toggle
+    await page.keyboard.press("KeyM");
+    await new Promise((r) => setTimeout(r, 120));
+    if (!logs.some((l) => /\[keys\] master muted=true/.test(l)))
+      throw new Error("missing master mute= true log");
+    let hintMutedOn = await page.evaluate(() => {
+      const el = document.querySelector(".hint");
+      return el ? el.textContent || "" : "";
+    });
+    if (!/Muted:\s*yes/.test(hintMutedOn))
+      throw new Error("hint Muted not yes after M");
+
+    await page.keyboard.press("KeyM");
+    await new Promise((r) => setTimeout(r, 120));
+    if (!logs.some((l) => /\[keys\] master muted=false/.test(l)))
+      throw new Error("missing master mute= false log");
+    let hintMutedOff = await page.evaluate(() => {
+      const el = document.querySelector(".hint");
+      return el ? el.textContent || "" : "";
+    });
+    if (!/Muted:\s*no/.test(hintMutedOff))
+      throw new Error("hint Muted not no after M again");
   } else {
     console.log(
       "[note] engine not started in CI (WebGPU unavailable); skipping R/Space/+/− assertions"

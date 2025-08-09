@@ -345,7 +345,7 @@ async fn init() -> anyhow::Result<()> {
                             let inv = (proj * view).inverse();
                             let p_near = inv * Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
                             let p_far = inv * Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
-                            let p0: Vec3 = p_near.truncate() / p_near.w;
+                            let _p0: Vec3 = p_near.truncate() / p_near.w;
                             let p1: Vec3 = p_far.truncate() / p_far.w;
                             // Ray origin from camera eye to improve drag intersection stability
                             let ro = Vec3::new(0.0, 0.0, CAMERA_Z);
@@ -725,6 +725,9 @@ async fn init() -> anyhow::Result<()> {
                                     // We use pulses array instead to avoid mutating scales directly
                                     ps[i] = (ps[i] + avg * 0.05).min(1.5);
                                 }
+                                if let Some(g) = &mut gpu {
+                                    g.set_ambient_clear(avg * 0.9);
+                                }
                             }
                             let e_ref = engine_tick.borrow();
                             let z_offset = z_offset_vec3();
@@ -839,7 +842,7 @@ async fn init() -> anyhow::Result<()> {
                     log::warn!("[gesture] start already triggered; ignoring extra click");
                     return;
                 }
-                let canvas_for_click_inner = canvas_for_click.clone();
+                let _canvas_for_click_inner = canvas_for_click.clone();
                 spawn_local(async move {
                     // Build AudioContext
                     let audio_ctx = match web::AudioContext::new() {
@@ -903,6 +906,7 @@ struct GpuState<'a> {
     bind_group: wgpu::BindGroup,
     width: u32,
     height: u32,
+        clear_color: wgpu::Color,
 }
 
 impl<'a> GpuState<'a> {
@@ -1087,8 +1091,26 @@ impl<'a> GpuState<'a> {
             bind_group,
             width,
             height,
+            clear_color: wgpu::Color {
+                r: 0.03,
+                g: 0.04,
+                b: 0.08,
+                a: 1.0,
+            },
         })
     }
+    fn set_ambient_clear(&mut self, energy01: f32) {
+        // Subtle brighten and slight hue shift with ambient energy
+        let e = energy01.clamp(0.0, 1.0);
+        let boost = 0.06 * e; // up to +0.06
+        self.clear_color = wgpu::Color {
+            r: (0.03 + boost * 0.8) as f64,
+            g: (0.04 + boost * 0.9) as f64,
+            b: (0.08 + boost * 0.5) as f64,
+            a: 1.0,
+        };
+    }
+
 
     fn resize_if_needed(&mut self, width: u32, height: u32) {
         if width == 0 || height == 0 {
@@ -1163,12 +1185,7 @@ impl<'a> GpuState<'a> {
                 view: &view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color {
-                        r: 0.03,
-                        g: 0.04,
-                        b: 0.08,
-                        a: 1.0,
-                    }),
+                    load: wgpu::LoadOp::Clear(self.clear_color),
                     store: wgpu::StoreOp::Store,
                 },
             })],
