@@ -25,20 +25,14 @@
 - Open: visit `http://localhost:8080`
 - Dev shortcut: `npm run dev:web` then `npm run open:web`
 
-### Host statically (GitHub Pages or any static host)
+### Deploy (Cloudflare Workers)
 
-Artifacts are in `crates/app-web/pkg` after `npm run build:web`.
+This repo is configured to deploy via Cloudflare Workers; headers (COOP/COEP/CORP) are set in `worker.js`.
 
-- GitHub Pages (manual):
-  - Build: `npm run build:web`
-  - Copy `crates/app-web/index.html` and the entire `crates/app-web/pkg/` directory to your Pages branch/site root
-  - Ensure COOP/COEP headers if you need SharedArrayBuffer; otherwise, WebGPU does not require them
-  - Open your Pages URL
-
-- Any static host:
-  - Serve the folder `crates/app-web/` with `index.html` and `pkg/` available at the same path
-  - If you need COOP/COEP (e.g., for future features using SAB), configure headers
-  - Sample dev server with headers is `server.js`
+- Build: `npm run build:web`
+- Deploy: `npx --yes wrangler deploy`
+  - Config: `wrangler.toml` (assets at `crates/app-web`)
+  - Worker adds the required headers and sensible cache-control for `.wasm`/`.js`/HTML
 
 Controls in browser:
 

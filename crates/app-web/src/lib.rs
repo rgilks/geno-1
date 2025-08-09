@@ -634,7 +634,7 @@ async fn init() -> anyhow::Result<()> {
                             let take = (bins.min(16)) as u32;
                             for i in 0..take {
                                 let v = arr.get_index(i) as f32; // in dBFS (-inf..0)
-                                // map dB to 0..1 roughly
+                                                                 // map dB to 0..1 roughly
                                 let lin = ((v + 100.0) / 100.0).clamp(0.0, 1.0);
                                 sum += lin;
                             }

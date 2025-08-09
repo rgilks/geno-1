@@ -75,8 +75,8 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 ## Deployment
 
-- [x] Add hosting instructions (GitHub Pages/static hosting)
-- [ ] Optional: GitHub Pages workflow to publish `crates/app-web` artifacts
+- [x] Add hosting instructions (Cloudflare Workers)
+- [ ] Optional: GitHub Pages workflow to publish `crates/app-web` artifacts (requires headers)
 - [x] Optional: production server/worker if needed
 
 ---
