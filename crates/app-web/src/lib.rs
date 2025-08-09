@@ -1,8 +1,8 @@
 #![cfg(target_arch = "wasm32")]
 use app_core::{
-    z_offset_vec3, EngineParams, MusicEngine, VoiceConfig, Waveform, BASE_SCALE,
+    midi_to_hz, z_offset_vec3, EngineParams, MusicEngine, VoiceConfig, Waveform, BASE_SCALE,
     C_MAJOR_PENTATONIC, DEFAULT_VOICE_COLORS, DEFAULT_VOICE_POSITIONS, ENGINE_DRAG_MAX_RADIUS,
-    PICK_SPHERE_RADIUS, SCALE_PULSE_MULTIPLIER, SPREAD, midi_to_hz,
+    PICK_SPHERE_RADIUS, SCALE_PULSE_MULTIPLIER, SPREAD,
 };
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use instant::Instant;
@@ -912,15 +912,26 @@ async fn init() -> anyhow::Result<()> {
                                     for (i, v) in eng.voices.iter().enumerate() {
                                         let vx = (v.position.x / 3.0).clamp(-1.0, 1.0) * 0.5 + 0.5;
                                         let dx = (uvx - vx).abs();
-                                        if dx < best_dx { best_dx = dx; best_i = i; }
+                                        if dx < best_dx {
+                                            best_dx = dx;
+                                            best_i = i;
+                                        }
                                     }
                                     drop(eng);
                                     if let Ok(src) = web::OscillatorNode::new(&audio_ctx_click) {
                                         match engine_m.borrow().configs[best_i].waveform {
-                                            Waveform::Sine => src.set_type(web::OscillatorType::Sine),
-                                            Waveform::Square => src.set_type(web::OscillatorType::Square),
-                                            Waveform::Saw => src.set_type(web::OscillatorType::Sawtooth),
-                                            Waveform::Triangle => src.set_type(web::OscillatorType::Triangle),
+                                            Waveform::Sine => {
+                                                src.set_type(web::OscillatorType::Sine)
+                                            }
+                                            Waveform::Square => {
+                                                src.set_type(web::OscillatorType::Square)
+                                            }
+                                            Waveform::Saw => {
+                                                src.set_type(web::OscillatorType::Sawtooth)
+                                            }
+                                            Waveform::Triangle => {
+                                                src.set_type(web::OscillatorType::Triangle)
+                                            }
                                         }
                                         src.frequency().set_value(freq);
                                         if let Ok(g) = web::GainNode::new(&audio_ctx_click) {
@@ -928,12 +939,22 @@ async fn init() -> anyhow::Result<()> {
                                             let now = audio_ctx_click.current_time();
                                             let t0 = now + 0.005;
                                             let dur = 0.35 + 0.25 * (1.0 - uvy as f64);
-                                            let _ = g.gain().linear_ramp_to_value_at_time(vel, t0 + 0.02);
-                                            let _ = g.gain().linear_ramp_to_value_at_time(0.0, t0 + dur);
+                                            let _ = g
+                                                .gain()
+                                                .linear_ramp_to_value_at_time(vel, t0 + 0.02);
+                                            let _ = g
+                                                .gain()
+                                                .linear_ramp_to_value_at_time(0.0, t0 + dur);
                                             let _ = src.connect_with_audio_node(&g);
-                                            let _ = g.connect_with_audio_node(&voice_gains_click[best_i]);
-                                            let _ = g.connect_with_audio_node(&delay_sends_click[best_i]);
-                                            let _ = g.connect_with_audio_node(&reverb_sends_click[best_i]);
+                                            let _ = g.connect_with_audio_node(
+                                                &voice_gains_click[best_i],
+                                            );
+                                            let _ = g.connect_with_audio_node(
+                                                &delay_sends_click[best_i],
+                                            );
+                                            let _ = g.connect_with_audio_node(
+                                                &reverb_sends_click[best_i],
+                                            );
                                             let _ = src.start_with_when(t0);
                                             let _ = src.stop_with_when(t0 + dur + 0.05);
                                         }
