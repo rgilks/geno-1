@@ -30,7 +30,8 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Instanced rendering of voice markers (circle mask, emissive pulse)
 - [x] Audio-reactive pulses on note events
 - [ ] Ambient visuals (particles/spectrum bars/lights)
-- [ ] Optional camera orbit or mouse-look; sync listener orientation
+- [x] Optional camera orbit (toggle 'O')
+- [ ] Sync listener orientation with camera
 - [ ] Visual polish (colors, easing, subtle glow)
 - [x] Prefer SRGB surface format where available (e.g., BGRA8UnormSrgb)
 
@@ -50,7 +51,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Basic native audio via `cpal` with envelopes
 - [x] Map native audio to per-voice waveforms (currently sine only)
 - [x] Stereo panning by X based on voice position
-- [ ] Native input parity (hover, drag, click)
+- [x] Native input parity (hover, drag, click)
 
 ## Error Handling & UX
 
@@ -71,8 +72,8 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 ## Testing & DX
 
 - [x] Headless web test validates interactions and hint content
-- [ ] Add assertions: BPM change reflected; solo/mute state (logs/state)
-- [ ] Optional native smoke test (launch, render few frames, exit)
+- [x] Add assertions: BPM change reflected; solo/mute state (logs/state)
+- [x] Optional native smoke test (launch, render few frames, exit)
 
 ## Deployment
 
