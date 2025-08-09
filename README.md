@@ -10,7 +10,7 @@
   - Mouse-driven FX: corner-based saturation (clean ↔ fizz) and opposite-corner delay emphasis; visuals have inertial swirl motion and click ripples
   - Start overlay to initialize audio (Click Start; canvas-click fallback)
   - Drag voices in XZ plane; click to mute, Shift+Click reseed, Alt+Click solo
-  - Keyboard: R (reseed all), Space (pause), + / - (tempo), M (master mute)
+- Keyboard: R (reseed all), Space (pause), + / - (tempo)
   - Starts muted by default; press M to unmute the master bus
   - Dynamic hint shows current BPM, paused, and muted state
   - Rich visuals: instanced voice markers with emissive pulses, ambient waves background, post bloom/tonemap/vignette; optional analyser-driven spectrum dots
@@ -113,3 +113,5 @@ Links:
 
 - Project Spec: `docs/SPEC.md`
 - Project TODO: `docs/TODO.md`
+- Audio Pipelines: `docs/diagrams/audio.md`
+- Visual Pipelines: `docs/diagrams/visual.md`

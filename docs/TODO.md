@@ -13,6 +13,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Add LICENSE file matching workspace `license = "MIT"`
 - [x] Fill optional `description`/`repository` fields in crate manifests
 - [x] Add README workflow badge (done) and keep CI green
+- [x] Architecture diagrams for audio and visual pipelines (see `docs/diagrams/`)
 
 ## Audio Engine (Web)
 
@@ -32,7 +33,6 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Instanced rendering of voice markers (circle mask, emissive pulse)
 - [x] Audio-reactive pulses on note events
 - [x] Ambient visuals (ambient waves background with swirl and click ripples; optional analyser-driven spectrum dots)
-- [ ] Optional camera orbit (toggle 'O') [removed in current build]
 - [x] Sync listener orientation with camera
 - [x] Visual polish (colors, easing, subtle glow, vignette)
 - [x] Prefer SRGB surface format where available (e.g., BGRA8UnormSrgb)

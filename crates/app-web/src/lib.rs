@@ -63,7 +63,7 @@ async fn init() -> anyhow::Result<()> {
                         if show {
                             // Default content (before full engine/UI attach)
                             div.set_inner_html(
-                                "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: 110 • Paused: no • Muted: yes • Orbit: yes",
+                                "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: 110 • Paused: no",
                             );
                             let _ = el.set_attribute("style", "");
                         } else {
@@ -152,6 +152,8 @@ async fn init() -> anyhow::Result<()> {
                             return;
                         }
                     };
+                    // Ensure context is running (Firefox may leave it suspended)
+                    let _ = audio_ctx.resume();
                     let listener = audio_ctx.listener();
                     listener.set_position(0.0, 0.0, 1.5);
                     let listener_for_tick = listener.clone();
@@ -202,6 +204,7 @@ async fn init() -> anyhow::Result<()> {
                             return;
                         }
                     };
+                    // Start unmuted by default (removed M-key toggle)
                     master_gain.gain().set_value(0.8);
                     // Subtle master saturation (arctan) with wet/dry mix
                     let sat_pre = match web::GainNode::new(&audio_ctx) {
@@ -390,7 +393,10 @@ async fn init() -> anyhow::Result<()> {
                         panner.set_ref_distance(0.5);
                         panner.set_max_distance(50.0);
                         let pos = engine.borrow().voices[v].position;
-                        panner.set_position(pos.x as f64, pos.y as f64, pos.z as f64);
+                        // Use AudioParam positionX/Y/Z for Firefox compatibility
+                        panner.position_x().set_value(pos.x as f32);
+                        panner.position_y().set_value(pos.y as f32);
+                        panner.position_z().set_value(pos.z as f32);
 
                         let gain = match web::GainNode::new(&audio_ctx) {
                             Ok(g) => g,
@@ -462,10 +468,6 @@ async fn init() -> anyhow::Result<()> {
 
                     // Pause state (stops scheduling new notes but keeps rendering)
                     let paused = Rc::new(RefCell::new(false));
-                    // Master mute state for all voices (start muted)
-                    let master_muted = Rc::new(RefCell::new(true));
-                    // (orbit removed)
-                    let orbit_enabled = Rc::new(RefCell::new(false));
                     let voice_gains = Rc::new(voice_gains);
 
                     // Queued ripple UV from pointer taps (read by render tick)
@@ -612,7 +614,6 @@ async fn init() -> anyhow::Result<()> {
                             } else {
                                 match best {
                                     Some((i, t)) => {
-                                        log::info!("[hover] hit voice={} t={:.3}", i, t);
                                         *hover_m.borrow_mut() = Some(i);
                                     }
                                     None => {
@@ -636,10 +637,6 @@ async fn init() -> anyhow::Result<()> {
                     {
                         let engine_k = engine.clone();
                         let paused_k = paused.clone();
-                        let master_muted_k = master_muted.clone();
-                        let orbit_enabled_k = orbit_enabled.clone();
-                        let _voice_gains_k = voice_gains.clone();
-                        let master_gain_k = master_gain.clone();
                         let canvas_k = canvas_for_click_inner.clone();
                         let window = web::window().unwrap();
                         let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
@@ -667,17 +664,13 @@ async fn init() -> anyhow::Result<()> {
                                                     == Some("1")
                                                 {
                                                     let bpm_now = engine_k.borrow().params.bpm;
-                                                    let muted_now = *master_muted_k.borrow();
-                                                    let orbit_now = *orbit_enabled_k.borrow();
                                                     if let Some(div) =
                                                         el.dyn_ref::<web::HtmlElement>()
                                                     {
                                                         let content = format!(
-                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
+                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
                                                             bpm_now,
-                                                            if *p { "yes" } else { "no" },
-                                                            if muted_now { "yes" } else { "no" },
-                                                            if orbit_now { "yes" } else { "no" }
+                                                            if *p { "yes" } else { "no" }
                                                     );
                                                         div.set_inner_html(&content);
                                                     }
@@ -701,15 +694,13 @@ async fn init() -> anyhow::Result<()> {
                                                     == Some("1")
                                                 {
                                                     let paused_now = *paused_k.borrow();
-                                                    let muted_now = *master_muted_k.borrow();
                                                     if let Some(div) =
                                                         el.dyn_ref::<web::HtmlElement>()
                                                     {
                                                         let content = format!(
-                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • F: fullscreen\nBPM: {:.0} • Paused: {} • Muted: {}",
+                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
                                                             new_bpm,
-                                                            if paused_now { "yes" } else { "no" },
-                                                            if muted_now { "yes" } else { "no" }
+                                                            if paused_now { "yes" } else { "no" }
                                                     );
                                                         div.set_inner_html(&content);
                                                     }
@@ -732,82 +723,14 @@ async fn init() -> anyhow::Result<()> {
                                                     == Some("1")
                                                 {
                                                     let paused_now = *paused_k.borrow();
-                                                    let muted_now = *master_muted_k.borrow();
-                                                    let orbit_now = *orbit_enabled_k.borrow();
                                                     if let Some(div) =
                                                         el.dyn_ref::<web::HtmlElement>()
                                                     {
                                                         let content = format!(
-                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
+                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
                                                             new_bpm,
-                                                            if paused_now { "yes" } else { "no" },
-                                                            if muted_now { "yes" } else { "no" },
-                                                            if orbit_now { "yes" } else { "no" }
+                                                            if paused_now { "yes" } else { "no" }
                                                     );
-                                                        div.set_inner_html(&content);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                // Master mute toggle
-                                "m" | "M" => {
-                                    let mut muted = master_muted_k.borrow_mut();
-                                    *muted = !*muted;
-                                    let new_val = if *muted { 0.0 } else { 0.8 };
-                                    master_gain_k.gain().set_value(new_val);
-                                    // noisy key debug log removed
-                                    // If hint visible, refresh its content
-                                    if let Some(win) = web::window() {
-                                        if let Some(doc) = win.document() {
-                                            if let Ok(Some(el)) = doc.query_selector(".hint") {
-                                                if el.get_attribute("data-visible").as_deref()
-                                                    == Some("1")
-                                                {
-                                                    let paused_now = *paused_k.borrow();
-                                                    let bpm_now = engine_k.borrow().params.bpm;
-                                                    if let Some(div) =
-                                                        el.dyn_ref::<web::HtmlElement>()
-                                                    {
-                                                        let content = format!(
-                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • F: fullscreen\nBPM: {:.0} • Paused: {} • Muted: {}",
-                                                            bpm_now,
-                                                            if paused_now { "yes" } else { "no" },
-                                                            if *muted { "yes" } else { "no" }
-                                                        );
-                                                        div.set_inner_html(&content);
-                                                    }
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                // Orbit toggle
-                                "o" | "O" => {
-                                    let mut ob = orbit_enabled_k.borrow_mut();
-                                    *ob = !*ob;
-                                    // noisy key debug log removed
-                                    // If hint visible, refresh its content
-                                    if let Some(win) = web::window() {
-                                        if let Some(doc) = win.document() {
-                                            if let Ok(Some(el)) = doc.query_selector(".hint") {
-                                                if el.get_attribute("data-visible").as_deref()
-                                                    == Some("1")
-                                                {
-                                                    let paused_now = *paused_k.borrow();
-                                                    let muted_now = *master_muted_k.borrow();
-                                                    let bpm_now = engine_k.borrow().params.bpm;
-                                                    if let Some(div) =
-                                                        el.dyn_ref::<web::HtmlElement>()
-                                                    {
-                                                        let content = format!(
-                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
-                                                            bpm_now,
-                                                            if paused_now { "yes" } else { "no" },
-                                                            if muted_now { "yes" } else { "no" },
-                                                            if *ob { "yes" } else { "no" }
-                                                        );
                                                         div.set_inner_html(&content);
                                                     }
                                                 }
@@ -1018,9 +941,6 @@ async fn init() -> anyhow::Result<()> {
                     let sat_pre_tick = Rc::new(sat_pre).clone();
                     let sat_wet_tick = Rc::new(sat_wet).clone();
                     let sat_dry_tick = Rc::new(sat_dry).clone();
-                    // Optional slow camera orbit
-                    let mut orbit_t: f32 = 0.0;
-                    let orbit_tick = orbit_enabled.clone();
                     let tick: Rc<RefCell<Option<Closure<dyn FnMut()>>>> =
                         Rc::new(RefCell::new(None));
                     let tick_clone = tick.clone();
@@ -1139,11 +1059,9 @@ async fn init() -> anyhow::Result<()> {
 
                             for i in 0..voice_panners.len() {
                                 let pos = engine_tick.borrow().voices[i].position;
-                                voice_panners[i].set_position(
-                                    pos.x as f64,
-                                    pos.y as f64,
-                                    pos.z as f64,
-                                );
+                                voice_panners[i].position_x().set_value(pos.x as f32);
+                                voice_panners[i].position_y().set_value(pos.y as f32);
+                                voice_panners[i].position_z().set_value(pos.z as f32);
                                 // Direct sound↔visual link: map position to per-voice mix and fx
                                 let dist = (pos.x * pos.x + pos.z * pos.z).sqrt();
                                 // Delay send increases with |x|, reverb with radial distance
@@ -1226,24 +1144,6 @@ async fn init() -> anyhow::Result<()> {
                             scales.push(BASE_SCALE + ps[1] * SCALE_PULSE_MULTIPLIER);
                             scales.push(BASE_SCALE + ps[2] * SCALE_PULSE_MULTIPLIER);
 
-                            // Orbiting ring particles around each voice center
-                            let two_pi = std::f32::consts::PI * 2.0;
-                            for vi in 0..3 {
-                                let center = positions[vi];
-                                let base_col = Vec3::from(e_ref.configs[vi].color_rgb);
-                                let ring_r = 0.9 + ps[vi] * 0.25;
-                                for j in 0..ring_count {
-                                    let a =
-                                        orbit_t * 0.8 + (j as f32) * (two_pi / ring_count as f32);
-                                    let offset = Vec3::new(a.cos() * ring_r, 0.0, a.sin() * ring_r);
-                                    positions.push(center + offset);
-                                    let c = base_col * 0.55;
-                                    colors.push(Vec4::from((c, 0.9)));
-                                    let s = 0.06 + 0.04 * ((j % 12) as f32 / 12.0);
-                                    scales.push(s);
-                                }
-                            }
-
                             // Optional analyser-driven dot spectrum row
                             if let Some(a) = &analyser {
                                 let bins = a.frequency_bin_count() as usize;
@@ -1274,13 +1174,9 @@ async fn init() -> anyhow::Result<()> {
                                 }
                             }
 
-                            // Compute camera eye for orbit or fixed
-                            let mut cam_eye = Vec3::new(0.0, 0.0, CAMERA_Z);
-                            if *orbit_tick.borrow() {
-                                orbit_t += dt_sec * 0.1; // rad/s
-                                let r = 6.0f32;
-                                cam_eye = Vec3::new(r * orbit_t.cos(), 0.0, r * orbit_t.sin());
-                            }
+                            // Compute camera eye
+                            let cam_eye = Vec3::new(0.0, 0.0, CAMERA_Z);
+                           
                             let cam_target = Vec3::ZERO;
                             // Sync AudioListener position + orientation to camera
                             let fwd = (cam_target - cam_eye).normalize();
