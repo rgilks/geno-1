@@ -8,3 +8,4 @@ Prefer WebGPU via `wgpu` v24.0 and avoid WebGL2 fallbacks.
 Prefer Node for servers/tooling; avoid Python for this project.
 Default to pure web flow first; keep native in parity where simple.
 Keep the README.md and TODO.md up to date.
+Build and test before committing.

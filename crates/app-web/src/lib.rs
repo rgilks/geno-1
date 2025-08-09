@@ -122,7 +122,7 @@ async fn init() -> anyhow::Result<()> {
                 return;
             }
             // Run async startup in response to user gesture
-            let canvas_for_click = canvas_for_click.clone();
+            let canvas_for_click_inner = canvas_for_click.clone();
             spawn_local(async move {
                 // Build AudioContext
                 let audio_ctx = match web::AudioContext::new() {
@@ -221,7 +221,7 @@ async fn init() -> anyhow::Result<()> {
                 }
 
                 // Initialize WebGPU (leak a canvas clone to satisfy 'static lifetime for surface)
-                let leaked_canvas = Box::leak(Box::new(canvas_for_click.clone()));
+                let leaked_canvas = Box::leak(Box::new(canvas_for_click_inner.clone()));
                 let mut gpu: Option<GpuState> = match GpuState::new(leaked_canvas).await {
                     Ok(g) => Some(g),
                     Err(e) => {
@@ -256,32 +256,6 @@ async fn init() -> anyhow::Result<()> {
                 let hover_index = Rc::new(RefCell::new(None::<usize>));
                 let drag_state = Rc::new(RefCell::new(DragState::default()));
 
-                // Helper: compute ray from screen to world
-                let project_to_ray = {
-                    let canvas = canvas_for_click.clone();
-                    move |sx: f32, sy: f32| -> (Vec3, Vec3) {
-                        let width = canvas.width() as f32;
-                        let height = canvas.height() as f32;
-                        let ndc_x = (2.0 * sx / width) - 1.0;
-                        let ndc_y = 1.0 - (2.0 * sy / height);
-                        let aspect = width / height.max(1.0);
-                        let proj = Mat4::perspective_rh(
-                            std::f32::consts::FRAC_PI_4,
-                            aspect,
-                            0.1,
-                            100.0,
-                        );
-                        let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, CAMERA_Z), Vec3::ZERO, Vec3::Y);
-                        let inv = (proj * view).inverse();
-                        let p_near = inv * Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
-                        let p_far = inv * Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
-                        let p0: Vec3 = p_near.truncate() / p_near.w;
-                        let p1: Vec3 = p_far.truncate() / p_far.w;
-                        let dir = (p1 - p0).normalize();
-                        (p0, dir)
-                    }
-                };
-
                 // Ray-sphere intersect
                 let ray_sphere =
                     |ray_o: Vec3, ray_d: Vec3, center: Vec3, radius: f32| -> Option<f32> {
@@ -300,19 +274,7 @@ async fn init() -> anyhow::Result<()> {
                         }
                     };
 
-                // Screen -> canvas coords
-                let to_canvas_coords = {
-                    let canvas = canvas_for_click.clone();
-                    move |client_x: f32, client_y: f32| -> Vec2 {
-                        let rect = canvas.get_bounding_client_rect();
-                        // Convert client (CSS px) to canvas internal pixel coords
-                        let x_css = client_x - rect.left() as f32;
-                        let y_css = client_y - rect.top() as f32;
-                        let sx = (x_css / rect.width() as f32) * canvas.width() as f32;
-                        let sy = (y_css / rect.height() as f32) * canvas.height() as f32;
-                        Vec2::new(sx, sy)
-                    }
-                };
+                // Screen -> canvas coords inline helper
 
                 // Mouse move: hover + drag
                 {
@@ -320,11 +282,17 @@ async fn init() -> anyhow::Result<()> {
                     let hover_m = hover_index.clone();
                     let drag_m = drag_state.clone();
                     let engine_m = engine.clone();
-                    let canvas = canvas_for_click.clone();
+                    let canvas_mouse = canvas_for_click_inner.clone();
+                    let canvas_connected = canvas_mouse.is_connected();
                     let closure = Closure::wrap(Box::new(move |ev: web::MouseEvent| {
-                        let pos = to_canvas_coords(ev.client_x() as f32, ev.client_y() as f32);
+                        let rect = canvas_mouse.get_bounding_client_rect();
+                        let x_css = ev.client_x() as f32 - rect.left() as f32;
+                        let y_css = ev.client_y() as f32 - rect.top() as f32;
+                        let sx = (x_css / rect.width() as f32) * canvas_mouse.width() as f32;
+                        let sy = (y_css / rect.height() as f32) * canvas_mouse.height() as f32;
+                        let pos = Vec2::new(sx, sy);
                         // For CI/headless environments without real mouse, synthesize hover over center
-                        if !canvas.is_connected() {
+                        if !canvas_connected {
                             return;
                         }
                         {
@@ -333,7 +301,22 @@ async fn init() -> anyhow::Result<()> {
                             ms.y = pos.y;
                         }
                         // Compute hover or drag update
-                        let (ro, rd) = project_to_ray(pos.x, pos.y);
+                        let width = canvas_mouse.width() as f32;
+                        let height = canvas_mouse.height() as f32;
+                        let ndc_x = (2.0 * pos.x / width) - 1.0;
+                        let ndc_y = 1.0 - (2.0 * pos.y / height);
+                        let aspect = width / height.max(1.0);
+                        let proj =
+                            Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect, 0.1, 100.0);
+                        let view =
+                            Mat4::look_at_rh(Vec3::new(0.0, 0.0, CAMERA_Z), Vec3::ZERO, Vec3::Y);
+                        let inv = (proj * view).inverse();
+                        let p_near = inv * Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
+                        let p_far = inv * Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
+                        let p0: Vec3 = p_near.truncate() / p_near.w;
+                        let p1: Vec3 = p_far.truncate() / p_far.w;
+                        let rd = (p1 - p0).normalize();
+                        let ro = p0;
                         let mut best = None::<(usize, f32)>;
                         let spread = SPREAD;
                         let z_offset = Z_OFFSET;
@@ -383,7 +366,7 @@ async fn init() -> anyhow::Result<()> {
                             *hover_m.borrow_mut() = best.map(|(i, _)| i);
                         }
                     }) as Box<dyn FnMut(_)>);
-                    canvas
+                    canvas_for_click
                         .add_event_listener_with_callback(
                             "mousemove",
                             closure.as_ref().unchecked_ref(),
@@ -542,7 +525,6 @@ async fn init() -> anyhow::Result<()> {
                     let hover_m = hover_index.clone();
                     let drag_m = drag_state.clone();
                     let mouse_m = mouse_state.clone();
-                    let canvas = canvas_for_click.clone();
                     let closure = Closure::wrap(Box::new(move |ev: web::MouseEvent| {
                         if let Some(i) = *hover_m.borrow() {
                             let mut ds = drag_m.borrow_mut();
@@ -553,7 +535,7 @@ async fn init() -> anyhow::Result<()> {
                         mouse_m.borrow_mut().down = true;
                         ev.prevent_default();
                     }) as Box<dyn FnMut(_)>);
-                    canvas
+                    canvas_for_click
                         .add_event_listener_with_callback(
                             "mousedown",
                             closure.as_ref().unchecked_ref(),
@@ -568,7 +550,6 @@ async fn init() -> anyhow::Result<()> {
                     let drag_m = drag_state.clone();
                     let mouse_m = mouse_state.clone();
                     let engine_m = engine.clone();
-                    let canvas = canvas_for_click.clone();
                     let closure = Closure::wrap(Box::new(move |ev: web::MouseEvent| {
                         let was_dragging = drag_m.borrow().active;
                         if was_dragging {
@@ -593,7 +574,7 @@ async fn init() -> anyhow::Result<()> {
                         mouse_m.borrow_mut().down = false;
                         ev.prevent_default();
                     }) as Box<dyn FnMut(_)>);
-                    canvas
+                    canvas_for_click
                         .add_event_listener_with_callback(
                             "mouseup",
                             closure.as_ref().unchecked_ref(),
@@ -640,20 +621,21 @@ async fn init() -> anyhow::Result<()> {
                         // Optional analyser-driven mild ambient pulse
                         if let Some(a) = &analyser {
                             let bins = a.frequency_bin_count();
-                            let mut arr = web::Float32Array::new_with_length(bins);
-                            a.get_float_frequency_data(&mut arr);
+                            let mut freq = vec![0.0_f32; bins as usize];
+                            a.get_float_frequency_data(&mut freq);
                             // Use low-frequency bin energy to adjust background subtly
                             let mut sum = 0.0f32;
                             let take = (bins.min(16)) as u32;
                             for i in 0..take {
-                                let v = arr.get_index(i) as f32; // in dBFS (-inf..0)
-                                                                 // map dB to 0..1 roughly
+                                let v = freq[i as usize]; // in dBFS (-inf..0)
+                                                          // map dB to 0..1 roughly
                                 let lin = ((v + 100.0) / 100.0).clamp(0.0, 1.0);
                                 sum += lin;
                             }
                             let avg = sum / take as f32;
                             // Slightly push base scales with ambient energy
-                            for i in 0..3.min(scales.len()) {
+                            let n = ps.len().min(3);
+                            for i in 0..n {
                                 // This is local shadow; adjust just-written scales via positions/colors path
                                 // We use pulses array instead to avoid mutating scales directly
                                 ps[i] = (ps[i] + avg * 0.05).min(1.5);
@@ -754,9 +736,12 @@ async fn init() -> anyhow::Result<()> {
                 }
             });
         }) as Box<dyn FnMut()>);
-        canvas
-            .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref())
-            .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
+        if let Some(w) = web::window() {
+            let _ = w.add_event_listener_with_callback(
+                "click",
+                closure.as_ref().unchecked_ref(),
+            );
+        }
         closure.forget();
     }
 
