@@ -11,7 +11,7 @@ Users can **influence and interact** with the generative music without manually 
 - 3 generative voices (sine/saw/triangle) with scale-constrained pitches (C major pentatonic by default), scheduler on an eighth-note grid
 - Web Audio graph with per-voice `PannerNode` and master reverb/delay buses; starts muted with Start overlay; gesture unlock required by browsers
 - Visuals: instanced voice markers, ambient waves background with pointer swirl and click ripples, post-processing (bright pass, blur, ACES tonemap, vignette, grain)
-- Interactions: drag voices in XZ, click= mute, Shift+Click= reseed, Alt+Click= solo; keys: R, Space, +/- (tempo), M (mute), O (orbit)
+- Interactions: drag voices in XZ, click= mute, Shift+Click= reseed, Alt+Click= solo; keys: R, Space, +/- (tempo), M (mute)
 - Native app: `winit` + `wgpu` render, `cpal` audio with equal-power panning and master saturation; hover highlight parity
 
 ## Goals and Use Cases
@@ -172,7 +172,7 @@ What the user sees:
 - **Objects Representing Voices:** Three instanced round markers (circle-masked quads) represent voices. Positions correspond to voice `PannerNode` positions; markers pulse and emit on note events.
 - **Ambient Waves Background:** A fullscreen pass (see `waves.wgsl`) renders layered ribbons with pointer-driven swirl displacement, per-voice influence, and click/tap ripple propagation.
 - **Post-processing:** A post stack (see `post.wgsl`) performs bright pass, separable blur, ACES tonemap, vignette, subtle hue warp, and film grain.
-- **Camera:** Fixed view with optional gentle orbit toggle; the `AudioListener` tracks the camera to maintain spatial consistency.
+- **Camera:** Fixed view; the `AudioListener` tracks the camera to maintain spatial consistency.
 
 **Visual Reactivity Implementation:**
 
@@ -231,7 +231,7 @@ We identify the key interactions the user needs and map them to in-scene control
 
 - **Integrated Look and Feel:**
 
-  - Keep controls integrated into the scene; avoid HTML-heavy UI. A minimalist hint overlay communicates keys and state (BPM/Paused/Muted/Orbit).
+- Keep controls integrated into the scene; avoid HTML-heavy UI. A minimalist hint overlay communicates keys and state (BPM/Paused/Muted).
 
 - **Error Handling/State:** Ensure the UI accounts for states:
 

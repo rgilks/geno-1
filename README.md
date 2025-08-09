@@ -10,9 +10,9 @@
   - Mouse-driven FX: corner-based saturation (clean ↔ fizz) and opposite-corner delay emphasis; visuals have inertial swirl motion and click ripples
   - Start overlay to initialize audio (Click Start; canvas-click fallback)
   - Drag voices in XZ plane; click to mute, Shift+Click reseed, Alt+Click solo
-  - Keyboard: R (reseed all), Space (pause), + / - (tempo), M (master mute), O (orbit on/off)
+  - Keyboard: R (reseed all), Space (pause), + / - (tempo), M (master mute)
   - Starts muted by default; press M to unmute the master bus
-  - Dynamic hint shows current BPM, paused, muted, and orbit state
+  - Dynamic hint shows current BPM, paused, and muted state
   - Rich visuals: instanced voice markers with emissive pulses, ambient waves background, post bloom/tonemap/vignette; optional analyser-driven spectrum dots
 - Native front-end renders and plays synthesized audio; parity improving:
   - Equal-power stereo panning from X position, multiple waveforms (sine/square/saw/triangle)
@@ -44,7 +44,7 @@ Notes:
 
 Quick controls (browser):
 
-- R: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off
+- R: reseed all • Space: pause/resume • +/-: tempo • M: master mute
 - Click a voice to mute; Alt+Click to solo; Shift+Click to reseed a voice; drag to move in XZ
 
 ### Pre-commit Check
@@ -67,7 +67,7 @@ Controls in browser:
 - Click Start to initialize audio (canvas click also works)
 - Drag a circle to move a voice in XZ plane (updates spatialization)
 - Click a voice: mute; Shift+Click: reseed; Alt+Click: solo
-- Keys: R (reseed all), Space (pause/resume), + / - (tempo), M (master mute), O (orbit on/off)
+- Keys: R (reseed all), Space (pause/resume), + / - (tempo), M (master mute)
 - Mouse position maps to master saturation and delay; moving the pointer leaves a “water-like” trailing swirl in visuals
 
 Headless test:
@@ -94,7 +94,7 @@ Headless test:
 - Screenshots/GIFs live in `docs/media/`.
 - Place files like:
   - `docs/media/screenshot-1.png` – main scene
-  - `docs/media/screenshot-2.png` – orbit and hint overlay
+  - `docs/media/screenshot-2.png` – hint overlay
   - `docs/media/loop-1.gif` – waves background with ripples and pulses
 
 Links:

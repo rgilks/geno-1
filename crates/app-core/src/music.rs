@@ -285,4 +285,78 @@ mod tests {
         assert!(!engine.voices[1].muted);
         assert!(!engine.voices[2].muted);
     }
+
+    #[test]
+    fn reseed_determinism_per_voice() {
+        // Given identical configs and params, reseeding a voice with a fixed seed should
+        // produce identical first scheduled events across engines.
+        let configs = vec![
+            VoiceConfig {
+                color_rgb: [1.0, 0.0, 0.0],
+                waveform: Waveform::Sine,
+                base_position: Vec3::new(-1.0, 0.0, 0.0),
+            },
+            VoiceConfig {
+                color_rgb: [0.0, 1.0, 0.0],
+                waveform: Waveform::Saw,
+                base_position: Vec3::new(1.0, 0.0, 0.0),
+            },
+            VoiceConfig {
+                color_rgb: [0.0, 0.0, 1.0],
+                waveform: Waveform::Triangle,
+                base_position: Vec3::new(0.0, 0.0, -1.0),
+            },
+        ];
+        let params = EngineParams::default();
+        let mut a = MusicEngine::new(configs.clone(), params.clone(), 111);
+        let mut b = MusicEngine::new(configs, params, 222);
+        // Force same reseed for voice 1
+        a.reseed_voice(1, Some(9999));
+        b.reseed_voice(1, Some(9999));
+        // Advance enough time to schedule a step and collect events
+        let mut out_a = Vec::new();
+        let mut out_b = Vec::new();
+        a.tick(Duration::from_millis(300), 0.0, &mut out_a);
+        b.tick(Duration::from_millis(300), 0.0, &mut out_b);
+        // Filter for voice 1 events and compare first if both exist
+        let ev_a = out_a.into_iter().find(|e| e.voice_index == 1);
+        let ev_b = out_b.into_iter().find(|e| e.voice_index == 1);
+        if let (Some(x), Some(y)) = (ev_a, ev_b) {
+            assert!((x.frequency_hz - y.frequency_hz).abs() < 1e-3);
+            assert!((x.duration_sec - y.duration_sec).abs() < 1e-3);
+        }
+    }
+
+    #[test]
+    fn tempo_change_does_not_break_mute_and_solo() {
+        let configs = vec![
+            VoiceConfig {
+                color_rgb: [1.0, 0.0, 0.0],
+                waveform: Waveform::Sine,
+                base_position: Vec3::new(-1.0, 0.0, 0.0),
+            },
+            VoiceConfig {
+                color_rgb: [0.0, 1.0, 0.0],
+                waveform: Waveform::Saw,
+                base_position: Vec3::new(1.0, 0.0, 0.0),
+            },
+            VoiceConfig {
+                color_rgb: [0.0, 0.0, 1.0],
+                waveform: Waveform::Triangle,
+                base_position: Vec3::new(0.0, 0.0, -1.0),
+            },
+        ];
+        let params = EngineParams::default();
+        let mut engine = MusicEngine::new(configs, params, 7);
+        // Solo voice 0 then change tempo
+        engine.toggle_solo(0);
+        engine.set_bpm(140.0);
+        // Mute flags should still reflect solo state
+        assert!(!engine.voices[0].muted);
+        assert!(engine.voices[1].muted);
+        assert!(engine.voices[2].muted);
+        // Toggle solo off and ensure unmuted
+        engine.toggle_solo(0);
+        assert!(engine.voices.iter().all(|v| !v.muted));
+    }
 }

@@ -157,17 +157,7 @@ const puppeteer = require("puppeteer");
     if (!/Muted:\s*no/.test(hintMutedOff))
       throw new Error("hint Muted not no after M again");
 
-    // Toggle orbit on/off and assert hint/logs
-    await page.keyboard.press("KeyO");
-    await new Promise((r) => setTimeout(r, 120));
-    if (!logs.some((l) => /\[keys\] orbit=(true|false)/.test(l)))
-      throw new Error("missing orbit toggle log");
-    const hintOrbit = await page.evaluate(() => {
-      const el = document.querySelector(".hint");
-      return el ? el.textContent || "" : "";
-    });
-    if (!/Orbit:\s*(yes|no)/.test(hintOrbit))
-      throw new Error("hint missing Orbit state after O");
+    // Orbit feature removed; no O-key assertions
 
     // Click center to toggle mute on the hovered voice (expects a hit)
     await page.mouse.move(box.x, box.y);

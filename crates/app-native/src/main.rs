@@ -707,15 +707,11 @@ fn render_wave_sample(phase: f32, wave: WaveKind) -> f32 {
         WaveKind::Saw => {
             // Map phase 0..2PI to -1..1
             let t = phase / (2.0 * std::f32::consts::PI);
-            (2.0 * (t - t.floor())) * 2.0 - 1.0
+            2.0 * (t - t.floor()) - 1.0
         }
         WaveKind::Triangle => {
-            // Triangle from saw
-            let saw = {
-                let t = phase / (2.0 * std::f32::consts::PI);
-                (2.0 * (t - t.floor())) * 2.0 - 1.0
-            };
-            (2.0 / std::f32::consts::PI) * (saw.asin())
+            // Triangle using arcsin(sin) identity, normalized to [-1, 1]
+            (2.0 / std::f32::consts::PI) * (phase.sin().asin())
         }
     }
 }

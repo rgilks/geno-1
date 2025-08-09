@@ -13,7 +13,7 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use web_sys as web;
-use wgpu::util::DeviceExt;
+// (DeviceExt no longer needed; legacy vertex buffers removed)
 
 // Rendering/picking shared constants to keep math consistent
 const CAMERA_Z: f32 = 6.0;
@@ -63,7 +63,7 @@ async fn init() -> anyhow::Result<()> {
                         if show {
                             // Default content (before full engine/UI attach)
                             div.set_inner_html(
-                                "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: 110 • Paused: no • Muted: yes • Orbit: yes",
+                                "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: 110 • Paused: no • Muted: yes • Orbit: yes",
                             );
                             let _ = el.set_attribute("style", "");
                         } else {
@@ -213,6 +213,7 @@ async fn init() -> anyhow::Result<()> {
                     };
                     sat_pre.gain().set_value(0.9);
 
+                    #[allow(deprecated)]
                     let saturator = match web::WaveShaperNode::new(&audio_ctx) {
                         Ok(n) => n,
                         Err(e) => {
@@ -229,6 +230,7 @@ async fn init() -> anyhow::Result<()> {
                         curve.push((2.0 / std::f32::consts::PI) * (drive * x).atan());
                     }
                     // web-sys binding copies from the slice into a Float32Array under the hood
+                    #[allow(deprecated)]
                     saturator.set_curve(Some(curve.as_mut_slice()));
 
                     let sat_wet = match web::GainNode::new(&audio_ctx) {
@@ -462,8 +464,8 @@ async fn init() -> anyhow::Result<()> {
                     let paused = Rc::new(RefCell::new(false));
                     // Master mute state for all voices (start muted)
                     let master_muted = Rc::new(RefCell::new(true));
-                    // Camera orbit toggle (enabled by default)
-                    let orbit_enabled = Rc::new(RefCell::new(true));
+                    // (orbit removed)
+                    let orbit_enabled = Rc::new(RefCell::new(false));
                     let voice_gains = Rc::new(voice_gains);
 
                     // Queued ripple UV from pointer taps (read by render tick)
@@ -630,14 +632,15 @@ async fn init() -> anyhow::Result<()> {
                         closure.forget();
                     }
 
-                    // Keyboard controls: R reseed all, Space pause, +/- bpm adjust
+                    // Keyboard controls: R reseed all, Space pause, +/- bpm adjust, F/Escape fullscreen
                     {
                         let engine_k = engine.clone();
                         let paused_k = paused.clone();
                         let master_muted_k = master_muted.clone();
                         let orbit_enabled_k = orbit_enabled.clone();
-                        let voice_gains_k = voice_gains.clone();
+                        let _voice_gains_k = voice_gains.clone();
                         let master_gain_k = master_gain.clone();
+                        let canvas_k = canvas_for_click_inner.clone();
                         let window = web::window().unwrap();
                         let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
                             let key = ev.key();
@@ -670,7 +673,7 @@ async fn init() -> anyhow::Result<()> {
                                                         el.dyn_ref::<web::HtmlElement>()
                                                     {
                                                         let content = format!(
-                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
+                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
                                                             bpm_now,
                                                             if *p { "yes" } else { "no" },
                                                             if muted_now { "yes" } else { "no" },
@@ -699,16 +702,14 @@ async fn init() -> anyhow::Result<()> {
                                                 {
                                                     let paused_now = *paused_k.borrow();
                                                     let muted_now = *master_muted_k.borrow();
-                                                    let orbit_now = *orbit_enabled_k.borrow();
                                                     if let Some(div) =
                                                         el.dyn_ref::<web::HtmlElement>()
                                                     {
                                                         let content = format!(
-                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
+                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • F: fullscreen\nBPM: {:.0} • Paused: {} • Muted: {}",
                                                             new_bpm,
                                                             if paused_now { "yes" } else { "no" },
-                                                            if muted_now { "yes" } else { "no" },
-                                                            if orbit_now { "yes" } else { "no" }
+                                                            if muted_now { "yes" } else { "no" }
                                                     );
                                                         div.set_inner_html(&content);
                                                     }
@@ -737,7 +738,7 @@ async fn init() -> anyhow::Result<()> {
                                                         el.dyn_ref::<web::HtmlElement>()
                                                     {
                                                         let content = format!(
-                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
+                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
                                                             new_bpm,
                                                             if paused_now { "yes" } else { "no" },
                                                             if muted_now { "yes" } else { "no" },
@@ -766,16 +767,14 @@ async fn init() -> anyhow::Result<()> {
                                                 {
                                                     let paused_now = *paused_k.borrow();
                                                     let bpm_now = engine_k.borrow().params.bpm;
-                                                    let orbit_now = *orbit_enabled_k.borrow();
                                                     if let Some(div) =
                                                         el.dyn_ref::<web::HtmlElement>()
                                                     {
                                                         let content = format!(
-                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • O: orbit on/off\nBPM: {:.0} • Paused: {} • Muted: {} • Orbit: {}",
+                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute • F: fullscreen\nBPM: {:.0} • Paused: {} • Muted: {}",
                                                             bpm_now,
                                                             if paused_now { "yes" } else { "no" },
-                                                            if *muted { "yes" } else { "no" },
-                                                            if orbit_now { "yes" } else { "no" }
+                                                            if *muted { "yes" } else { "no" }
                                                         );
                                                         div.set_inner_html(&content);
                                                     }
@@ -813,6 +812,28 @@ async fn init() -> anyhow::Result<()> {
                                                     }
                                                 }
                                             }
+                                        }
+                                    }
+                                }
+                                // Fullscreen toggle
+                                "f" | "F" => {
+                                    if let Some(win) = web::window() {
+                                        if let Some(doc) = win.document() {
+                                            if doc.fullscreen_element().is_some() {
+                                                let _ = doc.exit_fullscreen();
+                                            } else {
+                                                // Request fullscreen on the canvas
+                                                let _ = canvas_k.request_fullscreen();
+                                            }
+                                        }
+                                    }
+                                    ev.prevent_default();
+                                }
+                                // Exit fullscreen
+                                "Escape" => {
+                                    if let Some(win) = web::window() {
+                                        if let Some(doc) = win.document() {
+                                            let _ = doc.exit_fullscreen();
                                         }
                                     }
                                 }
@@ -1033,7 +1054,7 @@ async fn init() -> anyhow::Result<()> {
                             }
                             for p in ps.iter_mut() {
                                 // Exponential decay for smoother falloff
-                                *p *= (1.0 - (dt_sec * 1.8).min(0.9));
+                                *p *= 1.0 - (dt_sec * 1.8).min(0.9);
                             }
                             // Mouse-driven swirl effect intensity (visual + global audio whoosh)
                             let w = canvas_for_tick.width().max(1) as f32;
@@ -1412,20 +1433,7 @@ async fn init() -> anyhow::Result<()> {
 
 // ===================== WebGPU state =====================
 
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct Uniforms {
-    view_proj: [[f32; 4]; 4],
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct InstanceData {
-    pos: [f32; 3],
-    scale: f32,
-    color: [f32; 4],
-    pulse: f32,
-}
+// (legacy scene Uniforms/InstanceData removed)
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -1465,12 +1473,6 @@ struct GpuState<'a> {
     device: wgpu::Device,
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
-    // Scene
-    scene_pipeline: wgpu::RenderPipeline,
-    scene_uniform_buffer: wgpu::Buffer,
-    quad_vb: wgpu::Buffer,
-    instance_vb: wgpu::Buffer,
-    scene_bind_group: wgpu::BindGroup,
     // Waves full-screen layer
     waves_pipeline: wgpu::RenderPipeline,
     waves_uniform_buffer: wgpu::Buffer,
@@ -1484,7 +1486,7 @@ struct GpuState<'a> {
     bloom_b_view: wgpu::TextureView,
     linear_sampler: wgpu::Sampler,
 
-    post_shader: wgpu::ShaderModule,
+    #[allow(dead_code)]
     post_bgl0: wgpu::BindGroupLayout, // texture+sampler+uniform
     post_bgl1: wgpu::BindGroupLayout, // optional second texture+sampler
     post_uniform_buffer: wgpu::Buffer,
@@ -1567,97 +1569,7 @@ impl<'a> GpuState<'a> {
         };
         surface.configure(&device, &config);
 
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("shader"),
-            source: wgpu::ShaderSource::Wgsl(app_core::SCENE_WGSL.into()),
-        });
-        let scene_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("uniforms"),
-            size: std::mem::size_of::<Uniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        // Quad vertex buffer (two triangles)
-        let quad_vertices: [f32; 12] = [
-            -0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5,
-        ];
-        let quad_vb = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("quad_vb"),
-            contents: bytemuck::cast_slice(&quad_vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-        // Instance buffer (capacity for many instances: 3 voices + rings + spectrum)
-        let instance_vb = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("instance_vb"),
-            size: (std::mem::size_of::<InstanceData>() * 1024) as u64,
-            usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("bgl"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::VERTEX_FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-        let scene_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("bg"),
-            layout: &bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: scene_uniform_buffer.as_entire_binding(),
-            }],
-        });
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("pl"),
-            bind_group_layouts: &[&bgl],
-            push_constant_ranges: &[],
-        });
-        let vertex_buffers = [
-            // slot 0: quad positions
-            wgpu::VertexBufferLayout {
-                array_stride: (std::mem::size_of::<f32>() * 2) as u64,
-                step_mode: wgpu::VertexStepMode::Vertex,
-                attributes: &[wgpu::VertexAttribute {
-                    format: wgpu::VertexFormat::Float32x2,
-                    offset: 0,
-                    shader_location: 0,
-                }],
-            },
-            // slot 1: instance data
-            wgpu::VertexBufferLayout {
-                array_stride: std::mem::size_of::<InstanceData>() as u64,
-                step_mode: wgpu::VertexStepMode::Instance,
-                attributes: &[
-                    wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32x3,
-                        offset: 0,
-                        shader_location: 1,
-                    },
-                    wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32,
-                        offset: 12,
-                        shader_location: 2,
-                    },
-                    wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32x4,
-                        offset: 16,
-                        shader_location: 3,
-                    },
-                    wgpu::VertexAttribute {
-                        format: wgpu::VertexFormat::Float32,
-                        offset: 32,
-                        shader_location: 4,
-                    },
-                ],
-            },
-        ];
+        // Legacy instanced voice markers path removed; visuals are handled by waves/post stack.
 
         // Offscreen HDR targets (scene and bloom) at full and half resolution
         let hdr_format = wgpu::TextureFormat::Rgba16Float;
@@ -1710,31 +1622,7 @@ impl<'a> GpuState<'a> {
         let bloom_a_view = bloom_a.create_view(&wgpu::TextureViewDescriptor::default());
         let bloom_b_view = bloom_b.create_view(&wgpu::TextureViewDescriptor::default());
 
-        let scene_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("scene_pipeline"),
-            layout: Some(&pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &shader,
-                entry_point: Some("vs_main"),
-                buffers: &vertex_buffers,
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: hdr_format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            cache: None,
-            multiview: None,
-        });
+        // (removed legacy instanced scene pipeline)
         // Waves fullscreen pass (drawn into HDR before bloom)
         let waves_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("waves_shader"),
@@ -2048,11 +1936,6 @@ impl<'a> GpuState<'a> {
             device,
             queue,
             config,
-            scene_pipeline,
-            scene_uniform_buffer,
-            quad_vb,
-            instance_vb,
-            scene_bind_group,
             waves_pipeline,
             waves_uniform_buffer,
             waves_bind_group,
@@ -2063,7 +1946,6 @@ impl<'a> GpuState<'a> {
             bloom_b,
             bloom_b_view,
             linear_sampler,
-            post_shader,
             post_bgl0,
             post_bgl1,
             post_uniform_buffer,
@@ -2283,12 +2165,7 @@ impl<'a> GpuState<'a> {
         }
     }
 
-    fn view_proj(&self) -> [[f32; 4]; 4] {
-        let aspect = self.width as f32 / self.height.max(1) as f32;
-        let proj = Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect, 0.1, 100.0);
-        let view = Mat4::look_at_rh(self.cam_eye, self.cam_target, Vec3::Y);
-        (proj * view).to_cols_array_2d()
-    }
+    // (legacy view_proj removed)
 
     // draw_instance no longer used with instanced path
 
@@ -2309,33 +2186,7 @@ impl<'a> GpuState<'a> {
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("encoder"),
             });
-        // Write view-projection
-        self.queue.write_buffer(
-            &self.scene_uniform_buffer,
-            0,
-            bytemuck::bytes_of(&Uniforms {
-                view_proj: self.view_proj(),
-            }),
-        );
-        // Write instance data
-        let mut instance_data: Vec<InstanceData> = Vec::with_capacity(positions.len());
-        for i in 0..positions.len() {
-            let pulse_amount = if i < 3 {
-                // guard
-                // derive from scale relative to base 1.6
-                (scales[i] - 1.6).max(0.0) / 0.4
-            } else {
-                0.0
-            };
-            instance_data.push(InstanceData {
-                pos: positions[i].to_array(),
-                scale: scales[i],
-                color: colors[i].to_array(),
-                pulse: pulse_amount,
-            });
-        }
-        self.queue
-            .write_buffer(&self.instance_vb, 0, bytemuck::cast_slice(&instance_data));
+        // (removed legacy scene uniform and instance buffer updates)
         // Pass 1: render waves (and optionally instances) into HDR offscreen
         {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -2358,7 +2209,8 @@ impl<'a> GpuState<'a> {
                     positions[i].x,
                     positions[i].y,
                     positions[i].z,
-                    instance_data[i].pulse,
+                    // derive pulse amount directly from scale vs base scale
+                    ((scales[i] - 1.6).max(0.0) / 0.4).clamp(0.0, 1.5),
                 ],
                 color: colors[i].to_array(),
             };

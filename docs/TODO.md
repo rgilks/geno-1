@@ -25,14 +25,14 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Optional `AnalyserNode` to drive ambient visuals
 - [x] Master bus with lush `ConvolverNode` reverb and dark feedback `DelayNode` bus with lowpass tone shaping; per-voice sends
 - [ ] Optional AudioWorklet path (future)
-  - Notes: Master starts muted; Start overlay ensures gesture unlock. Pointer corners map to saturation/delay; click injects ripple into background waves.
+- Notes: Master starts muted; Start overlay ensures gesture unlock. Pointer corners map to saturation/delay; click injects ripple into background waves.
 
 ## Visual Engine (Web)
 
 - [x] Instanced rendering of voice markers (circle mask, emissive pulse)
 - [x] Audio-reactive pulses on note events
 - [x] Ambient visuals (ambient waves background with swirl and click ripples; optional analyser-driven spectrum dots)
-- [x] Optional camera orbit (toggle 'O')
+- [ ] Optional camera orbit (toggle 'O') [removed in current build]
 - [x] Sync listener orientation with camera
 - [x] Visual polish (colors, easing, subtle glow, vignette)
 - [x] Prefer SRGB surface format where available (e.g., BGRA8UnormSrgb)
@@ -45,7 +45,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Click: mute; Shift+Click: reseed; Alt+Click: solo
 - [x] Keyboard: R (reseed all), Space (pause), + / - (tempo), M (master mute)
   - [x] Start overlay (gesture) and default master mute
-  - [x] Dynamic hint overlay shows BPM, paused, muted, and orbit state
+  - [x] Dynamic hint overlay shows BPM, paused, and muted state
 - [ ] 3D in-scene icon controls replacing keyboard (post-v1)
 - [x] Clamp drag radius to a sensible range to avoid losing objects
 - [x] Mouse-driven FX mapping: corner-based saturation; opposite-corner delay
@@ -82,14 +82,14 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Headless web test validates interactions and hint content
 - [x] Add assertions: BPM change reflected; solo/mute state (logs/state)
 - [x] Optional native smoke test (launch, render few frames, exit)
-  - [ ] Add unit tests for `app-core` mute/solo edge-cases with reseed & tempo changes
+  - [x] Add unit tests for `app-core` mute/solo edge-cases with reseed & tempo changes
 
 ## Deployment
 
 - [x] Add hosting instructions (Cloudflare Workers)
-- [ ] Optional: GitHub Pages workflow to publish `crates/app-web` artifacts (requires headers)
+
 - [x] Optional: production server/worker if needed
-  - [ ] Document `wrangler` env and cache headers expectations for `.wasm`/`.js`
+- [ ] Document `wrangler` env and cache headers expectations for `.wasm`/`.js`
 
 ---
 
@@ -98,7 +98,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 ### M1: Solid Web Prototype (current)
 
 - 3 voices with spatial audio, reactive visuals, drag interactions
-- Keyboard and hint overlay for control (orbit/mute/tempo)
+- Keyboard and hint overlay for control (mute/tempo)
 - CI green with headless test
 
 Status: In progress — core features completed; polish pending
