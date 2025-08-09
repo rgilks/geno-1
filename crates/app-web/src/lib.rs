@@ -194,9 +194,138 @@ async fn init() -> anyhow::Result<()> {
                     );
                     }
 
-                    // Per-voice master gains -> destination
+                    // Master mix bus -> destination
+                    let master_gain = match web::GainNode::new(&audio_ctx) {
+                        Ok(g) => g,
+                        Err(e) => {
+                            log::error!("Master GainNode error: {:?}", e);
+                            return;
+                        }
+                    };
+                    master_gain.gain().set_value(0.8);
+                    if let Err(e) = master_gain.connect_with_audio_node(&audio_ctx.destination()) {
+                        log::error!("connect error: {:?}", e);
+                        return;
+                    }
+
+                    // Global lush reverb (Convolver) and tempo-synced dark delay bus
+                    // Reverb input and wet level
+                    let reverb_in = match web::GainNode::new(&audio_ctx) {
+                        Ok(g) => g,
+                        Err(e) => {
+                            log::error!("Reverb in GainNode error: {:?}", e);
+                            return;
+                        }
+                    };
+                    reverb_in.gain().set_value(1.0);
+                    let reverb = match web::ConvolverNode::new(&audio_ctx) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            log::error!("ConvolverNode error: {:?}", e);
+                            return;
+                        }
+                    };
+                    reverb.set_normalize(true);
+                    // Create a long, dark stereo impulse response procedurally
+                    {
+                        let sr = audio_ctx.sample_rate();
+                        let seconds = 5.0_f32; // lush tail
+                        let len = (sr as f32 * seconds) as u32;
+                        if let Ok(ir) = audio_ctx.create_buffer(2, len, sr) {
+                            // simple xorshift32 for deterministic noise
+                            let mut seed_l: u32 = 0x1234ABCD;
+                            let mut seed_r: u32 = 0x7890FEDC;
+                            for ch in 0..2 {
+                                let mut buf: Vec<f32> = vec![0.0; len as usize];
+                                let mut t = 0.0_f32;
+                                let dt = 1.0_f32 / sr as f32;
+                                for i in 0..len as usize {
+                                    let s = if ch == 0 { &mut seed_l } else { &mut seed_r };
+                                    let mut x = *s;
+                                    x ^= x << 13;
+                                    x ^= x >> 17;
+                                    x ^= x << 5;
+                                    *s = x;
+                                    let n = ((x as f32 / std::u32::MAX as f32) * 2.0 - 1.0) as f32;
+                                    // Exponential decay envelope, dark tilt
+                                    let decay = (-t / 3.0).exp();
+                                    let dark = (1.0 - (t / seconds)).max(0.0);
+                                    let v = n * decay * (0.6 + 0.4 * dark);
+                                    buf[i] = v;
+                                    t += dt;
+                                }
+                                let _ = ir.copy_to_channel(&mut buf, ch as i32);
+                            }
+                            reverb.set_buffer(Some(&ir));
+                        }
+                    }
+                    let reverb_wet = match web::GainNode::new(&audio_ctx) {
+                        Ok(g) => g,
+                        Err(e) => {
+                            log::error!("Reverb wet GainNode error: {:?}", e);
+                            return;
+                        }
+                    };
+                    reverb_wet.gain().set_value(0.6);
+                    let _ = reverb_in.connect_with_audio_node(&reverb);
+                    let _ = reverb.connect_with_audio_node(&reverb_wet);
+                    let _ = reverb_wet.connect_with_audio_node(&master_gain);
+
+                    // Delay bus with feedback loop and lowpass tone for darkness
+                    let delay_in = match web::GainNode::new(&audio_ctx) {
+                        Ok(g) => g,
+                        Err(e) => {
+                            log::error!("Delay in GainNode error: {:?}", e);
+                            return;
+                        }
+                    };
+                    delay_in.gain().set_value(1.0);
+                    let delay = match audio_ctx.create_delay_with_max_delay_time(3.0) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            log::error!("DelayNode error: {:?}", e);
+                            return;
+                        }
+                    };
+                    // Around ~3/8 to ~1/2 note depending on BPM 110 → ~0.55s feels lush
+                    delay.delay_time().set_value(0.55);
+                    let delay_tone = match web::BiquadFilterNode::new(&audio_ctx) {
+                        Ok(n) => n,
+                        Err(e) => {
+                            log::error!("BiquadFilterNode error: {:?}", e);
+                            return;
+                        }
+                    };
+                    delay_tone.set_type(web::BiquadFilterType::Lowpass);
+                    delay_tone.frequency().set_value(1400.0);
+                    let delay_feedback = match web::GainNode::new(&audio_ctx) {
+                        Ok(g) => g,
+                        Err(e) => {
+                            log::error!("Delay feedback GainNode error: {:?}", e);
+                            return;
+                        }
+                    };
+                    delay_feedback.gain().set_value(0.6);
+                    let delay_wet = match web::GainNode::new(&audio_ctx) {
+                        Ok(g) => g,
+                        Err(e) => {
+                            log::error!("Delay wet GainNode error: {:?}", e);
+                            return;
+                        }
+                    };
+                    delay_wet.gain().set_value(0.5);
+                    let _ = delay_in.connect_with_audio_node(&delay);
+                    let _ = delay.connect_with_audio_node(&delay_tone);
+                    let _ = delay_tone.connect_with_audio_node(&delay_feedback);
+                    let _ = delay_feedback.connect_with_audio_node(&delay);
+                    let _ = delay_tone.connect_with_audio_node(&delay_wet);
+                    let _ = delay_wet.connect_with_audio_node(&master_gain);
+
+                    // Per-voice master gains -> master bus, plus effect sends
                     let mut voice_gains: Vec<web::GainNode> = Vec::new();
                     let mut voice_panners: Vec<web::PannerNode> = Vec::new();
+                    let mut delay_sends_vec: Vec<web::GainNode> = Vec::new();
+                    let mut reverb_sends_vec: Vec<web::GainNode> = Vec::new();
                     for v in 0..engine.borrow().voices.len() {
                         let panner = match web::PannerNode::new(&audio_ctx) {
                             Ok(p) => p,
@@ -225,13 +354,36 @@ async fn init() -> anyhow::Result<()> {
                             log::error!("connect error: {:?}", e);
                             return;
                         }
-                        if let Err(e) = panner.connect_with_audio_node(&audio_ctx.destination()) {
+                        if let Err(e) = panner.connect_with_audio_node(&master_gain) {
                             log::error!("connect error: {:?}", e);
                             return;
                         }
+                        // Per-voice sends
+                        let d_send = match web::GainNode::new(&audio_ctx) {
+                            Ok(g) => g,
+                            Err(e) => {
+                                log::error!("Delay send GainNode error: {:?}", e);
+                                return;
+                            }
+                        };
+                        d_send.gain().set_value(0.4);
+                        let _ = d_send.connect_with_audio_node(&delay_in);
+                        delay_sends_vec.push(d_send);
+                        let r_send = match web::GainNode::new(&audio_ctx) {
+                            Ok(g) => g,
+                            Err(e) => {
+                                log::error!("Reverb send GainNode error: {:?}", e);
+                                return;
+                            }
+                        };
+                        r_send.gain().set_value(0.65);
+                        let _ = r_send.connect_with_audio_node(&reverb_in);
+                        reverb_sends_vec.push(r_send);
                         voice_gains.push(gain);
                         voice_panners.push(panner);
                     }
+                    let delay_sends = Rc::new(delay_sends_vec);
+                    let reverb_sends = Rc::new(reverb_sends_vec);
 
                     // Initialize WebGPU (leak a canvas clone to satisfy 'static lifetime for surface)
                     let leaked_canvas = Box::leak(Box::new(canvas_for_click_inner.clone()));
@@ -430,6 +582,7 @@ async fn init() -> anyhow::Result<()> {
                         let master_muted_k = master_muted.clone();
                         let orbit_enabled_k = orbit_enabled.clone();
                         let voice_gains_k = voice_gains.clone();
+                        let master_gain_k = master_gain.clone();
                         let window = web::window().unwrap();
                         let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
                             let key = ev.key();
@@ -546,10 +699,8 @@ async fn init() -> anyhow::Result<()> {
                                 "m" | "M" => {
                                     let mut muted = master_muted_k.borrow_mut();
                                     *muted = !*muted;
-                                    let new_val = if *muted { 0.0 } else { 0.2 };
-                                    for g in voice_gains_k.iter() {
-                                        g.gain().set_value(new_val);
-                                    }
+                                    let new_val = if *muted { 0.0 } else { 0.8 };
+                                    master_gain_k.gain().set_value(new_val);
                                     log::info!("[keys] master muted={}", *muted);
                                     // If hint visible, refresh its content
                                     if let Some(win) = web::window() {
@@ -713,6 +864,8 @@ async fn init() -> anyhow::Result<()> {
                     let hover_tick = hover_index.clone();
                     let canvas_for_tick = canvas_for_click_inner.clone();
                     let voice_gains_tick = voice_gains.clone();
+                    let delay_sends_tick = delay_sends.clone();
+                    let reverb_sends_tick = reverb_sends.clone();
                     // Optional slow camera orbit
                     let mut orbit_t: f32 = 0.0;
                     let orbit_tick = orbit_enabled.clone();
@@ -809,6 +962,25 @@ async fn init() -> anyhow::Result<()> {
                                 BASE_SCALE + ps[2] * SCALE_PULSE_MULTIPLIER,
                             ];
 
+                            // Orbiting ring particles around each voice center
+                            let two_pi = std::f32::consts::PI * 2.0;
+                            let ring_count = 48usize;
+                            for vi in 0..3 {
+                                let center = positions[vi];
+                                let base_col = Vec3::from(e_ref.configs[vi].color_rgb);
+                                let ring_r = 0.9 + ps[vi] * 0.25;
+                                for j in 0..ring_count {
+                                    let a =
+                                        orbit_t * 0.8 + (j as f32) * (two_pi / ring_count as f32);
+                                    let offset = Vec3::new(a.cos() * ring_r, 0.0, a.sin() * ring_r);
+                                    positions.push(center + offset);
+                                    let c = base_col * 0.55;
+                                    colors.push(Vec4::from((c, 0.9)));
+                                    let s = 0.06 + 0.04 * ((j % 12) as f32 / 12.0);
+                                    scales.push(s);
+                                }
+                            }
+
                             // Optional analyser-driven dot spectrum row
                             if let Some(a) = &analyser {
                                 let bins = a.frequency_bin_count() as usize;
@@ -903,6 +1075,11 @@ async fn init() -> anyhow::Result<()> {
                                 let _ = src.connect_with_audio_node(&gain);
                                 let _ =
                                     gain.connect_with_audio_node(&voice_gains_tick[ev.voice_index]);
+                                // Effect sends per note
+                                let _ =
+                                    gain.connect_with_audio_node(&delay_sends_tick[ev.voice_index]);
+                                let _ = gain
+                                    .connect_with_audio_node(&reverb_sends_tick[ev.voice_index]);
 
                                 let _ = src.start_with_when(t0);
                                 let _ = src.stop_with_when(t0 + ev.duration_sec as f64 + 0.02);
@@ -1079,10 +1256,10 @@ impl<'a> GpuState<'a> {
             contents: bytemuck::cast_slice(&quad_vertices),
             usage: wgpu::BufferUsages::VERTEX,
         });
-        // Instance buffer (capacity for 32 instances)
+        // Instance buffer (capacity for many instances: 3 voices + rings + spectrum)
         let instance_vb = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("instance_vb"),
-            size: (std::mem::size_of::<InstanceData>() * 32) as u64,
+            size: (std::mem::size_of::<InstanceData>() * 1024) as u64,
             usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

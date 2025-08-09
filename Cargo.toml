@@ -44,6 +44,11 @@ web-sys = { version = "0.3", features = [
   "PannerNode",
   "PanningModelType",
   "DistanceModelType",
+  "AudioBuffer",
+  "ConvolverNode",
+  "DelayNode",
+  "BiquadFilterNode",
+  "BiquadFilterType",
 ] }
 rand = "0.8"
 smallvec = "1.13"

@@ -23,16 +23,17 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Controls: BPM, reseed voice/all, mute, solo (click/keys)
 - [x] Distance attenuation via `PannerNode` with drag movement
 - [x] Optional `AnalyserNode` to drive ambient visuals
+- [x] Master bus with lush `ConvolverNode` reverb and dark feedback `DelayNode` bus with lowpass tone shaping; per-voice sends
 - [ ] Optional AudioWorklet path (future)
 
 ## Visual Engine (Web)
 
 - [x] Instanced rendering of voice markers (circle mask, emissive pulse)
 - [x] Audio-reactive pulses on note events
-- [ ] Ambient visuals (particles/spectrum bars/lights)
+- [x] Ambient visuals (animated ring particles, optional analyser-driven spectrum dots)
 - [x] Optional camera orbit (toggle 'O')
- - [x] Sync listener orientation with camera
-- [ ] Visual polish (colors, easing, subtle glow)
+- [x] Sync listener orientation with camera
+- [x] Visual polish (colors, easing, subtle glow, vignette)
 - [x] Prefer SRGB surface format where available (e.g., BGRA8UnormSrgb)
 
 ## Interaction & UI (Web)

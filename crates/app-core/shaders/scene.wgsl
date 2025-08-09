@@ -29,17 +29,21 @@ fn vs_main(
 
 @fragment
 fn fs_main(inf: VsOut) -> @location(0) vec4<f32> {
-  // Circular mask within the quad (unit circle of radius 0.5)
+    // Circular mask within the quad (unit circle of radius 0.5)
     let r = length(inf.local);
     let shape_alpha = 1.0 - smoothstep(0.48, 0.5, r);
 
-  // Emissive pulse boosts brightness subtly
+    // Emissive pulse boosts brightness subtly
     let emissive = 0.7 * clamp(inf.pulse, 0.0, 1.5);
     var rgb = inf.color.rgb * (1.0 + emissive);
 
     // Subtle outer glow/halo based on radius
     let halo = smoothstep(0.75, 0.55, r) * 0.12; // outer ring brightness
     rgb += halo * inf.color.rgb;
+
+    // Add vignette-like radial darkening for ambient mood
+    let vignette = smoothstep(0.0, 0.7, r);
+    rgb *= mix(1.0, 0.85, vignette);
 
     return vec4<f32>(rgb, shape_alpha * inf.color.a);
 }
