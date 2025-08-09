@@ -78,6 +78,43 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Resolve minor warnings in `app-web` (unused `mut`, unused `format` field)
 - [x] Centralize color/theme constants and object sizes
 
+### Planned Refactors (incremental, no behavior changes)
+
+- [ ] app-core: extract helper methods for per-voice scheduling parameters
+  - Rationale: improve readability in `schedule_step` by removing inline match blocks
+  - Status: implemented as private helpers (`voice_trigger_probability`, `voice_octave_offset`, `voice_base_duration`) and rustdoc added; no API change
+- [ ] app-core: document public structs and functions
+  - Rationale: clarify responsibilities of `MusicEngine`, `EngineParams`, `VoiceConfig`, etc.
+  - Status: partially done (added rustdoc to types and methods); continue across `constants.rs`/`state.rs`
+- [ ] app-core: introduce small newtype for `MidiNote` and typed Hz wrapper
+  - Rationale: make units explicit and reduce accidental misuse
+  - Plan: add newtypes with From/Into impls; keep existing APIs to avoid breakage initially
+- [ ] app-core: make `MusicEngine` scheduling grid configurable
+  - Rationale: today hard-coded to eighth-note; allow division enum without changing defaults
+  - Plan: add `grid_division: Division` to `EngineParams` with `Eighth` default; use in `tick`
+- [ ] app-core: separate RNG/seeding from state to allow deterministic replay sessions
+  - Rationale: enable capture/replay of seeds per voice for tests/demos
+  - Plan: introduce `EngineRandom` struct; keep current methods as thin wrappers
+- [ ] app-web: factor large `lib.rs` into modules (`audio`, `render`, `input`, `ui`)
+  - Rationale: improve maintainability of a >2k LOC file
+  - Plan: create `mod` submodules and move code in small PR-sized steps; keep exports stable
+- [ ] app-web: centralize DOM/hint/UI updates behind a tiny view model
+  - Rationale: reduce ad-hoc DOM writes scattered in event handlers
+  - Plan: introduce a `UiState` struct with methods to set BPM/paused/mute text
+- [ ] app-web: extract WebGPU pipeline builders
+  - Rationale: deduplicate pipeline/buffer setup for waves/post passes
+  - Plan: create `pipeline.rs` helpers returning typed bundles; no functional changes
+- [ ] app-native: mirror `app-web` structure where practical
+  - Rationale: parity and easier cross-referencing
+  - Plan: extract `gpu.rs`, `audio.rs`, `input.rs` modules gradually
+
+### Testing Enhancements
+
+- [x] app-core: add unit tests for midi conversion, mute/solo, tempo effects, reseed determinism
+- [ ] app-core: add property-based tests for `midi_to_hz` monotonicity and octave symmetry
+- [ ] app-web: extend headless test to simulate tempo change and check hint reflects BPM
+- [ ] app-web: add a check that clicking voices toggles mute text/icon state in the hint
+
 ## Testing & DX
 
 - [x] Headless web test validates interactions and hint content

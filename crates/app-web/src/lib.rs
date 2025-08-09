@@ -15,6 +15,10 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys as web;
 // (DeviceExt no longer needed; legacy vertex buffers removed)
 
+mod input;
+mod render;
+mod ui;
+
 // Rendering/picking shared constants to keep math consistent
 const CAMERA_Z: f32 = 6.0;
 
@@ -52,25 +56,7 @@ async fn init() -> anyhow::Result<()> {
         let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
             let key = ev.key();
             if key == "h" || key == "H" {
-                if let Ok(Some(el)) = document.query_selector(".hint") {
-                    let cur = el.get_attribute("data-visible");
-                    let show = match cur.as_deref() {
-                        Some("1") => false,
-                        _ => true,
-                    };
-                    let _ = el.set_attribute("data-visible", if show { "1" } else { "0" });
-                    if let Some(div) = el.dyn_ref::<web::HtmlElement>() {
-                        if show {
-                            // Default content (before full engine/UI attach)
-                            div.set_inner_html(
-                                "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: 110 • Paused: no",
-                            );
-                            let _ = el.set_attribute("style", "");
-                        } else {
-                            let _ = el.set_attribute("style", "display:none");
-                        }
-                    }
-                }
+                ui::toggle_hint_visibility(&document);
                 ev.prevent_default();
             }
         }) as Box<dyn FnMut(_)>);
@@ -475,39 +461,9 @@ async fn init() -> anyhow::Result<()> {
                         Rc::new(RefCell::new(None));
 
                     // ---------------- Interaction state ----------------
-                    #[derive(Default, Clone, Copy)]
-                    struct MouseState {
-                        x: f32,
-                        y: f32,
-                        down: bool,
-                    }
-                    #[derive(Default, Clone, Copy)]
-                    struct DragState {
-                        active: bool,
-                        voice: usize,
-                        plane_z_world: f32,
-                    }
-                    let mouse_state = Rc::new(RefCell::new(MouseState::default()));
+                    let mouse_state = Rc::new(RefCell::new(input::MouseState::default()));
                     let hover_index = Rc::new(RefCell::new(None::<usize>));
-                    let drag_state = Rc::new(RefCell::new(DragState::default()));
-
-                    // Ray-sphere intersect
-                    let ray_sphere =
-                        |ray_o: Vec3, ray_d: Vec3, center: Vec3, radius: f32| -> Option<f32> {
-                            let oc = ray_o - center;
-                            let b = oc.dot(ray_d);
-                            let c = oc.dot(oc) - radius * radius;
-                            let disc = b * b - c;
-                            if disc < 0.0 {
-                                return None;
-                            }
-                            let t = -b - disc.sqrt();
-                            if t >= 0.0 {
-                                Some(t)
-                            } else {
-                                None
-                            }
-                        };
+                    let drag_state = Rc::new(RefCell::new(input::DragState::default()));
 
                     // Screen -> canvas coords inline helper
 
@@ -542,37 +498,19 @@ async fn init() -> anyhow::Result<()> {
                             ms.y = pos.y;
                             // noisy move debug log removed
                             // Compute hover or drag update
-                            let width = canvas_mouse.width() as f32;
-                            let height = canvas_mouse.height() as f32;
-                            let ndc_x = (2.0 * pos.x / width) - 1.0;
-                            let ndc_y = 1.0 - (2.0 * pos.y / height);
-                            let aspect = width / height.max(1.0);
-                            let proj = Mat4::perspective_rh(
-                                std::f32::consts::FRAC_PI_4,
-                                aspect,
-                                0.1,
-                                100.0,
+                            let (ro, rd) = render::screen_to_world_ray(
+                                &canvas_mouse,
+                                pos.x,
+                                pos.y,
+                                CAMERA_Z,
                             );
-                            let view = Mat4::look_at_rh(
-                                Vec3::new(0.0, 0.0, CAMERA_Z),
-                                Vec3::ZERO,
-                                Vec3::Y,
-                            );
-                            let inv = (proj * view).inverse();
-                            let p_near = inv * Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
-                            let p_far = inv * Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
-                            let _p0: Vec3 = p_near.truncate() / p_near.w;
-                            let p1: Vec3 = p_far.truncate() / p_far.w;
-                            // Ray origin from camera eye to improve drag intersection stability
-                            let ro = Vec3::new(0.0, 0.0, CAMERA_Z);
-                            let rd = (p1 - ro).normalize();
                             let mut best = None::<(usize, f32)>;
                             let spread = SPREAD;
                             let z_offset = z_offset_vec3();
                             for (i, v) in engine_m.borrow().voices.iter().enumerate() {
                                 let center_world = v.position * spread + z_offset;
                                 if let Some(t) =
-                                    ray_sphere(ro, rd, center_world, PICK_SPHERE_RADIUS)
+                                    input::ray_sphere(ro, rd, center_world, PICK_SPHERE_RADIUS)
                                 {
                                     if t >= 0.0 {
                                         match best {
