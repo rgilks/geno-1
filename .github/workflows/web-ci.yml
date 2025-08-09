@@ -1,0 +1,29 @@
+name: Web build and headless test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Install system deps
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-0 libgbm1 libasound2
+      - name: Install wasm-pack
+        run: curl -sSfL https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
+      - name: Install node deps
+        run: npm ci
+      - name: Build web
+        run: npm run build:web
+      - name: Run server and headless test
+        run: |
+          node server.js &
+          sleep 2
+          node web-test.js

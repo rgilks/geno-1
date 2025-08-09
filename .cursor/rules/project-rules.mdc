@@ -1,0 +1,14 @@
+---
+alwaysApply: true
+---
+
+Proceed in small iterative steps and test each change.
+Do not block for approvals; follow `docs/SPEC.md` and keep momentum.
+Prefer WebGPU via `wgpu` v24.0 and avoid WebGL2 fallbacks.
+Prefer Node for servers/tooling; avoid Python for this project.
+Default to pure web flow first; keep native in parity where simple.
+Proceed in small iterative steps and test each change.
+Do not block for approvals; follow `docs/SPEC.md` and keep momentum.
+Prefer WebGPU via `wgpu` v24.0 and avoid WebGL2 fallbacks.
+Prefer Node for servers/tooling; avoid Python for this project.
+Default to pure web flow first; keep native in parity where simple.

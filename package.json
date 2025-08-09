@@ -4,12 +4,15 @@
   "description": "- Native app: `cargo run -p app-native` - Web (WASM): uses `wasm-pack` to build and a static `index.html` to run (to be added next)",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "test": "npm run test:web",
     "build:web": "cd crates/app-web && wasm-pack build --target web --out-dir pkg --out-name app_web --release && cp env.js pkg/env.js",
     "build:web:dev": "cd crates/app-web && wasm-pack build --target web --out-dir pkg --out-name app_web && cp env.js pkg/env.js",
     "serve:web": "cd crates/app-web && http-server -p 8080 -c-1 .",
     "dev:web": "npm run build:web && npm run serve:web",
     "open:web": "open http://localhost:8080",
+    "start:web": "node server.js",
+    "test:web": "node web-test.js",
+    "ci:web": "npm run build:web && node server.js & sleep 1 && node web-test.js",
     "build:native": "cargo build -p app-native",
     "native": "cargo run -p app-native",
     "build:all": "npm run build:native && npm run build:web",
@@ -29,6 +32,7 @@
   "homepage": "https://github.com/rgilks/geno-1#readme",
   "devDependencies": {
     "http-server": "^14.1.1",
+    "puppeteer": "^24.16.0",
     "wasm-pack": "^0.13.1"
   }
 }

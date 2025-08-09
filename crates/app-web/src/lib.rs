@@ -38,6 +38,9 @@ async fn init() -> anyhow::Result<()> {
         .dyn_into::<web::HtmlCanvasElement>()
         .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
 
+    // Note: we will query the optional hint element lazily inside event handlers to avoid
+    // capturing it here and forcing closures to be FnOnce.
+
     // Avoid grabbing a 2D context here to allow WebGPU to acquire the canvas
 
     // Maintain canvas internal pixel size to match CSS size * devicePixelRatio
@@ -181,6 +184,9 @@ async fn init() -> anyhow::Result<()> {
                 // Visual pulses per voice
                 let pulses = Rc::new(RefCell::new(vec![0.0_f32; engine.borrow().voices.len()]));
 
+                // Pause state (stops scheduling new notes but keeps rendering)
+                let paused = Rc::new(RefCell::new(false));
+
                 // ---------------- Interaction state ----------------
                 #[derive(Default, Clone, Copy)]
                 struct MouseState {
@@ -316,6 +322,82 @@ async fn init() -> anyhow::Result<()> {
                     closure.forget();
                 }
 
+                // Keyboard controls: H toggle help, R reseed all, Space pause, +/- bpm adjust
+                {
+                    let engine_k = engine.clone();
+                    let paused_k = paused.clone();
+                    let window = web::window().unwrap();
+                    let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
+                        let key = ev.key();
+                        match key.as_str() {
+                            // Toggle help overlay visibility
+                            "h" | "H" => {
+                                if let Some(win) = web::window() {
+                                    if let Some(doc) = win.document() {
+                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
+                                            let cur = el.get_attribute("data-visible");
+                                            let new_visible = match cur.as_deref() {
+                                                Some("1") => "0",
+                                                _ => "1",
+                                            };
+                                            let _ = el.set_attribute("data-visible", new_visible);
+                                            if new_visible == "1" {
+                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
+                                                {
+                                                    div.set_inner_html(
+                                                        "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo",
+                                                    );
+                                                }
+                                                let _ = el.set_attribute("style", "");
+                                            } else {
+                                                let _ = el.set_attribute("style", "display:none");
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            // Reseed all voices
+                            "r" | "R" => {
+                                let voice_len = engine_k.borrow().voices.len();
+                                let mut eng = engine_k.borrow_mut();
+                                for i in 0..voice_len {
+                                    eng.reseed_voice(i, None);
+                                }
+                                log::info!("[keys] reseeded all voices");
+                            }
+                            // Pause/resume scheduling
+                            " " => {
+                                let mut p = paused_k.borrow_mut();
+                                *p = !*p;
+                                log::info!("[keys] paused={} ", *p);
+                                ev.prevent_default();
+                            }
+                            // Increase BPM
+                            "+" | "=" => {
+                                let mut eng = engine_k.borrow_mut();
+                                let new_bpm = (eng.params.bpm + 5.0).min(240.0);
+                                eng.set_bpm(new_bpm);
+                                log::info!("[keys] bpm -> {:.1}", new_bpm);
+                            }
+                            // Decrease BPM
+                            "-" | "_" => {
+                                let mut eng = engine_k.borrow_mut();
+                                let new_bpm = (eng.params.bpm - 5.0).max(40.0);
+                                eng.set_bpm(new_bpm);
+                                log::info!("[keys] bpm -> {:.1}", new_bpm);
+                            }
+                            _ => {}
+                        }
+                    }) as Box<dyn FnMut(_)>);
+                    window
+                        .add_event_listener_with_callback(
+                            "keydown",
+                            closure.as_ref().unchecked_ref(),
+                        )
+                        .ok();
+                    closure.forget();
+                }
+
                 // Mousedown: begin drag if over a voice
                 {
                     let hover_m = hover_index.clone();
@@ -398,9 +480,11 @@ async fn init() -> anyhow::Result<()> {
 
                     let audio_time = audio_ctx.current_time();
                     note_events.clear();
-                    engine_tick
-                        .borrow_mut()
-                        .tick(dt, audio_time, &mut note_events);
+                    if !*paused.borrow() {
+                        engine_tick
+                            .borrow_mut()
+                            .tick(dt, audio_time, &mut note_events);
+                    }
 
                     {
                         let mut ps = pulses_tick.borrow_mut();
@@ -453,37 +537,39 @@ async fn init() -> anyhow::Result<()> {
                         }
                     }
 
-                    for ev in &note_events {
-                        let src = match web::OscillatorNode::new(&audio_ctx) {
-                            Ok(s) => s,
-                            Err(_) => continue,
-                        };
-                        match engine_tick.borrow().configs[ev.voice_index].waveform {
-                            Waveform::Sine => src.set_type(web::OscillatorType::Sine),
-                            Waveform::Square => src.set_type(web::OscillatorType::Square),
-                            Waveform::Saw => src.set_type(web::OscillatorType::Sawtooth),
-                            Waveform::Triangle => src.set_type(web::OscillatorType::Triangle),
+                    if !*paused.borrow() {
+                        for ev in &note_events {
+                            let src = match web::OscillatorNode::new(&audio_ctx) {
+                                Ok(s) => s,
+                                Err(_) => continue,
+                            };
+                            match engine_tick.borrow().configs[ev.voice_index].waveform {
+                                Waveform::Sine => src.set_type(web::OscillatorType::Sine),
+                                Waveform::Square => src.set_type(web::OscillatorType::Square),
+                                Waveform::Saw => src.set_type(web::OscillatorType::Sawtooth),
+                                Waveform::Triangle => src.set_type(web::OscillatorType::Triangle),
+                            }
+                            src.frequency().set_value(ev.frequency_hz);
+
+                            let gain = match web::GainNode::new(&audio_ctx) {
+                                Ok(g) => g,
+                                Err(_) => continue,
+                            };
+                            gain.gain().set_value(0.0);
+                            let t0 = audio_time + 0.01;
+                            let _ = gain
+                                .gain()
+                                .linear_ramp_to_value_at_time(ev.velocity as f32, t0 + 0.02);
+                            let _ = gain
+                                .gain()
+                                .linear_ramp_to_value_at_time(0.0_f32, t0 + ev.duration_sec as f64);
+
+                            let _ = src.connect_with_audio_node(&gain);
+                            let _ = gain.connect_with_audio_node(&voice_gains[ev.voice_index]);
+
+                            let _ = src.start_with_when(t0);
+                            let _ = src.stop_with_when(t0 + ev.duration_sec as f64 + 0.02);
                         }
-                        src.frequency().set_value(ev.frequency_hz);
-
-                        let gain = match web::GainNode::new(&audio_ctx) {
-                            Ok(g) => g,
-                            Err(_) => continue,
-                        };
-                        gain.gain().set_value(0.0);
-                        let t0 = audio_time + 0.01;
-                        let _ = gain
-                            .gain()
-                            .linear_ramp_to_value_at_time(ev.velocity as f32, t0 + 0.02);
-                        let _ = gain
-                            .gain()
-                            .linear_ramp_to_value_at_time(0.0_f32, t0 + ev.duration_sec as f64);
-
-                        let _ = src.connect_with_audio_node(&gain);
-                        let _ = gain.connect_with_audio_node(&voice_gains[ev.voice_index]);
-
-                        let _ = src.start_with_when(t0);
-                        let _ = src.stop_with_when(t0 + ev.duration_sec as f64 + 0.02);
                     }
 
                     // Schedule next frame
