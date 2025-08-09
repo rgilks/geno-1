@@ -909,8 +909,8 @@ async fn init() -> anyhow::Result<()> {
                             let du = uv[0] - prev_uv[0];
                             let dv = uv[1] - prev_uv[1];
                             let speed = ((du * du + dv * dv).sqrt() / (dt_sec + 1e-5)).min(10.0);
-                            let target = ((speed * 0.25) + if ms.down { 0.6 } else { 0.0 })
-                                .clamp(0.0, 1.0);
+                            let target =
+                                ((speed * 0.25) + if ms.down { 0.6 } else { 0.0 }).clamp(0.0, 1.0);
                             swirl_energy = 0.85 * swirl_energy + 0.15 * target;
                             prev_uv = uv;
                             drop(ms);
@@ -932,10 +932,10 @@ async fn init() -> anyhow::Result<()> {
                                 // Direct sound↔visual link: map position to per-voice mix and fx
                                 let dist = (pos.x * pos.x + pos.z * pos.z).sqrt();
                                 // Delay send increases with |x|, reverb with radial distance
-                                let mut d_amt = (0.15 + 0.85 * pos.x.abs().min(1.0))
-                                    .clamp(0.0, 1.0);
-                                let mut r_amt = (0.25 + 0.75 * (dist / 2.5).clamp(0.0, 1.0))
-                                    .clamp(0.0, 1.2);
+                                let mut d_amt =
+                                    (0.15 + 0.85 * pos.x.abs().min(1.0)).clamp(0.0, 1.0);
+                                let mut r_amt =
+                                    (0.25 + 0.75 * (dist / 2.5).clamp(0.0, 1.0)).clamp(0.0, 1.2);
                                 // Boost sends with swirl energy for pronounced movement effect
                                 let boost = 1.0 + 0.8 * swirl_energy;
                                 d_amt = (d_amt * boost).clamp(0.0, 1.2);
@@ -1006,8 +1006,7 @@ async fn init() -> anyhow::Result<()> {
                                     colors[i].z = (colors[i].z * 1.4).min(1.0);
                                 }
                             }
-                            let mut scales: Vec<f32> =
-                                Vec::with_capacity(3 + ring_count * 3 + 16);
+                            let mut scales: Vec<f32> = Vec::with_capacity(3 + ring_count * 3 + 16);
                             scales.push(BASE_SCALE + ps[0] * SCALE_PULSE_MULTIPLIER);
                             scales.push(BASE_SCALE + ps[1] * SCALE_PULSE_MULTIPLIER);
                             scales.push(BASE_SCALE + ps[2] * SCALE_PULSE_MULTIPLIER);
@@ -1086,8 +1085,9 @@ async fn init() -> anyhow::Result<()> {
 
                             if let Some(g) = &mut gpu {
                                 g.set_camera(cam_eye, cam_target);
-                                // Feed mouse-driven swirl into GPU uniforms
-                                g.set_swirl(uv, 1.0, swirl_energy > 0.05);
+                                // Feed mouse position persistently; movement boosts strength
+                                let strength = 0.35 + 1.0 * swirl_energy;
+                                g.set_swirl(uv, strength, true);
                                 // Keep WebGPU surface sized to canvas backing size
                                 let w = canvas_for_tick.width();
                                 let h = canvas_for_tick.height();

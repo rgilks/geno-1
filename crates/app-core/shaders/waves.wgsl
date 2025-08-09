@@ -105,17 +105,16 @@ fn fs_waves(inp: VsOut) -> @location(0) vec4<f32> {
         let depth = f32(L);
         let par = mix(0.65, 1.25, depth / 2.0);
         var cuv = cuv0 * par + vec2<f32>(0.0, -0.10 * depth);
-        // Swirl displacement around active pointer
-        if u.swirl_active > 0.5 {
-            let c = (u.swirl_uv - 0.5) * vec2<f32>(aspect, 1.0) * par;
-            let v = cuv - c;
-            let r = length(v);
-            let ang = u.swirl_strength * 2.5 * exp(-1.8 * r);
-            let cs = cos(ang);
-            let sn = sin(ang);
-            let rot = vec2<f32>(v.x * cs - v.y * sn, v.x * sn + v.y * cs);
-            cuv = c + rot;
-        }
+        // Swirl displacement driven by pointer position.
+        // Always active; strength is provided by CPU and can be small when idle.
+        let c = (u.swirl_uv - 0.5) * vec2<f32>(aspect, 1.0) * par;
+        let v = cuv - c;
+        let r = length(v);
+        let ang = u.swirl_strength * 2.5 * exp(-1.8 * r);
+        let cs = cos(ang);
+        let sn = sin(ang);
+        let rot = vec2<f32>(v.x * cs - v.y * sn, v.x * sn + v.y * cs);
+        cuv = c + rot;
         // Displace coordinates by nearby voices so dragging clearly affects visuals
         var disp = vec2<f32>(0.0);
         for (var i = 0; i < 3; i = i + 1) {
