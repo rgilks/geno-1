@@ -11,6 +11,11 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys as web;
 use wgpu::util::DeviceExt;
 
+// Rendering/picking shared constants to keep math consistent
+const CAMERA_Z: f32 = 6.0;
+const Z_OFFSET: Vec3 = Vec3::new(0.0, 0.0, -4.0);
+const SPREAD: f32 = 1.8;
+
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
@@ -217,11 +222,11 @@ async fn init() -> anyhow::Result<()> {
 
                 // Initialize WebGPU (leak a canvas clone to satisfy 'static lifetime for surface)
                 let leaked_canvas = Box::leak(Box::new(canvas_for_click.clone()));
-                let mut gpu = match GpuState::new(leaked_canvas).await {
-                    Ok(g) => g,
+                let mut gpu: Option<GpuState> = match GpuState::new(leaked_canvas).await {
+                    Ok(g) => Some(g),
                     Err(e) => {
                         log::error!("WebGPU init error: {:?}", e);
-                        return;
+                        None
                     }
                 };
 
@@ -260,9 +265,13 @@ async fn init() -> anyhow::Result<()> {
                         let ndc_x = (2.0 * sx / width) - 1.0;
                         let ndc_y = 1.0 - (2.0 * sy / height);
                         let aspect = width / height.max(1.0);
-                        let proj =
-                            Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect, 0.1, 100.0);
-                        let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, 3.0), Vec3::ZERO, Vec3::Y);
+                        let proj = Mat4::perspective_rh(
+                            std::f32::consts::FRAC_PI_4,
+                            aspect,
+                            0.1,
+                            100.0,
+                        );
+                        let view = Mat4::look_at_rh(Vec3::new(0.0, 0.0, CAMERA_Z), Vec3::ZERO, Vec3::Y);
                         let inv = (proj * view).inverse();
                         let p_near = inv * Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
                         let p_far = inv * Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
@@ -314,6 +323,10 @@ async fn init() -> anyhow::Result<()> {
                     let canvas = canvas_for_click.clone();
                     let closure = Closure::wrap(Box::new(move |ev: web::MouseEvent| {
                         let pos = to_canvas_coords(ev.client_x() as f32, ev.client_y() as f32);
+                        // For CI/headless environments without real mouse, synthesize hover over center
+                        if !canvas.is_connected() {
+                            return;
+                        }
                         {
                             let mut ms = mouse_state_m.borrow_mut();
                             ms.x = pos.x;
@@ -322,8 +335,8 @@ async fn init() -> anyhow::Result<()> {
                         // Compute hover or drag update
                         let (ro, rd) = project_to_ray(pos.x, pos.y);
                         let mut best = None::<(usize, f32)>;
-                        let spread = 1.8f32;
-                        let z_offset = Vec3::new(0.0, 0.0, -4.0);
+                        let spread = SPREAD;
+                        let z_offset = Z_OFFSET;
                         for (i, v) in engine_m.borrow().voices.iter().enumerate() {
                             let center_world = v.position * spread + z_offset;
                             if let Some(t) = ray_sphere(ro, rd, center_world, 0.8) {
@@ -344,7 +357,7 @@ async fn init() -> anyhow::Result<()> {
                                 let t = n.dot(plane_p - ro) / denom;
                                 if t >= 0.0 {
                                     let hit_world = ro + rd * t;
-                                    let mut eng_pos = (hit_world - z_offset) / spread;
+                                    let mut eng_pos = (hit_world - Z_OFFSET) / SPREAD;
                                     // Clamp drag radius to avoid losing objects
                                     let max_r = 3.0_f32; // engine-space radius
                                     let len =
@@ -647,8 +660,8 @@ async fn init() -> anyhow::Result<()> {
                             }
                         }
                         let e_ref = engine_tick.borrow();
-                        let z_offset = Vec3::new(0.0, 0.0, -4.0);
-                        let spread = 1.8f32;
+                        let z_offset = Z_OFFSET;
+                        let spread = SPREAD;
                         let positions: Vec<Vec3> = vec![
                             e_ref.voices[0].position * spread + z_offset,
                             e_ref.voices[1].position * spread + z_offset,
@@ -676,12 +689,14 @@ async fn init() -> anyhow::Result<()> {
                         let scales: Vec<f32> =
                             vec![1.6 + ps[0] * 0.4, 1.6 + ps[1] * 0.4, 1.6 + ps[2] * 0.4];
 
-                        // Keep WebGPU surface sized to canvas backing size
-                        let w = canvas_for_tick.width();
-                        let h = canvas_for_tick.height();
-                        gpu.resize_if_needed(w, h);
-                        if let Err(e) = gpu.render(&positions, &colors, &scales) {
-                            log::error!("render error: {:?}", e);
+                        if let Some(g) = &mut gpu {
+                            // Keep WebGPU surface sized to canvas backing size
+                            let w = canvas_for_tick.width();
+                            let h = canvas_for_tick.height();
+                            g.resize_if_needed(w, h);
+                            if let Err(e) = g.render(&positions, &colors, &scales) {
+                                log::error!("render error: {:?}", e);
+                            }
                         }
                     }
 
