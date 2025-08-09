@@ -47,7 +47,10 @@ async fn init() -> anyhow::Result<()> {
             if key == "h" || key == "H" {
                 if let Ok(Some(el)) = document.query_selector(".hint") {
                     let cur = el.get_attribute("data-visible");
-                    let show = match cur.as_deref() { Some("1") => false, _ => true };
+                    let show = match cur.as_deref() {
+                        Some("1") => false,
+                        _ => true,
+                    };
                     let _ = el.set_attribute("data-visible", if show { "1" } else { "0" });
                     if let Some(div) = el.dyn_ref::<web::HtmlElement>() {
                         if show {
