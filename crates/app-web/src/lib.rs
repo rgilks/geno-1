@@ -906,7 +906,7 @@ struct GpuState<'a> {
     bind_group: wgpu::BindGroup,
     width: u32,
     height: u32,
-        clear_color: wgpu::Color,
+    clear_color: wgpu::Color,
 }
 
 impl<'a> GpuState<'a> {
@@ -1110,7 +1110,6 @@ impl<'a> GpuState<'a> {
             a: 1.0,
         };
     }
-
 
     fn resize_if_needed(&mut self, width: u32, height: u32) {
         if width == 0 || height == 0 {

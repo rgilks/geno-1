@@ -156,6 +156,21 @@ const puppeteer = require("puppeteer");
     });
     if (!/Muted:\s*no/.test(hintMutedOff))
       throw new Error("hint Muted not no after M again");
+
+    // Click center to toggle mute on the hovered voice (expects a hit)
+    await page.mouse.move(box.x, box.y);
+    await page.mouse.click(box.x, box.y);
+    await new Promise((r) => setTimeout(r, 120));
+    if (!logs.some((l) => /\[click\] toggle mute voice \d+/.test(l)))
+      throw new Error("missing toggle mute click log");
+
+    // Alt+Click to solo the same voice
+    await page.keyboard.down("Alt");
+    await page.mouse.click(box.x, box.y);
+    await page.keyboard.up("Alt");
+    await new Promise((r) => setTimeout(r, 120));
+    if (!logs.some((l) => /\[click\] solo voice \d+/.test(l)))
+      throw new Error("missing solo click log");
   } else {
     console.log(
       "[note] engine not started in CI (WebGPU unavailable); skipping R/Space/+/− assertions"

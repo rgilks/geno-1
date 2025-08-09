@@ -15,6 +15,7 @@
     "ci:web": "npm run build:web && node server.js & SERVER_PID=$!; sleep 1; node web-test.js; kill $SERVER_PID",
     "build:native": "cargo build -p app-native",
     "native": "cargo run -p app-native",
+    "native:smoke": "SMOKE_TEST=1 cargo run -p app-native",
     "build:all": "npm run build:native && npm run build:web",
     "clean": "cargo clean && rm -rf crates/app-web/pkg",
     "check:rust": "cargo fmt --all -- --check && cargo clippy --workspace --exclude app-web --all-targets -- -D warnings && cargo test --workspace --exclude app-web --all-targets && cargo build -p app-native",

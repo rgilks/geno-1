@@ -384,6 +384,12 @@ fn main() {
         pollster::block_on(GpuState::new(&window, Arc::clone(&shared_state))).expect("gpu");
     let _start = Instant::now();
 
+    let mut frames_left: Option<u32> = if std::env::var("SMOKE_TEST").ok().as_deref() == Some("1") {
+        Some(120)
+    } else {
+        None
+    };
+
     event_loop
         .run(move |event, elwt| match event {
             Event::WindowEvent {
@@ -394,12 +400,23 @@ fn main() {
                 event: WindowEvent::CloseRequested,
                 ..
             } => elwt.exit(),
-            Event::AboutToWait => match state.render() {
-                Ok(_) => state.window.request_redraw(),
-                Err(wgpu::SurfaceError::Lost) => state.resize(state.window.inner_size()),
-                Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
-                Err(_) => {}
-            },
+            Event::AboutToWait => {
+                match state.render() {
+                    Ok(_) => {
+                        state.window.request_redraw();
+                        if let Some(ref mut n) = frames_left {
+                            if *n == 0 {
+                                elwt.exit();
+                            } else {
+                                *n -= 1;
+                            }
+                        }
+                    }
+                    Err(wgpu::SurfaceError::Lost) => state.resize(state.window.inner_size()),
+                    Err(wgpu::SurfaceError::OutOfMemory) => elwt.exit(),
+                    Err(_) => {}
+                }
+            }
             _ => {}
         })
         .unwrap();
