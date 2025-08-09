@@ -32,6 +32,8 @@ jobs:
           node server.js &
           sleep 2
           node web-test.js
+        env:
+          PUPPETEER_PRODUCT: chrome
       - name: Deploy to Cloudflare (main only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         env:

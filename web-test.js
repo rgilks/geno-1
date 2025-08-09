@@ -4,9 +4,13 @@ const puppeteer = require("puppeteer");
   const browser = await puppeteer.launch({
     headless: "new",
     args: [
+      // CI-friendly flags: disable sandbox and GPU to avoid kernel/AppArmor limits
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+      // keep WebGPU feature flag harmlessly; test does not require GPU
       "--enable-unsafe-webgpu",
-      "--use-angle=metal",
-      "--disable-gpu-sandbox",
     ],
   });
   const page = await browser.newPage();
