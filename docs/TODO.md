@@ -25,17 +25,19 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Optional `AnalyserNode` to drive ambient visuals
 - [x] Master bus with lush `ConvolverNode` reverb and dark feedback `DelayNode` bus with lowpass tone shaping; per-voice sends
 - [ ] Optional AudioWorklet path (future)
+  - Notes: Master starts muted; Start overlay ensures gesture unlock. Pointer corners map to saturation/delay; click injects ripple into background waves.
 
 ## Visual Engine (Web)
 
 - [x] Instanced rendering of voice markers (circle mask, emissive pulse)
 - [x] Audio-reactive pulses on note events
-- [x] Ambient visuals (animated ring particles, optional analyser-driven spectrum dots)
+- [x] Ambient visuals (ambient waves background with swirl and click ripples; optional analyser-driven spectrum dots)
 - [x] Optional camera orbit (toggle 'O')
 - [x] Sync listener orientation with camera
 - [x] Visual polish (colors, easing, subtle glow, vignette)
 - [x] Prefer SRGB surface format where available (e.g., BGRA8UnormSrgb)
 - [x] Inertial pointer swirl (spring-damper) for water-like motion
+  - [x] Post stack: bright-pass, separable blur, ACES tonemap, vignette, grain
 
 ## Interaction & UI (Web)
 
@@ -43,18 +45,20 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Click: mute; Shift+Click: reseed; Alt+Click: solo
 - [x] Keyboard: R (reseed all), Space (pause), + / - (tempo), M (master mute)
   - [x] Start overlay (gesture) and default master mute
-  - [x] Dynamic hint overlay shows BPM, paused, and muted state
+  - [x] Dynamic hint overlay shows BPM, paused, muted, and orbit state
 - [ ] 3D in-scene icon controls replacing keyboard (post-v1)
 - [x] Clamp drag radius to a sensible range to avoid losing objects
 - [x] Mouse-driven FX mapping: corner-based saturation; opposite-corner delay
+  - [x] Click/tap ripple expands in waves background
 
 ## Cross-Platform / Native
 
 - [x] Native window via `winit` and rendering via `wgpu`
 - [x] Basic native audio via `cpal` with envelopes
-- [x] Map native audio to per-voice waveforms (currently sine only)
-- [x] Stereo panning by X based on voice position
+- [x] Map native audio to per-voice waveforms (sine/square/saw/triangle)
+- [x] Stereo panning by X based on voice position (equal-power)
 - [x] Native input parity (hover, drag, click)
+  - [x] Subtle master saturation in native output
 
 ## Error Handling & UX
 
@@ -66,6 +70,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [ ] Profile; ensure steady 60 FPS on typical desktop GPUs
 - [ ] Minimize JS↔Wasm transfers; reuse GPU buffers
 - [ ] Cap polyphony / reuse oscillators; audit WebAudio lifetimes
+  - [ ] Consider reducing WGSL noise/FBM cost or iterations if needed
 
 ## Code Hygiene
 
@@ -77,12 +82,14 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Headless web test validates interactions and hint content
 - [x] Add assertions: BPM change reflected; solo/mute state (logs/state)
 - [x] Optional native smoke test (launch, render few frames, exit)
+  - [ ] Add unit tests for `app-core` mute/solo edge-cases with reseed & tempo changes
 
 ## Deployment
 
 - [x] Add hosting instructions (Cloudflare Workers)
 - [ ] Optional: GitHub Pages workflow to publish `crates/app-web` artifacts (requires headers)
 - [x] Optional: production server/worker if needed
+  - [ ] Document `wrangler` env and cache headers expectations for `.wasm`/`.js`
 
 ---
 
@@ -91,7 +98,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 ### M1: Solid Web Prototype (current)
 
 - 3 voices with spatial audio, reactive visuals, drag interactions
-- Keyboard and hint overlay for control
+- Keyboard and hint overlay for control (orbit/mute/tempo)
 - CI green with headless test
 
 Status: In progress — core features completed; polish pending

@@ -4,7 +4,15 @@
 
 This project is an **interactive generative music visualizer** built with Rust, WebAssembly (Wasm), and WebGPU. It produces evolving musical sequences (melodies and harmonies generated algorithmically) and visualizes them in a 3D scene in real-time. The system supports **polyphonic** audio (multiple simultaneous sound voices) and arranges these sound sources in a virtual 3D space so that users experience spatial audio. The 3D visuals react dynamically to the music, providing an immersive audio-visual experience.
 
-Users will be able to **influence and interact** with the generative music without manually composing it. The interface will be subtle and minimalistic – controls are integrated into the 3D scene itself (avoiding standard web UI elements) to preserve immersion. The primary target platform is **desktop web browsers** supporting WebGPU, with the possibility of a desktop-native version using the same Rust/WGPU codebase. (Mobile is not a focus due to limited WebGPU support on mobile devices.)
+Users can **influence and interact** with the generative music without manually composing it. The interface is subtle and minimalistic – a hint overlay shows status and keys; primary controls are embedded in-scene and via keyboard. The primary target platform is **desktop web browsers** supporting WebGPU (no WebGL fallback by design), with a desktop-native version using the same Rust/WGPU codebase. Mobile is not a focus.
+
+### Current Capabilities (v1 prototype)
+
+- 3 generative voices (sine/saw/triangle) with scale-constrained pitches (C major pentatonic by default), scheduler on an eighth-note grid
+- Web Audio graph with per-voice `PannerNode` and master reverb/delay buses; starts muted with Start overlay; gesture unlock required by browsers
+- Visuals: instanced voice markers, ambient waves background with pointer swirl and click ripples, post-processing (bright pass, blur, ACES tonemap, vignette, grain)
+- Interactions: drag voices in XZ, click= mute, Shift+Click= reseed, Alt+Click= solo; keys: R, Space, +/- (tempo), M (mute), O (orbit)
+- Native app: `winit` + `wgpu` render, `cpal` audio with equal-power panning and master saturation; hover highlight parity
 
 ## Goals and Use Cases
 
@@ -34,10 +42,10 @@ Users will be able to **influence and interact** with the generative music witho
 
 - **WebGPU (via WGPU crate):** All rendering will use the modern WebGPU API for GPU-accelerated graphics. We will use Rust’s [`wgpu`](https://github.com/gfx-rs/wgpu) library as an abstraction over WebGPU. This allows writing the graphics code once and running it on WebGPU in the browser and on Vulkan/Metal/DirectX backends natively. WebGPU provides the performance needed for complex 3D visuals in a browser environment, albeit with still limited browser/device support (hence focusing on desktop).
 
-- **Audio:** Audio generation and output will rely on:
+- **Audio:** Audio generation and output relies on:
 
-  - **Web Audio API (Browser):** In the web build, use the Web Audio API to create audio context, generate sounds, and spatialize them. This can be accessed from Rust via `web-sys` or `wasm-bindgen` bindings. The audio graph will include **Oscillator or AudioBuffer nodes** for sound generation and **PannerNode** for spatialization of each voice (to position sound in 3D space relative to the listener).
-  - **Native Audio (Desktop):** For a native app, use a Rust audio library (e.g. `cpal` for cross-platform audio output or `rodio` or an audio engine crate) to output sound. The same generative logic can be used, but connected to a different backend. Spatialization in native could be done via stereo panning calculations or using a library that supports 3D audio.
+  - **Web Audio API (Browser):** The Web Audio graph uses per-voice `OscillatorNode` → `GainNode` envelope → `PannerNode` for spatialization, with a master `ConvolverNode` reverb and a dark feedback `DelayNode` bus (with tone shaping) fed by per-voice sends.
+  - **Native Audio (Desktop):** Native uses `cpal` with per-note oscillators (sine/square/saw/triangle), short attack/release envelopes, equal-power stereo panning from voice X position, and gentle master saturation (arctan curve).
 
 - **Cross-platform Windowing:**
 
@@ -50,7 +58,7 @@ Users will be able to **influence and interact** with the generative music witho
   - Audio: Web Audio via `web_sys` (and possibly an audio thread or `AudioWorklet` for smooth audio scheduling).
   - We may use smaller utility crates (for example, `rand` for randomness, `serde` if any config, etc.), but the core logic is custom.
 
-- **Browser Compatibility:** The application will target browsers with WebGPU enabled (e.g. latest Chrome, Edge, or Firefox Nightly with WebGPU, and Safari if/when it supports it). Because WebGPU is relatively new, we will advise users to use a compatible browser version. (Mobile browsers are currently not supported due to WebGPU availability and performance issues on mobile GPUs.)
+- **Browser Compatibility:** The application targets browsers with WebGPU enabled; WebGL fallback is intentionally avoided. A Start overlay handles user gesture unlock for audio.
 
 - **Desktop App:** The same Rust code should compile as a native app (using cargo with conditional compilation for native vs WASM). The desktop app would use WGPU (with Vulkan/Metal/DirectX via `wgpu`) and native audio. This provides an "easy path" to run outside the browser without rewriting the core logic – essentially the web version and desktop version share the code for generating music and visuals.
 
@@ -58,9 +66,9 @@ Users will be able to **influence and interact** with the generative music witho
 
 The system is composed of three main subsystems:
 
-1. **Audio Engine** – handles music generation (notes/sequences) and sound output (synthesis and spatial audio).
-2. **Visual Engine** – handles 3D rendering using WebGPU, creating visuals that correspond to the audio.
-3. **Interaction & UI Module** – handles user input (mouse, keyboard) and provides interactive controls embedded in the 3D scene.
+1. **Audio Engine** – music generation (notes/sequences) and sound output (synthesis and spatial audio).
+2. **Visual Engine** – 3D rendering using WebGPU, including ambient waves background and a post-processing stack (bright pass, separable blur, ACES tonemap, vignette, grain).
+3. **Interaction & UI Module** – user input (mouse, keyboard) with a minimalist hint overlay; interactive controls embedded in the 3D scene.
 
 These components will run simultaneously and communicate in real-time. The application will likely run a **main loop** (or use requestAnimationFrame in the browser) to update both audio and visuals continuously:
 
@@ -81,8 +89,8 @@ The audio engine is responsible for producing continuous music with multiple voi
 
 **Key Responsibilities:**
 
-- Maintain **multiple voices/instruments**: e.g., Voice A, Voice B, Voice C (the exact number can be tuned – for instance 3 or 4 voices to start). Each voice can have a distinct timbre (sound texture) and role (for example, one could play bass notes, another a melody, another a harmony/pad).
-- **Generative Music Algorithm:** Implement a system that generates note sequences for each voice. Possible approaches include:
+- Maintain **three voices** with distinct timbres (sine/saw/triangle) and roles (bass/mid/high).
+- **Generative Music Algorithm:** Eighth-note grid scheduler per voice with probabilities, scale-constrained pitches (default C major pentatonic), and per-voice octave ranges; reseeding randomizes sequences.
 
   - _Random within constraints:_ e.g., define a musical scale (set of allowed pitches) and have each voice pick random notes from that scale. Ensure some rhythmic structure (like a fixed tempo and grid, e.g., 120 BPM with 8 beats per measure, etc., then randomly decide to play or not play a note on each subdivision for a pattern).
   - _Algorithmic composition:_ for more interesting output, techniques like Markov chains, cellular automata, or simple procedural rules can be used to vary the melody. However, initially a simpler random or loop-based pattern generator can be sufficient.
@@ -109,16 +117,11 @@ The audio engine is responsible for producing continuous music with multiple voi
 
   - Use the AudioContext’s time for scheduling. For example, you can schedule oscillator start/stop times in the future. We might have a function that continuously schedules a little bit ahead (say one bar of music ahead) so that even if the main thread is busy rendering, the audio plays smoothly (Web Audio can handle scheduled events in its own thread).
   - Alternatively, use an **AudioWorklet** to generate audio continuously via script if sample-level control is needed. But using the built-in oscillator nodes with scheduled timings will likely suffice and is simpler.
-  - The **tempo** of the music should be defined (and possibly adjustable). The engine will determine how often to trigger notes in each voice. e.g., 120 BPM means 0.5 seconds per beat – if we schedule events quantized to that.
+  - The **tempo** of the music is adjustable via keyboard (`+`/`-`). Default BPM is 110.
 
-- **Parameter Controls:** The engine should expose certain parameters that the user (via UI) can control:
+- **Parameter Controls:**
 
-  - Global volume or individual voice volumes (maybe accessible by interacting with the visual object for that voice).
-  - Mute/unmute voices.
-  - Change scale or key (for example, switch from a major scale to minor, or transpose all sequences up/down). This could regenerate sequences in the new scale.
-  - Change tempo (speed up or slow down the music).
-  - Trigger regeneration: e.g., scrap the current sequence (for one voice or all) and create a new random one on the fly.
-  - Possibly toggle sound presets (maybe cycle the waveform used by a voice).
+  - Per-voice mute/solo via click/Alt+Click; Shift+Click reseeds a voice; `R` reseeds all; `M` toggles master mute (starts muted); `Space` toggles pause; `O` toggles orbit.
   - These changes should take effect seamlessly: if user changes tempo, new notes should align to the new tempo. If user regenerates, the old pattern can either stop immediately or finish the measure then switch, depending on desired effect.
 
 - **Polyphony Performance:** The audio system must handle multiple simultaneous sounds efficiently. Using the Web Audio API’s built-in nodes is quite efficient in the browser. But we must be cautious not to create too many nodes unbounded (which could use too much CPU). Reusing nodes or limiting polyphony per voice (e.g., each voice usually just plays one note at a time in our design) helps. If chords are needed, that’s essentially multiple voices.
@@ -164,26 +167,12 @@ The visual engine renders a real-time 3D scene using WebGPU. The visuals are tig
   - Each animation frame, update the scene (positions, sizes, colors of objects) based on the latest audio state, then encode commands and submit to GPU to render the frame.
 
 **Scene and Visual Elements:**
-We need to design what the user will see. Some possibilities and design decisions:
+What the user sees:
 
-- **Objects Representing Voices:** A straightforward mapping is to have one visual object per audio voice. For example:
-
-  - Voice 1 might be a sphere, Voice 2 a cube, Voice 3 a pyramid – or some distinct shapes – or they could all be similar shapes but different colors.
-  - The position of each object in the 3D scene corresponds to the PannerNode position for that voice’s sound (so the visual and sound source stay together in space).
-  - These objects can _animate/react_ when their voice plays a note. For instance, the object could pulse (scale up slightly) or glow when a note triggers. If a voice is playing continuously, maybe it has a gentle oscillation or equalizer-like bar animation.
-
-- **Audio Reactive Animations:** Beyond the main voice objects, the scene could include more abstract visualizations:
-
-  - We might have particle systems or waveforms that react to overall sound. Example: emit particles or shockwaves on strong beats/transients.
-  - Or a rotating waveform ring, or bars that show frequency spectrum (like a classic equalizer, but we can position it creatively in 3D).
-  - Color changes: perhaps map the mood of the music (or scale) to color hue, or each voice has an assigned color theme.
-  - Light effects: We could use point lights that brighten/dim based on sound volume. For example, each voice object could also be a light source whose intensity follows that voice’s amplitude envelope.
-
-- **Environment:** We should decide if there’s a background or environment. Possibly a dark background (space-like) to make the colorful visuals pop. We can include subtle elements like a starfield, or a floor plane if needed for reference. But since UI should blend in, probably a minimal environment (e.g., a gradient background or very faint grid).
-- **Camera:** Use a perspective camera to view the 3D scene. The camera could be at a fixed position or slowly orbiting for dynamism. We may also allow the user to control the camera (e.g., click-and-drag to rotate around, or keyboard to move) – that could enhance exploration, especially since audio is spatial (listener moves with camera).
-
-  - If user moves camera, update `AudioListener` position/orientation accordingly so spatial audio stays consistent.
-  - A default could be a gentle orbit or a fixed angle that shows all voice objects clearly.
+- **Objects Representing Voices:** Three instanced round markers (circle-masked quads) represent voices. Positions correspond to voice `PannerNode` positions; markers pulse and emit on note events.
+- **Ambient Waves Background:** A fullscreen pass (see `waves.wgsl`) renders layered ribbons with pointer-driven swirl displacement, per-voice influence, and click/tap ripple propagation.
+- **Post-processing:** A post stack (see `post.wgsl`) performs bright pass, separable blur, ACES tonemap, vignette, subtle hue warp, and film grain.
+- **Camera:** Fixed view with optional gentle orbit toggle; the `AudioListener` tracks the camera to maintain spatial consistency.
 
 **Visual Reactivity Implementation:**
 
@@ -233,9 +222,8 @@ We identify the key interactions the user needs and map them to in-scene control
 
 - **Event Handling:**
 
-  - In the browser, capture mouse events on the canvas (`onclick`, `onmousemove`, etc.). In Rust, using `web_sys::window().event_listener` or via `winit` if it works on web. For desktop, `winit` will provide events.
-  - When the user clicks, perform a **ray pick**: shoot a ray from camera through cursor position into the 3D scene to detect if it intersects a control object. We will maintain bounding info for interactive objects (like position and radius of voice spheres, or bounding boxes of any UI icons).
-  - A simple approach is to do ray-sphere intersection math for voice objects, since those might be primary interactive elements. Alternatively, render a separate ID buffer in WebGPU (each object with a unique color ID) to pick via pixel color under cursor – but that adds complexity. Math raycasting might suffice given few objects.
+  - In the browser, capture mouse events on the canvas; on native, use `winit` events.
+  - Perform **ray-sphere** intersection for voice picking. Maintain hover highlight; on click/drag, update engine voice state and audio panner.
   - Once we know which object is selected on click, we handle according to that object’s role (e.g., if it’s a voice sphere: start dragging it; if it’s a regenerate button: trigger regeneration immediately; etc.).
   - On drag: update object position in real-time (for voice objects) and possibly give some visual feedback (like a highlight or trailing indicator).
   - On release: drop the object at new position.
@@ -243,10 +231,7 @@ We identify the key interactions the user needs and map them to in-scene control
 
 - **Integrated Look and Feel:**
 
-  - The interactive objects should be styled to fit the scene. For example, an icon like a “reload” might be actually a small 3D mesh or even a 2D sprite drawn in the world. We might have a floating panel that is semi-transparent containing a couple of symbols. Or use glowing glyphs in 3D space (could use a bitmap icon texture on a plane, or a simple geometry shaped like the icon).
-  - By placing them in the 3D space, we ensure they render with the scene (maybe fixed in front of camera or at a convenient location).
-  - Use subtle animations on these controls to draw attention gently. E.g., the regenerate icon could slowly rotate, indicating its function implicitly. A play/pause might pulse when music is playing.
-  - No text labels means the user might have a learning curve; we should make the controls as intuitive as possible visually, and possibly provide a one-time overlay or help screen (maybe on start or on a key press like `H`) that explains controls in text. This could be a small exception where we overlay some helper text just to guide new users, then fade it out.
+  - Keep controls integrated into the scene; avoid HTML-heavy UI. A minimalist hint overlay communicates keys and state (BPM/Paused/Muted/Orbit).
 
 - **Error Handling/State:** Ensure the UI accounts for states:
 
@@ -275,7 +260,7 @@ While the **browser (WebAssembly + WebGPU)** is the primary deployment, we aim t
   - On native, use `Instance::create_surface` with the winit window handle.
   - We should ensure the swapchain format and other settings are compatible in both.
 
-- **Testing both:** The developer should frequently test in a browser (e.g., using `wasm-server-runner` or an `http` server to serve the WASM and HTML) and test the native binary on the desktop to ensure parity. The visual output and features should be nearly identical.
+- **Testing both:** Use `npm run check` to format, lint, test Rust, build native, and build/serve the web bundle, then run the headless browser test (Puppeteer). CI skips engine-coupled assertions when WebGPU is unavailable in headless.
 - **Platform Specific Limitations:**
 
   - Web Audio gives us spatialization and easy music scheduling. On native, implementing these features might be a bit more manual (e.g., we might lack a direct equivalent of PannerNode; if needed we could integrate OpenAL or use an audio engine crate that supports 3D sound). However, as an easy path, simple stereo panning math can suffice for an initial version.
