@@ -4,7 +4,16 @@
   "description": "- Native app: `cargo run -p app-native` - Web (WASM): uses `wasm-pack` to build and a static `index.html` to run (to be added next)",
   "main": "index.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build:web": "cd crates/app-web && wasm-pack build --target web --out-dir pkg --out-name app_web --release && cp env.js pkg/env.js",
+    "build:web:dev": "cd crates/app-web && wasm-pack build --target web --out-dir pkg --out-name app_web && cp env.js pkg/env.js",
+    "serve:web": "cd crates/app-web && http-server -p 8080 -c-1 .",
+    "dev:web": "npm run build:web && npm run serve:web",
+    "open:web": "open http://localhost:8080",
+    "build:native": "cargo build -p app-native",
+    "run:native": "cargo run -p app-native",
+    "build:all": "npm run build:native && npm run build:web",
+    "clean": "cargo clean && rm -rf crates/app-web/pkg"
   },
   "repository": {
     "type": "git",

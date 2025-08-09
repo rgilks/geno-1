@@ -14,3 +14,4 @@ bytemuck = { workspace = true }
 env_logger = "0.11"
 pollster = "0.3"
 app-core = { path = "../app-core" }
+cpal = { workspace = true }
