@@ -124,6 +124,15 @@ async fn init() -> anyhow::Result<()> {
                     Ok(ctx) => ctx,
                     Err(e) => {
                         log::error!("AudioContext error: {:?}", e);
+                        if let Some(win) = web::window() {
+                            if let Some(doc) = win.document() {
+                                if let Ok(Some(el)) = doc.query_selector("#audio-error") {
+                                    if let Some(div) = el.dyn_ref::<web::HtmlElement>() {
+                                        let _ = div.set_attribute("style", "");
+                                    }
+                                }
+                            }
+                        }
                         return;
                     }
                 };
@@ -216,8 +225,12 @@ async fn init() -> anyhow::Result<()> {
                     }
                 };
 
-                // Visual pulses per voice
+                // Visual pulses per voice and optional analyser for ambient effects
                 let pulses = Rc::new(RefCell::new(vec![0.0_f32; engine.borrow().voices.len()]));
+                let analyser: Option<web::AnalyserNode> = web::AnalyserNode::new(&audio_ctx).ok();
+                if let Some(a) = &analyser {
+                    a.set_fft_size(256);
+                }
 
                 // Pause state (stops scheduling new notes but keeps rendering)
                 let paused = Rc::new(RefCell::new(false));
@@ -331,7 +344,16 @@ async fn init() -> anyhow::Result<()> {
                                 let t = n.dot(plane_p - ro) / denom;
                                 if t >= 0.0 {
                                     let hit_world = ro + rd * t;
-                                    let eng_pos = (hit_world - z_offset) / spread;
+                                    let mut eng_pos = (hit_world - z_offset) / spread;
+                                    // Clamp drag radius to avoid losing objects
+                                    let max_r = 3.0_f32; // engine-space radius
+                                    let len =
+                                        (eng_pos.x * eng_pos.x + eng_pos.z * eng_pos.z).sqrt();
+                                    if len > max_r {
+                                        let scale = max_r / len;
+                                        eng_pos.x *= scale;
+                                        eng_pos.z *= scale;
+                                    }
                                     let mut eng = engine_m.borrow_mut();
                                     let vi = drag_m.borrow().voice;
                                     eng.set_voice_position(
@@ -602,6 +624,28 @@ async fn init() -> anyhow::Result<()> {
                             let pos = engine_tick.borrow().voices[i].position;
                             voice_panners[i].set_position(pos.x as f64, pos.y as f64, pos.z as f64);
                         }
+                        // Optional analyser-driven mild ambient pulse
+                        if let Some(a) = &analyser {
+                            let bins = a.frequency_bin_count();
+                            let mut arr = web::Float32Array::new_with_length(bins);
+                            a.get_float_frequency_data(&mut arr);
+                            // Use low-frequency bin energy to adjust background subtly
+                            let mut sum = 0.0f32;
+                            let take = (bins.min(16)) as u32;
+                            for i in 0..take {
+                                let v = arr.get_index(i) as f32; // in dBFS (-inf..0)
+                                // map dB to 0..1 roughly
+                                let lin = ((v + 100.0) / 100.0).clamp(0.0, 1.0);
+                                sum += lin;
+                            }
+                            let avg = sum / take as f32;
+                            // Slightly push base scales with ambient energy
+                            for i in 0..3.min(scales.len()) {
+                                // This is local shadow; adjust just-written scales via positions/colors path
+                                // We use pulses array instead to avoid mutating scales directly
+                                ps[i] = (ps[i] + avg * 0.05).min(1.5);
+                            }
+                        }
                         let e_ref = engine_tick.borrow();
                         let z_offset = Vec3::new(0.0, 0.0, -4.0);
                         let spread = 1.8f32;
@@ -764,7 +808,17 @@ impl<'a> GpuState<'a> {
             .await
             .map_err(|e| anyhow::anyhow!(format!("request_device error: {:?}", e)))?;
         let caps = surface.get_capabilities(&adapter);
-        let format = caps.formats[0];
+        let format = caps
+            .formats
+            .iter()
+            .copied()
+            .find(|f| {
+                matches!(
+                    f,
+                    wgpu::TextureFormat::Bgra8UnormSrgb | wgpu::TextureFormat::Rgba8UnormSrgb
+                )
+            })
+            .unwrap_or(caps.formats[0]);
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,

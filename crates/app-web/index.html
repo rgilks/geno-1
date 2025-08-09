@@ -41,6 +41,24 @@
     <canvas id="app-canvas" width="1280" height="720"></canvas>
     <div class="hint">Click the canvas to start audio</div>
     <div
+      id="audio-error"
+      style="
+        display: none;
+        color: #caa;
+        font: 14px/1.4 system-ui;
+        position: fixed;
+        left: 12px;
+        top: 88px;
+        max-width: 560px;
+        background: rgba(20, 20, 30, 0.7);
+        padding: 10px 12px;
+        border-radius: 6px;
+      "
+    >
+      Audio initialization failed (AudioContext). If audio permissions were
+      denied or you are in a headless environment, audio will not play.
+    </div>
+    <div
       id="no-webgpu"
       style="
         display: none;

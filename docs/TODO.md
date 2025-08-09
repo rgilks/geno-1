@@ -32,7 +32,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [ ] Ambient visuals (particles/spectrum bars/lights)
 - [ ] Optional camera orbit or mouse-look; sync listener orientation
 - [ ] Visual polish (colors, easing, subtle glow)
-- [ ] Prefer SRGB surface format where available (e.g., BGRA8UnormSrgb)
+- [x] Prefer SRGB surface format where available (e.g., BGRA8UnormSrgb)
 
 ## Interaction & UI (Web)
 
@@ -41,7 +41,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Keyboard: H (help), R (reseed all), Space (pause), + / - (tempo)
 - [x] Dynamic hint overlay shows BPM and pause state
 - [ ] 3D in-scene icon controls replacing keyboard (post-v1)
-- [ ] Clamp drag radius to a sensible range to avoid losing objects
+- [x] Clamp drag radius to a sensible range to avoid losing objects
 
 ## Cross-Platform / Native
 
@@ -54,7 +54,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 ## Error Handling & UX
 
 - [x] Graceful message if `navigator.gpu` not available (WebGPU unsupported)
-- [ ] Graceful message if `AudioContext` fails to initialize (permissions)
+- [x] Graceful message if `AudioContext` fails to initialize (permissions)
 
 ## Performance & Quality
 
@@ -75,7 +75,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 ## Deployment
 
-- [ ] Add hosting instructions (GitHub Pages/static hosting)
+- [x] Add hosting instructions (GitHub Pages/static hosting)
 - [ ] Optional: GitHub Pages workflow to publish `crates/app-web` artifacts
 - [x] Optional: production server/worker if needed
 
