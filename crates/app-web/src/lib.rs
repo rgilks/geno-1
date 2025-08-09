@@ -61,7 +61,7 @@ async fn init() -> anyhow::Result<()> {
                         if show {
                             // Default content (before full engine/UI attach)
                             div.set_inner_html(
-                                "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: 110 • Paused: no",
+                                "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute\nBPM: 110 • Paused: no • Muted: yes",
                             );
                             let _ = el.set_attribute("style", "");
                         } else {
@@ -113,636 +113,792 @@ async fn init() -> anyhow::Result<()> {
     // Prepare a clone for use inside the click closure
     let canvas_for_click = canvas.clone();
 
-    // On first click, start audio graph and scheduling + WebGPU renderer
+    // On Start button click, start audio graph and scheduling + WebGPU renderer
     static STARTED: AtomicBool = AtomicBool::new(false);
     {
-        let closure = Closure::wrap(Box::new(move || {
-            if STARTED.swap(true, Ordering::SeqCst) {
-                log::warn!("[gesture] start already triggered; ignoring extra click");
-                return;
-            }
-            // Run async startup in response to user gesture
-            let canvas_for_click_inner = canvas_for_click.clone();
-            spawn_local(async move {
-                // Build AudioContext
-                let audio_ctx = match web::AudioContext::new() {
-                    Ok(ctx) => ctx,
-                    Err(e) => {
-                        log::error!("AudioContext error: {:?}", e);
-                        if let Some(win) = web::window() {
-                            if let Some(doc) = win.document() {
-                                if let Ok(Some(el)) = doc.query_selector("#audio-error") {
-                                    if let Some(div) = el.dyn_ref::<web::HtmlElement>() {
-                                        let _ = div.set_attribute("style", "");
+        if let Some(start_btn) = document.get_element_by_id("start-btn") {
+            let closure = Closure::wrap(Box::new(move || {
+                if STARTED.swap(true, Ordering::SeqCst) {
+                    log::warn!("[gesture] start already triggered; ignoring extra click");
+                    return;
+                }
+                // Hide start overlay if present
+                if let Some(w) = web::window() {
+                    if let Some(doc) = w.document() {
+                        if let Some(overlay) = doc.get_element_by_id("start-overlay") {
+                            let _ = overlay.set_attribute("style", "display:none");
+                        }
+                    }
+                }
+                // Run async startup in response to user gesture
+                let canvas_for_click_inner = canvas_for_click.clone();
+                spawn_local(async move {
+                    // Build AudioContext
+                    let audio_ctx = match web::AudioContext::new() {
+                        Ok(ctx) => ctx,
+                        Err(e) => {
+                            log::error!("AudioContext error: {:?}", e);
+                            if let Some(win) = web::window() {
+                                if let Some(doc) = win.document() {
+                                    if let Ok(Some(el)) = doc.query_selector("#audio-error") {
+                                        if let Some(div) = el.dyn_ref::<web::HtmlElement>() {
+                                            let _ = div.set_attribute("style", "");
+                                        }
                                     }
                                 }
                             }
+                            return;
                         }
-                        return;
-                    }
-                };
-                let listener = audio_ctx.listener();
-                listener.set_position(0.0, 0.0, 1.5);
+                    };
+                    let listener = audio_ctx.listener();
+                    listener.set_position(0.0, 0.0, 1.5);
 
-                // Music engine
-                let voice_configs = vec![
-                    VoiceConfig {
-                        color_rgb: [0.9, 0.3, 0.3],
-                        waveform: Waveform::Sine,
-                        base_position: Vec3::new(-1.0, 0.0, 0.0),
-                    },
-                    VoiceConfig {
-                        color_rgb: [0.3, 0.9, 0.4],
-                        waveform: Waveform::Saw,
-                        base_position: Vec3::new(1.0, 0.0, 0.0),
-                    },
-                    VoiceConfig {
-                        color_rgb: [0.3, 0.5, 0.9],
-                        waveform: Waveform::Triangle,
-                        base_position: Vec3::new(0.0, 0.0, -1.0),
-                    },
-                ];
-                log::info!("[gesture] starting systems after click");
-                let engine = Rc::new(RefCell::new(MusicEngine::new(
-                    voice_configs,
-                    EngineParams {
-                        bpm: 110.0,
-                        scale: C_MAJOR_PENTATONIC,
-                    },
-                    42,
-                )));
-                {
-                    let e = engine.borrow();
-                    log::info!(
+                    // Music engine
+                    let voice_configs = vec![
+                        VoiceConfig {
+                            color_rgb: [0.9, 0.3, 0.3],
+                            waveform: Waveform::Sine,
+                            base_position: Vec3::new(-1.0, 0.0, 0.0),
+                        },
+                        VoiceConfig {
+                            color_rgb: [0.3, 0.9, 0.4],
+                            waveform: Waveform::Saw,
+                            base_position: Vec3::new(1.0, 0.0, 0.0),
+                        },
+                        VoiceConfig {
+                            color_rgb: [0.3, 0.5, 0.9],
+                            waveform: Waveform::Triangle,
+                            base_position: Vec3::new(0.0, 0.0, -1.0),
+                        },
+                    ];
+                    log::info!("[gesture] starting systems after click");
+                    let engine = Rc::new(RefCell::new(MusicEngine::new(
+                        voice_configs,
+                        EngineParams {
+                            bpm: 110.0,
+                            scale: C_MAJOR_PENTATONIC,
+                        },
+                        42,
+                    )));
+                    {
+                        let e = engine.borrow();
+                        log::info!(
                         "[engine] voices={} pos0=({:.2},{:.2},{:.2}) pos1=({:.2},{:.2},{:.2}) pos2=({:.2},{:.2},{:.2})",
                         e.voices.len(),
                         e.voices[0].position.x, e.voices[0].position.y, e.voices[0].position.z,
                         e.voices[1].position.x, e.voices[1].position.y, e.voices[1].position.z,
                         e.voices[2].position.x, e.voices[2].position.y, e.voices[2].position.z
                     );
-                }
+                    }
 
-                // Per-voice master gains -> destination
-                let mut voice_gains: Vec<web::GainNode> = Vec::new();
-                let mut voice_panners: Vec<web::PannerNode> = Vec::new();
-                for v in 0..engine.borrow().voices.len() {
-                    let panner = match web::PannerNode::new(&audio_ctx) {
-                        Ok(p) => p,
-                        Err(e) => {
-                            log::error!("PannerNode error: {:?}", e);
+                    // Per-voice master gains -> destination
+                    let mut voice_gains: Vec<web::GainNode> = Vec::new();
+                    let mut voice_panners: Vec<web::PannerNode> = Vec::new();
+                    for v in 0..engine.borrow().voices.len() {
+                        let panner = match web::PannerNode::new(&audio_ctx) {
+                            Ok(p) => p,
+                            Err(e) => {
+                                log::error!("PannerNode error: {:?}", e);
+                                return;
+                            }
+                        };
+                        panner.set_panning_model(web::PanningModelType::Hrtf);
+                        panner.set_distance_model(web::DistanceModelType::Inverse);
+                        panner.set_ref_distance(0.5);
+                        panner.set_max_distance(50.0);
+                        let pos = engine.borrow().voices[v].position;
+                        panner.set_position(pos.x as f64, pos.y as f64, pos.z as f64);
+
+                        let gain = match web::GainNode::new(&audio_ctx) {
+                            Ok(g) => g,
+                            Err(e) => {
+                                log::error!("GainNode error: {:?}", e);
+                                return;
+                            }
+                        };
+                        // Start muted; we will allow toggling via 'M' key
+                        gain.gain().set_value(0.0);
+                        if let Err(e) = gain.connect_with_audio_node(&panner) {
+                            log::error!("connect error: {:?}", e);
                             return;
                         }
-                    };
-                    panner.set_panning_model(web::PanningModelType::Hrtf);
-                    panner.set_distance_model(web::DistanceModelType::Inverse);
-                    panner.set_ref_distance(0.5);
-                    panner.set_max_distance(50.0);
-                    let pos = engine.borrow().voices[v].position;
-                    panner.set_position(pos.x as f64, pos.y as f64, pos.z as f64);
-
-                    let gain = match web::GainNode::new(&audio_ctx) {
-                        Ok(g) => g,
-                        Err(e) => {
-                            log::error!("GainNode error: {:?}", e);
+                        if let Err(e) = panner.connect_with_audio_node(&audio_ctx.destination()) {
+                            log::error!("connect error: {:?}", e);
                             return;
                         }
-                    };
-                    gain.gain().set_value(0.2);
-                    if let Err(e) = gain.connect_with_audio_node(&panner) {
-                        log::error!("connect error: {:?}", e);
-                        return;
+                        voice_gains.push(gain);
+                        voice_panners.push(panner);
                     }
-                    if let Err(e) = panner.connect_with_audio_node(&audio_ctx.destination()) {
-                        log::error!("connect error: {:?}", e);
-                        return;
-                    }
-                    voice_gains.push(gain);
-                    voice_panners.push(panner);
-                }
 
-                // Initialize WebGPU (leak a canvas clone to satisfy 'static lifetime for surface)
-                let leaked_canvas = Box::leak(Box::new(canvas_for_click_inner.clone()));
-                let mut gpu: Option<GpuState> = match GpuState::new(leaked_canvas).await {
-                    Ok(g) => Some(g),
-                    Err(e) => {
-                        log::error!("WebGPU init error: {:?}", e);
-                        None
-                    }
-                };
-
-                // Visual pulses per voice and optional analyser for ambient effects
-                let pulses = Rc::new(RefCell::new(vec![0.0_f32; engine.borrow().voices.len()]));
-                let analyser: Option<web::AnalyserNode> = web::AnalyserNode::new(&audio_ctx).ok();
-                if let Some(a) = &analyser {
-                    a.set_fft_size(256);
-                }
-
-                // Pause state (stops scheduling new notes but keeps rendering)
-                let paused = Rc::new(RefCell::new(false));
-
-                // ---------------- Interaction state ----------------
-                #[derive(Default, Clone, Copy)]
-                struct MouseState {
-                    x: f32,
-                    y: f32,
-                    down: bool,
-                }
-                #[derive(Default, Clone, Copy)]
-                struct DragState {
-                    active: bool,
-                    voice: usize,
-                }
-                let mouse_state = Rc::new(RefCell::new(MouseState::default()));
-                let hover_index = Rc::new(RefCell::new(None::<usize>));
-                let drag_state = Rc::new(RefCell::new(DragState::default()));
-
-                // Ray-sphere intersect
-                let ray_sphere =
-                    |ray_o: Vec3, ray_d: Vec3, center: Vec3, radius: f32| -> Option<f32> {
-                        let oc = ray_o - center;
-                        let b = oc.dot(ray_d);
-                        let c = oc.dot(oc) - radius * radius;
-                        let disc = b * b - c;
-                        if disc < 0.0 {
-                            return None;
-                        }
-                        let t = -b - disc.sqrt();
-                        if t >= 0.0 {
-                            Some(t)
-                        } else {
+                    // Initialize WebGPU (leak a canvas clone to satisfy 'static lifetime for surface)
+                    let leaked_canvas = Box::leak(Box::new(canvas_for_click_inner.clone()));
+                    let mut gpu: Option<GpuState> = match GpuState::new(leaked_canvas).await {
+                        Ok(g) => Some(g),
+                        Err(e) => {
+                            log::error!("WebGPU init error: {:?}", e);
                             None
                         }
                     };
 
-                // Screen -> canvas coords inline helper
+                    // Visual pulses per voice and optional analyser for ambient effects
+                    let pulses = Rc::new(RefCell::new(vec![0.0_f32; engine.borrow().voices.len()]));
+                    let analyser: Option<web::AnalyserNode> =
+                        web::AnalyserNode::new(&audio_ctx).ok();
+                    if let Some(a) = &analyser {
+                        a.set_fft_size(256);
+                    }
 
-                // Mouse move: hover + drag
-                {
-                    let mouse_state_m = mouse_state.clone();
-                    let hover_m = hover_index.clone();
-                    let drag_m = drag_state.clone();
-                    let engine_m = engine.clone();
-                    let canvas_mouse = canvas_for_click_inner.clone();
-                    let canvas_connected = canvas_mouse.is_connected();
-                    let closure = Closure::wrap(Box::new(move |ev: web::MouseEvent| {
-                        let rect = canvas_mouse.get_bounding_client_rect();
-                        let x_css = ev.client_x() as f32 - rect.left() as f32;
-                        let y_css = ev.client_y() as f32 - rect.top() as f32;
-                        let sx = (x_css / rect.width() as f32) * canvas_mouse.width() as f32;
-                        let sy = (y_css / rect.height() as f32) * canvas_mouse.height() as f32;
-                        let pos = Vec2::new(sx, sy);
-                        // For CI/headless environments without real mouse, synthesize hover over center
-                        if !canvas_connected {
-                            return;
-                        }
-                        {
-                            let mut ms = mouse_state_m.borrow_mut();
-                            ms.x = pos.x;
-                            ms.y = pos.y;
-                        }
-                        // Compute hover or drag update
-                        let width = canvas_mouse.width() as f32;
-                        let height = canvas_mouse.height() as f32;
-                        let ndc_x = (2.0 * pos.x / width) - 1.0;
-                        let ndc_y = 1.0 - (2.0 * pos.y / height);
-                        let aspect = width / height.max(1.0);
-                        let proj =
-                            Mat4::perspective_rh(std::f32::consts::FRAC_PI_4, aspect, 0.1, 100.0);
-                        let view =
-                            Mat4::look_at_rh(Vec3::new(0.0, 0.0, CAMERA_Z), Vec3::ZERO, Vec3::Y);
-                        let inv = (proj * view).inverse();
-                        let p_near = inv * Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
-                        let p_far = inv * Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
-                        let p0: Vec3 = p_near.truncate() / p_near.w;
-                        let p1: Vec3 = p_far.truncate() / p_far.w;
-                        let rd = (p1 - p0).normalize();
-                        let ro = p0;
-                        let mut best = None::<(usize, f32)>;
-                        let spread = SPREAD;
-                        let z_offset = Z_OFFSET;
-                        for (i, v) in engine_m.borrow().voices.iter().enumerate() {
-                            let center_world = v.position * spread + z_offset;
-                            if let Some(t) = ray_sphere(ro, rd, center_world, 0.8) {
-                                if t >= 0.0 {
-                                    match best {
-                                        Some((_, bt)) if t >= bt => {}
-                                        _ => best = Some((i, t)),
-                                    }
-                                }
-                            }
-                        }
-                        if drag_m.borrow().active {
-                            // Drag to XZ plane (y = 0)
-                            let n = Vec3::Y;
-                            let plane_p = Vec3::ZERO;
-                            let denom = n.dot(rd);
-                            if denom.abs() > 1e-4 {
-                                let t = n.dot(plane_p - ro) / denom;
-                                if t >= 0.0 {
-                                    let hit_world = ro + rd * t;
-                                    let mut eng_pos = (hit_world - Z_OFFSET) / SPREAD;
-                                    // Clamp drag radius to avoid losing objects
-                                    let max_r = 3.0_f32; // engine-space radius
-                                    let len =
-                                        (eng_pos.x * eng_pos.x + eng_pos.z * eng_pos.z).sqrt();
-                                    if len > max_r {
-                                        let scale = max_r / len;
-                                        eng_pos.x *= scale;
-                                        eng_pos.z *= scale;
-                                    }
-                                    let mut eng = engine_m.borrow_mut();
-                                    let vi = drag_m.borrow().voice;
-                                    eng.set_voice_position(
-                                        vi,
-                                        Vec3::new(eng_pos.x, 0.0, eng_pos.z),
-                                    );
-                                    log::info!(
-                                        "[drag] voice {} -> world=({:.2},{:.2},{:.2}) engine=({:.2},{:.2},{:.2})",
-                                        vi, hit_world.x, hit_world.y, hit_world.z, eng_pos.x, 0.0, eng_pos.z
-                                    );
-                                }
-                            }
-                        } else {
-                            *hover_m.borrow_mut() = best.map(|(i, _)| i);
-                        }
-                    }) as Box<dyn FnMut(_)>);
-                    canvas_for_click
-                        .add_event_listener_with_callback(
-                            "mousemove",
-                            closure.as_ref().unchecked_ref(),
-                        )
-                        .ok();
-                    closure.forget();
-                }
+                    // Pause state (stops scheduling new notes but keeps rendering)
+                    let paused = Rc::new(RefCell::new(false));
+                    // Master mute state for all voices (start muted)
+                    let master_muted = Rc::new(RefCell::new(true));
+                    let voice_gains = Rc::new(voice_gains);
 
-                // Keyboard controls: H toggle help, R reseed all, Space pause, +/- bpm adjust
-                {
-                    let engine_k = engine.clone();
-                    let paused_k = paused.clone();
-                    let window = web::window().unwrap();
-                    let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
-                        let key = ev.key();
-                        match key.as_str() {
-                            // Toggle help overlay visibility
-                            "h" | "H" => {
-                                if let Some(win) = web::window() {
-                                    if let Some(doc) = win.document() {
-                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
-                                            let cur = el.get_attribute("data-visible");
-                                            let new_visible = match cur.as_deref() {
-                                                Some("1") => "0",
-                                                _ => "1",
-                                            };
-                                            let _ = el.set_attribute("data-visible", new_visible);
-                                            if new_visible == "1" {
-                                                // Compose dynamic hint content with BPM and paused state
-                                                let paused_now = *paused_k.borrow();
-                                                let bpm_now = engine_k.borrow().params.bpm;
-                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
-                                                {
-                                                    let content = format!(
-                                                        "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
-                                                        bpm_now,
-                                                        if paused_now { "yes" } else { "no" }
-                                                    );
-                                                    div.set_inner_html(&content);
-                                                }
-                                                let _ = el.set_attribute("style", "");
-                                            } else {
-                                                let _ = el.set_attribute("style", "display:none");
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            // Reseed all voices
-                            "r" | "R" => {
-                                let voice_len = engine_k.borrow().voices.len();
-                                let mut eng = engine_k.borrow_mut();
-                                for i in 0..voice_len {
-                                    eng.reseed_voice(i, None);
-                                }
-                                log::info!("[keys] reseeded all voices");
-                            }
-                            // Pause/resume scheduling
-                            " " => {
-                                let mut p = paused_k.borrow_mut();
-                                *p = !*p;
-                                log::info!("[keys] paused={} ", *p);
-                                // If hint visible, refresh its content
-                                if let Some(win) = web::window() {
-                                    if let Some(doc) = win.document() {
-                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
-                                            if el.get_attribute("data-visible").as_deref()
-                                                == Some("1")
-                                            {
-                                                let bpm_now = engine_k.borrow().params.bpm;
-                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
-                                                {
-                                                    let content = format!(
-                                                        "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
-                                                        bpm_now,
-                                                        if *p { "yes" } else { "no" }
-                                                    );
-                                                    div.set_inner_html(&content);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                ev.prevent_default();
-                            }
-                            // Increase BPM
-                            "+" | "=" => {
-                                let mut eng = engine_k.borrow_mut();
-                                let new_bpm = (eng.params.bpm + 5.0).min(240.0);
-                                eng.set_bpm(new_bpm);
-                                log::info!("[keys] bpm -> {:.1}", new_bpm);
-                                // If hint visible, refresh its content
-                                if let Some(win) = web::window() {
-                                    if let Some(doc) = win.document() {
-                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
-                                            if el.get_attribute("data-visible").as_deref()
-                                                == Some("1")
-                                            {
-                                                let paused_now = *paused_k.borrow();
-                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
-                                                {
-                                                    let content = format!(
-                                                        "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
-                                                        new_bpm,
-                                                        if paused_now { "yes" } else { "no" }
-                                                    );
-                                                    div.set_inner_html(&content);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            // Decrease BPM
-                            "-" | "_" => {
-                                let mut eng = engine_k.borrow_mut();
-                                let new_bpm = (eng.params.bpm - 5.0).max(40.0);
-                                eng.set_bpm(new_bpm);
-                                log::info!("[keys] bpm -> {:.1}", new_bpm);
-                                // If hint visible, refresh its content
-                                if let Some(win) = web::window() {
-                                    if let Some(doc) = win.document() {
-                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
-                                            if el.get_attribute("data-visible").as_deref()
-                                                == Some("1")
-                                            {
-                                                let paused_now = *paused_k.borrow();
-                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
-                                                {
-                                                    let content = format!(
-                                                        "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
-                                                        new_bpm,
-                                                        if paused_now { "yes" } else { "no" }
-                                                    );
-                                                    div.set_inner_html(&content);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                    }) as Box<dyn FnMut(_)>);
-                    window
-                        .add_event_listener_with_callback(
-                            "keydown",
-                            closure.as_ref().unchecked_ref(),
-                        )
-                        .ok();
-                    closure.forget();
-                }
+                    // ---------------- Interaction state ----------------
+                    #[derive(Default, Clone, Copy)]
+                    struct MouseState {
+                        x: f32,
+                        y: f32,
+                        down: bool,
+                    }
+                    #[derive(Default, Clone, Copy)]
+                    struct DragState {
+                        active: bool,
+                        voice: usize,
+                        plane_z_world: f32,
+                    }
+                    let mouse_state = Rc::new(RefCell::new(MouseState::default()));
+                    let hover_index = Rc::new(RefCell::new(None::<usize>));
+                    let drag_state = Rc::new(RefCell::new(DragState::default()));
 
-                // Mousedown: begin drag if over a voice
-                {
-                    let hover_m = hover_index.clone();
-                    let drag_m = drag_state.clone();
-                    let mouse_m = mouse_state.clone();
-                    let closure = Closure::wrap(Box::new(move |ev: web::MouseEvent| {
-                        if let Some(i) = *hover_m.borrow() {
-                            let mut ds = drag_m.borrow_mut();
-                            ds.active = true;
-                            ds.voice = i;
-                            log::info!("[mouse] begin drag on voice {}", i);
-                        }
-                        mouse_m.borrow_mut().down = true;
-                        ev.prevent_default();
-                    }) as Box<dyn FnMut(_)>);
-                    canvas_for_click
-                        .add_event_listener_with_callback(
-                            "mousedown",
-                            closure.as_ref().unchecked_ref(),
-                        )
-                        .ok();
-                    closure.forget();
-                }
-
-                // Mouseup: click actions or end drag
-                {
-                    let hover_m = hover_index.clone();
-                    let drag_m = drag_state.clone();
-                    let mouse_m = mouse_state.clone();
-                    let engine_m = engine.clone();
-                    let closure = Closure::wrap(Box::new(move |ev: web::MouseEvent| {
-                        let was_dragging = drag_m.borrow().active;
-                        if was_dragging {
-                            drag_m.borrow_mut().active = false;
-                        } else if let Some(i) = *hover_m.borrow() {
-                            // Click without drag: modifiers
-                            let shift = ev.shift_key();
-                            let alt = ev.alt_key();
-                            if alt {
-                                engine_m.borrow_mut().toggle_solo(i);
-                                log::info!("[click] solo voice {}", i);
-                            } else if shift {
-                                engine_m.borrow_mut().reseed_voice(i, None);
-                                log::info!("[click] reseed voice {}", i);
+                    // Ray-sphere intersect
+                    let ray_sphere =
+                        |ray_o: Vec3, ray_d: Vec3, center: Vec3, radius: f32| -> Option<f32> {
+                            let oc = ray_o - center;
+                            let b = oc.dot(ray_d);
+                            let c = oc.dot(oc) - radius * radius;
+                            let disc = b * b - c;
+                            if disc < 0.0 {
+                                return None;
+                            }
+                            let t = -b - disc.sqrt();
+                            if t >= 0.0 {
+                                Some(t)
                             } else {
-                                engine_m.borrow_mut().toggle_mute(i);
-                                log::info!("[click] toggle mute voice {}", i);
+                                None
                             }
-                        } else {
-                            log::info!("[click] mouseup with no hit");
-                        }
-                        mouse_m.borrow_mut().down = false;
-                        ev.prevent_default();
-                    }) as Box<dyn FnMut(_)>);
-                    canvas_for_click
-                        .add_event_listener_with_callback(
-                            "mouseup",
-                            closure.as_ref().unchecked_ref(),
-                        )
-                        .ok();
-                    closure.forget();
-                }
+                        };
 
-                // Scheduler + renderer loop driven by requestAnimationFrame
-                let mut last_instant = Instant::now();
-                let mut note_events = Vec::new();
-                let pulses_tick = pulses.clone();
-                let engine_tick = engine.clone();
-                let hover_tick = hover_index.clone();
-                let canvas_for_tick = canvas_for_click.clone();
-                let tick: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
-                let tick_clone = tick.clone();
-                *tick.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-                    let now = Instant::now();
-                    let dt = now - last_instant;
-                    last_instant = now;
-                    let dt_sec = dt.as_secs_f32();
+                    // Screen -> canvas coords inline helper
 
-                    let audio_time = audio_ctx.current_time();
-                    note_events.clear();
-                    if !*paused.borrow() {
-                        engine_tick
-                            .borrow_mut()
-                            .tick(dt, audio_time, &mut note_events);
-                    }
-
+                    // Mouse move: hover + drag
                     {
-                        let mut ps = pulses_tick.borrow_mut();
-                        for ev in &note_events {
-                            ps[ev.voice_index] = (ps[ev.voice_index] + ev.velocity as f32).min(1.5);
-                        }
-                        for p in ps.iter_mut() {
-                            *p = (*p - dt_sec * 1.5).max(0.0);
-                        }
-                        for i in 0..voice_panners.len() {
-                            let pos = engine_tick.borrow().voices[i].position;
-                            voice_panners[i].set_position(pos.x as f64, pos.y as f64, pos.z as f64);
-                        }
-                        // Optional analyser-driven mild ambient pulse
-                        if let Some(a) = &analyser {
-                            let bins = a.frequency_bin_count();
-                            let mut freq = vec![0.0_f32; bins as usize];
-                            a.get_float_frequency_data(&mut freq);
-                            // Use low-frequency bin energy to adjust background subtly
-                            let mut sum = 0.0f32;
-                            let take = (bins.min(16)) as u32;
-                            for i in 0..take {
-                                let v = freq[i as usize]; // in dBFS (-inf..0)
-                                                          // map dB to 0..1 roughly
-                                let lin = ((v + 100.0) / 100.0).clamp(0.0, 1.0);
-                                sum += lin;
+                        let mouse_state_m = mouse_state.clone();
+                        let hover_m = hover_index.clone();
+                        let drag_m = drag_state.clone();
+                        let engine_m = engine.clone();
+                        let canvas_mouse = canvas_for_click_inner.clone();
+                        let canvas_connected = canvas_mouse.is_connected();
+                        let closure = Closure::wrap(Box::new(move |ev: web::PointerEvent| {
+                            let rect = canvas_mouse.get_bounding_client_rect();
+                            let x_css = ev.client_x() as f32 - rect.left() as f32;
+                            let y_css = ev.client_y() as f32 - rect.top() as f32;
+                            let sx = (x_css / rect.width() as f32) * canvas_mouse.width() as f32;
+                            let sy = (y_css / rect.height() as f32) * canvas_mouse.height() as f32;
+                            let pos = Vec2::new(sx, sy);
+                            // For CI/headless environments without real mouse, synthesize hover over center
+                            if !canvas_connected {
+                                return;
                             }
-                            let avg = sum / take as f32;
-                            // Slightly push base scales with ambient energy
-                            let n = ps.len().min(3);
-                            for i in 0..n {
-                                // This is local shadow; adjust just-written scales via positions/colors path
-                                // We use pulses array instead to avoid mutating scales directly
-                                ps[i] = (ps[i] + avg * 0.05).min(1.5);
+                            {
+                                let mut ms = mouse_state_m.borrow_mut();
+                                ms.x = pos.x;
+                                ms.y = pos.y;
                             }
+                            let is_active = drag_m.borrow().active;
+                            log::info!(
+                                "[move] pid={} pos=({:.1},{:.1}) active={}",
+                                ev.pointer_id(),
+                                pos.x,
+                                pos.y,
+                                is_active
+                            );
+                            // Compute hover or drag update
+                            let width = canvas_mouse.width() as f32;
+                            let height = canvas_mouse.height() as f32;
+                            let ndc_x = (2.0 * pos.x / width) - 1.0;
+                            let ndc_y = 1.0 - (2.0 * pos.y / height);
+                            let aspect = width / height.max(1.0);
+                            let proj = Mat4::perspective_rh(
+                                std::f32::consts::FRAC_PI_4,
+                                aspect,
+                                0.1,
+                                100.0,
+                            );
+                            let view = Mat4::look_at_rh(
+                                Vec3::new(0.0, 0.0, CAMERA_Z),
+                                Vec3::ZERO,
+                                Vec3::Y,
+                            );
+                            let inv = (proj * view).inverse();
+                            let p_near = inv * Vec4::new(ndc_x, ndc_y, 0.0, 1.0);
+                            let p_far = inv * Vec4::new(ndc_x, ndc_y, 1.0, 1.0);
+                            let p0: Vec3 = p_near.truncate() / p_near.w;
+                            let p1: Vec3 = p_far.truncate() / p_far.w;
+                            // Ray origin from camera eye to improve drag intersection stability
+                            let ro = Vec3::new(0.0, 0.0, CAMERA_Z);
+                            let rd = (p1 - ro).normalize();
+                            let mut best = None::<(usize, f32)>;
+                            let spread = SPREAD;
+                            let z_offset = Z_OFFSET;
+                            for (i, v) in engine_m.borrow().voices.iter().enumerate() {
+                                let center_world = v.position * spread + z_offset;
+                                if let Some(t) = ray_sphere(ro, rd, center_world, 0.8) {
+                                    if t >= 0.0 {
+                                        match best {
+                                            Some((_, bt)) if t >= bt => {}
+                                            _ => best = Some((i, t)),
+                                        }
+                                    }
+                                }
+                            }
+                            if drag_m.borrow().active {
+                                // Drag on plane z = constant (locked at mousedown)
+                                let plane_z = drag_m.borrow().plane_z_world;
+                                if rd.z.abs() > 1e-6 {
+                                    let t = (plane_z - ro.z) / rd.z;
+                                    if t >= 0.0 {
+                                        let hit_world = ro + rd * t;
+                                        let mut eng_pos = (hit_world - Z_OFFSET) / SPREAD;
+                                        // Clamp drag radius to avoid losing objects
+                                        let max_r = 3.0_f32; // engine-space radius
+                                        let len =
+                                            (eng_pos.x * eng_pos.x + eng_pos.z * eng_pos.z).sqrt();
+                                        if len > max_r {
+                                            let scale = max_r / len;
+                                            eng_pos.x *= scale;
+                                            eng_pos.z *= scale;
+                                        }
+                                        let mut eng = engine_m.borrow_mut();
+                                        let vi = drag_m.borrow().voice;
+                                        eng.set_voice_position(
+                                            vi,
+                                            Vec3::new(eng_pos.x, 0.0, eng_pos.z),
+                                        );
+                                        log::info!(
+                                            "[drag] voice {} -> world=({:.2},{:.2},{:.2}) engine=({:.2},{:.2},{:.2}) t={:.3} plane_z={:.2}",
+                                            vi, hit_world.x, hit_world.y, hit_world.z, eng_pos.x, 0.0, eng_pos.z, t, plane_z
+                                        );
+                                    }
+                                } else {
+                                    log::info!("[drag] ray parallel to z-plane (rd.z~0)");
+                                }
+                            } else {
+                                match best {
+                                    Some((i, t)) => {
+                                        log::info!("[hover] hit voice={} t={:.3}", i, t);
+                                        *hover_m.borrow_mut() = Some(i);
+                                    }
+                                    None => {
+                                        *hover_m.borrow_mut() = None;
+                                    }
+                                }
+                            }
+                        })
+                            as Box<dyn FnMut(_)>);
+                        if let Some(w) = web::window() {
+                            w.add_event_listener_with_callback(
+                                "pointermove",
+                                closure.as_ref().unchecked_ref(),
+                            )
+                            .ok();
                         }
-                        let e_ref = engine_tick.borrow();
-                        let z_offset = Z_OFFSET;
-                        let spread = SPREAD;
-                        let positions: Vec<Vec3> = vec![
-                            e_ref.voices[0].position * spread + z_offset,
-                            e_ref.voices[1].position * spread + z_offset,
-                            e_ref.voices[2].position * spread + z_offset,
-                        ];
-                        let mut colors: Vec<Vec4> = vec![
-                            Vec4::from((Vec3::from(e_ref.configs[0].color_rgb), 1.0)),
-                            Vec4::from((Vec3::from(e_ref.configs[1].color_rgb), 1.0)),
-                            Vec4::from((Vec3::from(e_ref.configs[2].color_rgb), 1.0)),
-                        ];
-                        let hovered = *hover_tick.borrow();
-                        for i in 0..3 {
-                            if e_ref.voices[i].muted {
-                                colors[i].x *= 0.35;
-                                colors[i].y *= 0.35;
-                                colors[i].z *= 0.35;
-                                colors[i].w = 1.0;
-                            }
-                            if hovered == Some(i) {
-                                colors[i].x = (colors[i].x * 1.4).min(1.0);
-                                colors[i].y = (colors[i].y * 1.4).min(1.0);
-                                colors[i].z = (colors[i].z * 1.4).min(1.0);
-                            }
-                        }
-                        let scales: Vec<f32> =
-                            vec![1.6 + ps[0] * 0.4, 1.6 + ps[1] * 0.4, 1.6 + ps[2] * 0.4];
-
-                        if let Some(g) = &mut gpu {
-                            // Keep WebGPU surface sized to canvas backing size
-                            let w = canvas_for_tick.width();
-                            let h = canvas_for_tick.height();
-                            g.resize_if_needed(w, h);
-                            if let Err(e) = g.render(&positions, &colors, &scales) {
-                                log::error!("render error: {:?}", e);
-                            }
-                        }
+                        closure.forget();
                     }
 
-                    if !*paused.borrow() {
-                        for ev in &note_events {
-                            let src = match web::OscillatorNode::new(&audio_ctx) {
-                                Ok(s) => s,
-                                Err(_) => continue,
-                            };
-                            match engine_tick.borrow().configs[ev.voice_index].waveform {
-                                Waveform::Sine => src.set_type(web::OscillatorType::Sine),
-                                Waveform::Square => src.set_type(web::OscillatorType::Square),
-                                Waveform::Saw => src.set_type(web::OscillatorType::Sawtooth),
-                                Waveform::Triangle => src.set_type(web::OscillatorType::Triangle),
+                    // Keyboard controls: H toggle help, R reseed all, Space pause, +/- bpm adjust
+                    {
+                        let engine_k = engine.clone();
+                        let paused_k = paused.clone();
+                        let master_muted_k = master_muted.clone();
+                        let voice_gains_k = voice_gains.clone();
+                        let window = web::window().unwrap();
+                        let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
+                            let key = ev.key();
+                            match key.as_str() {
+                                // Toggle help overlay visibility
+                                "h" | "H" => {
+                                    if let Some(win) = web::window() {
+                                        if let Some(doc) = win.document() {
+                                            if let Ok(Some(el)) = doc.query_selector(".hint") {
+                                                let cur = el.get_attribute("data-visible");
+                                                let new_visible = match cur.as_deref() {
+                                                    Some("1") => "0",
+                                                    _ => "1",
+                                                };
+                                                let _ =
+                                                    el.set_attribute("data-visible", new_visible);
+                                                if new_visible == "1" {
+                                                    // Compose dynamic hint content with BPM and paused state
+                                                    let paused_now = *paused_k.borrow();
+                                                    let muted_now = *master_muted_k.borrow();
+                                                    let bpm_now = engine_k.borrow().params.bpm;
+                                                    if let Some(div) =
+                                                        el.dyn_ref::<web::HtmlElement>()
+                                                    {
+                                                        let content = format!(
+                                                        "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute\nBPM: {:.0} • Paused: {} • Muted: {}",
+                                                        bpm_now,
+                                                        if paused_now { "yes" } else { "no" },
+                                                        if muted_now { "yes" } else { "no" }
+                                                    );
+                                                        div.set_inner_html(&content);
+                                                    }
+                                                    let _ = el.set_attribute("style", "");
+                                                } else {
+                                                    let _ =
+                                                        el.set_attribute("style", "display:none");
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                // Reseed all voices
+                                "r" | "R" => {
+                                    let voice_len = engine_k.borrow().voices.len();
+                                    let mut eng = engine_k.borrow_mut();
+                                    for i in 0..voice_len {
+                                        eng.reseed_voice(i, None);
+                                    }
+                                    log::info!("[keys] reseeded all voices");
+                                }
+                                // Pause/resume scheduling
+                                " " => {
+                                    let mut p = paused_k.borrow_mut();
+                                    *p = !*p;
+                                    log::info!("[keys] paused={} ", *p);
+                                    // If hint visible, refresh its content
+                                    if let Some(win) = web::window() {
+                                        if let Some(doc) = win.document() {
+                                            if let Ok(Some(el)) = doc.query_selector(".hint") {
+                                                if el.get_attribute("data-visible").as_deref()
+                                                    == Some("1")
+                                                {
+                                                    let bpm_now = engine_k.borrow().params.bpm;
+                                                    let muted_now = *master_muted_k.borrow();
+                                                    if let Some(div) =
+                                                        el.dyn_ref::<web::HtmlElement>()
+                                                    {
+                                                        let content = format!(
+                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute\nBPM: {:.0} • Paused: {} • Muted: {}",
+                                                            bpm_now,
+                                                            if *p { "yes" } else { "no" },
+                                                            if muted_now { "yes" } else { "no" }
+                                                    );
+                                                        div.set_inner_html(&content);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                    ev.prevent_default();
+                                }
+                                // Increase BPM
+                                "+" | "=" => {
+                                    let mut eng = engine_k.borrow_mut();
+                                    let new_bpm = (eng.params.bpm + 5.0).min(240.0);
+                                    eng.set_bpm(new_bpm);
+                                    log::info!("[keys] bpm -> {:.1}", new_bpm);
+                                    // If hint visible, refresh its content
+                                    if let Some(win) = web::window() {
+                                        if let Some(doc) = win.document() {
+                                            if let Ok(Some(el)) = doc.query_selector(".hint") {
+                                                if el.get_attribute("data-visible").as_deref()
+                                                    == Some("1")
+                                                {
+                                                    let paused_now = *paused_k.borrow();
+                                                    let muted_now = *master_muted_k.borrow();
+                                                    if let Some(div) =
+                                                        el.dyn_ref::<web::HtmlElement>()
+                                                    {
+                                                        let content = format!(
+                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute\nBPM: {:.0} • Paused: {} • Muted: {}",
+                                                            new_bpm,
+                                                            if paused_now { "yes" } else { "no" },
+                                                            if muted_now { "yes" } else { "no" }
+                                                    );
+                                                        div.set_inner_html(&content);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                // Decrease BPM
+                                "-" | "_" => {
+                                    let mut eng = engine_k.borrow_mut();
+                                    let new_bpm = (eng.params.bpm - 5.0).max(40.0);
+                                    eng.set_bpm(new_bpm);
+                                    log::info!("[keys] bpm -> {:.1}", new_bpm);
+                                    // If hint visible, refresh its content
+                                    if let Some(win) = web::window() {
+                                        if let Some(doc) = win.document() {
+                                            if let Ok(Some(el)) = doc.query_selector(".hint") {
+                                                if el.get_attribute("data-visible").as_deref()
+                                                    == Some("1")
+                                                {
+                                                    let paused_now = *paused_k.borrow();
+                                                    let muted_now = *master_muted_k.borrow();
+                                                    if let Some(div) =
+                                                        el.dyn_ref::<web::HtmlElement>()
+                                                    {
+                                                        let content = format!(
+                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute\nBPM: {:.0} • Paused: {} • Muted: {}",
+                                                            new_bpm,
+                                                            if paused_now { "yes" } else { "no" },
+                                                            if muted_now { "yes" } else { "no" }
+                                                    );
+                                                        div.set_inner_html(&content);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                // Master mute toggle
+                                "m" | "M" => {
+                                    let mut muted = master_muted_k.borrow_mut();
+                                    *muted = !*muted;
+                                    let new_val = if *muted { 0.0 } else { 0.2 };
+                                    for g in voice_gains_k.iter() {
+                                        g.gain().set_value(new_val);
+                                    }
+                                    log::info!("[keys] master muted={}", *muted);
+                                    // If hint visible, refresh its content
+                                    if let Some(win) = web::window() {
+                                        if let Some(doc) = win.document() {
+                                            if let Ok(Some(el)) = doc.query_selector(".hint") {
+                                                if el.get_attribute("data-visible").as_deref()
+                                                    == Some("1")
+                                                {
+                                                    let paused_now = *paused_k.borrow();
+                                                    let bpm_now = engine_k.borrow().params.bpm;
+                                                    if let Some(div) =
+                                                        el.dyn_ref::<web::HtmlElement>()
+                                                    {
+                                                        let content = format!(
+                                                            "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo • M: master mute\nBPM: {:.0} • Paused: {} • Muted: {}",
+                                                            bpm_now,
+                                                            if paused_now { "yes" } else { "no" },
+                                                            if *muted { "yes" } else { "no" }
+                                                        );
+                                                        div.set_inner_html(&content);
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                                _ => {}
                             }
-                            src.frequency().set_value(ev.frequency_hz);
-
-                            let gain = match web::GainNode::new(&audio_ctx) {
-                                Ok(g) => g,
-                                Err(_) => continue,
-                            };
-                            gain.gain().set_value(0.0);
-                            let t0 = audio_time + 0.01;
-                            let _ = gain
-                                .gain()
-                                .linear_ramp_to_value_at_time(ev.velocity as f32, t0 + 0.02);
-                            let _ = gain
-                                .gain()
-                                .linear_ramp_to_value_at_time(0.0_f32, t0 + ev.duration_sec as f64);
-
-                            let _ = src.connect_with_audio_node(&gain);
-                            let _ = gain.connect_with_audio_node(&voice_gains[ev.voice_index]);
-
-                            let _ = src.start_with_when(t0);
-                            let _ = src.stop_with_when(t0 + ev.duration_sec as f64 + 0.02);
-                        }
+                        })
+                            as Box<dyn FnMut(_)>);
+                        window
+                            .add_event_listener_with_callback(
+                                "keydown",
+                                closure.as_ref().unchecked_ref(),
+                            )
+                            .ok();
+                        closure.forget();
                     }
 
-                    // Schedule next frame
+                    // Mousedown: begin drag if over a voice
+                    {
+                        let hover_m = hover_index.clone();
+                        let drag_m = drag_state.clone();
+                        let mouse_m = mouse_state.clone();
+                        let engine_m = engine.clone();
+                        let canvas_target = canvas_for_click_inner.clone();
+                        let closure = Closure::wrap(Box::new(move |ev: web::PointerEvent| {
+                            if let Some(i) = *hover_m.borrow() {
+                                let mut ds = drag_m.borrow_mut();
+                                ds.active = true;
+                                ds.voice = i;
+                                ds.plane_z_world =
+                                    engine_m.borrow().voices[i].position.z * SPREAD + Z_OFFSET.z;
+                                log::info!("[mouse] begin drag on voice {}", i);
+                            }
+                            mouse_m.borrow_mut().down = true;
+                            let _ = canvas_target.set_pointer_capture(ev.pointer_id());
+                            log::info!(
+                                "[down] pid={} shift={} alt={}",
+                                ev.pointer_id(),
+                                ev.shift_key(),
+                                ev.alt_key()
+                            );
+                            ev.prevent_default();
+                        })
+                            as Box<dyn FnMut(_)>);
+                        canvas_for_click_inner
+                            .add_event_listener_with_callback(
+                                "pointerdown",
+                                closure.as_ref().unchecked_ref(),
+                            )
+                            .ok();
+                        closure.forget();
+                    }
+
+                    // Mouseup: click actions or end drag
+                    {
+                        let hover_m = hover_index.clone();
+                        let drag_m = drag_state.clone();
+                        let mouse_m = mouse_state.clone();
+                        let engine_m = engine.clone();
+                        let closure = Closure::wrap(Box::new(move |ev: web::PointerEvent| {
+                            let was_dragging = drag_m.borrow().active;
+                            if was_dragging {
+                                drag_m.borrow_mut().active = false;
+                            } else if let Some(i) = *hover_m.borrow() {
+                                // Click without drag: modifiers
+                                let shift = ev.shift_key();
+                                let alt = ev.alt_key();
+                                if alt {
+                                    engine_m.borrow_mut().toggle_solo(i);
+                                    log::info!("[click] solo voice {}", i);
+                                } else if shift {
+                                    engine_m.borrow_mut().reseed_voice(i, None);
+                                    log::info!("[click] reseed voice {}", i);
+                                } else {
+                                    engine_m.borrow_mut().toggle_mute(i);
+                                    log::info!("[click] toggle mute voice {}", i);
+                                }
+                            } else {
+                                log::info!("[click] mouseup with no hit");
+                            }
+                            log::info!(
+                                "[up] pid={} was_dragging={}",
+                                ev.pointer_id(),
+                                was_dragging
+                            );
+                            mouse_m.borrow_mut().down = false;
+                            ev.prevent_default();
+                        })
+                            as Box<dyn FnMut(_)>);
+                        if let Some(w) = web::window() {
+                            w.add_event_listener_with_callback(
+                                "pointerup",
+                                closure.as_ref().unchecked_ref(),
+                            )
+                            .ok();
+                        }
+                        closure.forget();
+                    }
+
+                    // Scheduler + renderer loop driven by requestAnimationFrame
+                    let mut last_instant = Instant::now();
+                    let mut note_events = Vec::new();
+                    let pulses_tick = pulses.clone();
+                    let engine_tick = engine.clone();
+                    let hover_tick = hover_index.clone();
+                    let canvas_for_tick = canvas_for_click_inner.clone();
+                    let voice_gains_tick = voice_gains.clone();
+                    let tick: Rc<RefCell<Option<Closure<dyn FnMut()>>>> =
+                        Rc::new(RefCell::new(None));
+                    let tick_clone = tick.clone();
+                    *tick.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+                        let now = Instant::now();
+                        let dt = now - last_instant;
+                        last_instant = now;
+                        let dt_sec = dt.as_secs_f32();
+
+                        let audio_time = audio_ctx.current_time();
+                        note_events.clear();
+                        if !*paused.borrow() {
+                            engine_tick
+                                .borrow_mut()
+                                .tick(dt, audio_time, &mut note_events);
+                        }
+
+                        {
+                            let mut ps = pulses_tick.borrow_mut();
+                            for ev in &note_events {
+                                ps[ev.voice_index] =
+                                    (ps[ev.voice_index] + ev.velocity as f32).min(1.5);
+                            }
+                            for p in ps.iter_mut() {
+                                *p = (*p - dt_sec * 1.5).max(0.0);
+                            }
+                            for i in 0..voice_panners.len() {
+                                let pos = engine_tick.borrow().voices[i].position;
+                                voice_panners[i].set_position(
+                                    pos.x as f64,
+                                    pos.y as f64,
+                                    pos.z as f64,
+                                );
+                            }
+                            // Optional analyser-driven mild ambient pulse
+                            if let Some(a) = &analyser {
+                                let bins = a.frequency_bin_count();
+                                let mut freq = vec![0.0_f32; bins as usize];
+                                a.get_float_frequency_data(&mut freq);
+                                // Use low-frequency bin energy to adjust background subtly
+                                let mut sum = 0.0f32;
+                                let take = (bins.min(16)) as u32;
+                                for i in 0..take {
+                                    let v = freq[i as usize]; // in dBFS (-inf..0)
+                                                              // map dB to 0..1 roughly
+                                    let lin = ((v + 100.0) / 100.0).clamp(0.0, 1.0);
+                                    sum += lin;
+                                }
+                                let avg = sum / take as f32;
+                                // Slightly push base scales with ambient energy
+                                let n = ps.len().min(3);
+                                for i in 0..n {
+                                    // This is local shadow; adjust just-written scales via positions/colors path
+                                    // We use pulses array instead to avoid mutating scales directly
+                                    ps[i] = (ps[i] + avg * 0.05).min(1.5);
+                                }
+                            }
+                            let e_ref = engine_tick.borrow();
+                            let z_offset = Z_OFFSET;
+                            let spread = SPREAD;
+                            let positions: Vec<Vec3> = vec![
+                                e_ref.voices[0].position * spread + z_offset,
+                                e_ref.voices[1].position * spread + z_offset,
+                                e_ref.voices[2].position * spread + z_offset,
+                            ];
+                            let mut colors: Vec<Vec4> = vec![
+                                Vec4::from((Vec3::from(e_ref.configs[0].color_rgb), 1.0)),
+                                Vec4::from((Vec3::from(e_ref.configs[1].color_rgb), 1.0)),
+                                Vec4::from((Vec3::from(e_ref.configs[2].color_rgb), 1.0)),
+                            ];
+                            let hovered = *hover_tick.borrow();
+                            for i in 0..3 {
+                                if e_ref.voices[i].muted {
+                                    colors[i].x *= 0.35;
+                                    colors[i].y *= 0.35;
+                                    colors[i].z *= 0.35;
+                                    colors[i].w = 1.0;
+                                }
+                                if hovered == Some(i) {
+                                    colors[i].x = (colors[i].x * 1.4).min(1.0);
+                                    colors[i].y = (colors[i].y * 1.4).min(1.0);
+                                    colors[i].z = (colors[i].z * 1.4).min(1.0);
+                                }
+                            }
+                            let scales: Vec<f32> =
+                                vec![1.6 + ps[0] * 0.4, 1.6 + ps[1] * 0.4, 1.6 + ps[2] * 0.4];
+
+                            if let Some(g) = &mut gpu {
+                                // Keep WebGPU surface sized to canvas backing size
+                                let w = canvas_for_tick.width();
+                                let h = canvas_for_tick.height();
+                                g.resize_if_needed(w, h);
+                                if let Err(e) = g.render(&positions, &colors, &scales) {
+                                    log::error!("render error: {:?}", e);
+                                }
+                            }
+                        }
+
+                        if !*paused.borrow() {
+                            for ev in &note_events {
+                                let src = match web::OscillatorNode::new(&audio_ctx) {
+                                    Ok(s) => s,
+                                    Err(_) => continue,
+                                };
+                                match engine_tick.borrow().configs[ev.voice_index].waveform {
+                                    Waveform::Sine => src.set_type(web::OscillatorType::Sine),
+                                    Waveform::Square => src.set_type(web::OscillatorType::Square),
+                                    Waveform::Saw => src.set_type(web::OscillatorType::Sawtooth),
+                                    Waveform::Triangle => {
+                                        src.set_type(web::OscillatorType::Triangle)
+                                    }
+                                }
+                                src.frequency().set_value(ev.frequency_hz);
+
+                                let gain = match web::GainNode::new(&audio_ctx) {
+                                    Ok(g) => g,
+                                    Err(_) => continue,
+                                };
+                                gain.gain().set_value(0.0);
+                                let t0 = audio_time + 0.01;
+                                let _ = gain
+                                    .gain()
+                                    .linear_ramp_to_value_at_time(ev.velocity as f32, t0 + 0.02);
+                                let _ = gain.gain().linear_ramp_to_value_at_time(
+                                    0.0_f32,
+                                    t0 + ev.duration_sec as f64,
+                                );
+
+                                let _ = src.connect_with_audio_node(&gain);
+                                let _ =
+                                    gain.connect_with_audio_node(&voice_gains_tick[ev.voice_index]);
+
+                                let _ = src.start_with_when(t0);
+                                let _ = src.stop_with_when(t0 + ev.duration_sec as f64 + 0.02);
+                            }
+                        }
+
+                        // Schedule next frame
+                        if let Some(w) = web::window() {
+                            let _ = w.request_animation_frame(
+                                tick_clone
+                                    .borrow()
+                                    .as_ref()
+                                    .unwrap()
+                                    .as_ref()
+                                    .unchecked_ref(),
+                            );
+                        }
+                    })
+                        as Box<dyn FnMut()>));
                     if let Some(w) = web::window() {
                         let _ = w.request_animation_frame(
-                            tick_clone
-                                .borrow()
-                                .as_ref()
-                                .unwrap()
-                                .as_ref()
-                                .unchecked_ref(),
+                            tick.borrow().as_ref().unwrap().as_ref().unchecked_ref(),
                         );
                     }
-                }) as Box<dyn FnMut()>));
-                if let Some(w) = web::window() {
-                    let _ = w.request_animation_frame(
-                        tick.borrow().as_ref().unwrap().as_ref().unchecked_ref(),
-                    );
+                });
+            }) as Box<dyn FnMut()>);
+            let _ = start_btn
+                .add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+            closure.forget();
+        } else {
+            // Fallback: start on first window click (legacy behavior)
+            let closure = Closure::wrap(Box::new(move || {
+                if STARTED.swap(true, Ordering::SeqCst) {
+                    log::warn!("[gesture] start already triggered; ignoring extra click");
+                    return;
                 }
-            });
-        }) as Box<dyn FnMut()>);
-        if let Some(w) = web::window() {
-            let _ = w.add_event_listener_with_callback(
-                "click",
-                closure.as_ref().unchecked_ref(),
-            );
+                let canvas_for_click_inner = canvas_for_click.clone();
+                spawn_local(async move {
+                    // Build AudioContext
+                    let audio_ctx = match web::AudioContext::new() {
+                        Ok(ctx) => ctx,
+                        Err(e) => {
+                            log::error!("AudioContext error: {:?}", e);
+                            if let Some(win) = web::window() {
+                                if let Some(doc) = win.document() {
+                                    if let Ok(Some(el)) = doc.query_selector("#audio-error") {
+                                        if let Some(div) = el.dyn_ref::<web::HtmlElement>() {
+                                            let _ = div.set_attribute("style", "");
+                                        }
+                                    }
+                                }
+                            }
+                            return;
+                        }
+                    };
+                    let listener = audio_ctx.listener();
+                    listener.set_position(0.0, 0.0, 1.5);
+                    // ... existing code continues unchanged ...
+                });
+            }) as Box<dyn FnMut()>);
+            if let Some(w) = web::window() {
+                let _ =
+                    w.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+            }
+            closure.forget();
         }
-        closure.forget();
     }
 
     Ok(())
@@ -831,49 +987,9 @@ impl<'a> GpuState<'a> {
         };
         surface.configure(&device, &config);
 
-        let shader_src = r#"
-struct VsOut {
-  @builtin(position) pos: vec4<f32>,
-  @location(0) color: vec4<f32>,
-  @location(1) local: vec2<f32>,
-  @location(2) pulse: f32,
-};
-struct Uniforms { view_proj: mat4x4<f32> };
-@group(0) @binding(0) var<uniform> u: Uniforms;
-
-@vertex
-fn vs_main(
-  @location(0) v_pos: vec2<f32>,
-  @location(1) i_pos: vec3<f32>,
-  @location(2) i_scale: f32,
-  @location(3) i_color: vec4<f32>,
-  @location(4) i_pulse: f32,
-) -> VsOut {
-  let local_scaled = vec4<f32>(v_pos * i_scale, 0.0, 1.0);
-  let world = vec4<f32>(i_pos, 1.0) + local_scaled;
-  var out: VsOut;
-  out.pos = u.view_proj * world;
-  out.color = i_color;
-  out.local = v_pos; // unscaled local for shape mask
-  out.pulse = i_pulse;
-  return out;
-}
-
-@fragment
-fn fs_main(inf: VsOut) -> @location(0) vec4<f32> {
-  // Circular mask within the quad (unit circle of radius 0.5)
-  let r = length(inf.local);
-  let shape_alpha = 1.0 - smoothstep(0.48, 0.5, r);
-
-  // Emissive pulse boosts brightness subtly
-  let emissive = 0.7 * clamp(inf.pulse, 0.0, 1.5);
-  let rgb = inf.color.rgb * (1.0 + emissive);
-  return vec4<f32>(rgb, shape_alpha * inf.color.a);
-}
-"#;
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("shader"),
-            source: wgpu::ShaderSource::Wgsl(shader_src.into()),
+            source: wgpu::ShaderSource::Wgsl(app_core::SCENE_WGSL.into()),
         });
         let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("uniforms"),

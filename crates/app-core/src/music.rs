@@ -67,6 +67,7 @@ impl MusicEngine {
                 muted: false,
             })
             .collect::<Vec<_>>();
+
         // Derive per-voice RNGs from base seed so we can reseed voices independently
         let rngs = (0..voices.len())
             .map(|i| {
@@ -74,6 +75,7 @@ impl MusicEngine {
                 StdRng::seed_from_u64(mix)
             })
             .collect::<Vec<_>>();
+
         Self {
             voices,
             configs,

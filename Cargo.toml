@@ -29,6 +29,7 @@ web-sys = { version = "0.3", features = [
   "Element",
   "EventTarget",
   "MouseEvent",
+  "PointerEvent",
   "KeyboardEvent",
   "CanvasRenderingContext2d",
   "AudioContext",
