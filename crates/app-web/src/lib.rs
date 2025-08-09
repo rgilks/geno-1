@@ -342,11 +342,17 @@ async fn init() -> anyhow::Result<()> {
                                             };
                                             let _ = el.set_attribute("data-visible", new_visible);
                                             if new_visible == "1" {
+                                                // Compose dynamic hint content with BPM and paused state
+                                                let paused_now = *paused_k.borrow();
+                                                let bpm_now = engine_k.borrow().params.bpm;
                                                 if let Some(div) = el.dyn_ref::<web::HtmlElement>()
                                                 {
-                                                    div.set_inner_html(
-                                                        "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo",
+                                                    let content = format!(
+                                                        "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
+                                                        bpm_now,
+                                                        if paused_now { "yes" } else { "no" }
                                                     );
+                                                    div.set_inner_html(&content);
                                                 }
                                                 let _ = el.set_attribute("style", "");
                                             } else {
@@ -370,6 +376,27 @@ async fn init() -> anyhow::Result<()> {
                                 let mut p = paused_k.borrow_mut();
                                 *p = !*p;
                                 log::info!("[keys] paused={} ", *p);
+                                // If hint visible, refresh its content
+                                if let Some(win) = web::window() {
+                                    if let Some(doc) = win.document() {
+                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
+                                            if el.get_attribute("data-visible").as_deref()
+                                                == Some("1")
+                                            {
+                                                let bpm_now = engine_k.borrow().params.bpm;
+                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
+                                                {
+                                                    let content = format!(
+                                                        "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
+                                                        bpm_now,
+                                                        if *p { "yes" } else { "no" }
+                                                    );
+                                                    div.set_inner_html(&content);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                                 ev.prevent_default();
                             }
                             // Increase BPM
@@ -378,6 +405,27 @@ async fn init() -> anyhow::Result<()> {
                                 let new_bpm = (eng.params.bpm + 5.0).min(240.0);
                                 eng.set_bpm(new_bpm);
                                 log::info!("[keys] bpm -> {:.1}", new_bpm);
+                                // If hint visible, refresh its content
+                                if let Some(win) = web::window() {
+                                    if let Some(doc) = win.document() {
+                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
+                                            if el.get_attribute("data-visible").as_deref()
+                                                == Some("1")
+                                            {
+                                                let paused_now = *paused_k.borrow();
+                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
+                                                {
+                                                    let content = format!(
+                                                        "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
+                                                        new_bpm,
+                                                        if paused_now { "yes" } else { "no" }
+                                                    );
+                                                    div.set_inner_html(&content);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                             // Decrease BPM
                             "-" | "_" => {
@@ -385,6 +433,27 @@ async fn init() -> anyhow::Result<()> {
                                 let new_bpm = (eng.params.bpm - 5.0).max(40.0);
                                 eng.set_bpm(new_bpm);
                                 log::info!("[keys] bpm -> {:.1}", new_bpm);
+                                // If hint visible, refresh its content
+                                if let Some(win) = web::window() {
+                                    if let Some(doc) = win.document() {
+                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
+                                            if el.get_attribute("data-visible").as_deref()
+                                                == Some("1")
+                                            {
+                                                let paused_now = *paused_k.borrow();
+                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
+                                                {
+                                                    let content = format!(
+                                                        "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
+                                                        new_bpm,
+                                                        if paused_now { "yes" } else { "no" }
+                                                    );
+                                                    div.set_inner_html(&content);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
                             }
                             _ => {}
                         }

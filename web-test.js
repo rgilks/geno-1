@@ -55,11 +55,16 @@ const puppeteer = require("puppeteer");
       ? {
           style: el.getAttribute("style") || "",
           data: el.getAttribute("data-visible") || "",
+          text: el.textContent || "",
         }
       : null;
   });
   console.log("WEBGPU", hasWebGPU);
   console.log("HINT", !!hintState, hintState);
+  if (!hintState) throw new Error("hint not found");
+  if (!/BPM: \d+/.test(hintState.text)) throw new Error("hint missing BPM");
+  if (!/Paused: (yes|no)/.test(hintState.text))
+    throw new Error("hint missing Paused state");
 
   await browser.close();
   process.exit(0);
