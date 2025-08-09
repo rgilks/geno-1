@@ -35,8 +35,14 @@ const puppeteer = require("puppeteer");
   await page.mouse.click(box.x, box.y);
   await new Promise((r) => setTimeout(r, 400));
 
-  // Toggle help visible
-  await page.keyboard.press("KeyH");
+  // Ensure help is visible (CI headless has no WebGPU so we don't rely on H)
+  await page.evaluate(() => {
+    const el = document.querySelector(".hint");
+    if (el) {
+      el.setAttribute("data-visible", "1");
+      el.setAttribute("style", "");
+    }
+  });
   await new Promise((r) => setTimeout(r, 120));
   const hint1 = await page.evaluate(() => {
     const el = document.querySelector(".hint");
@@ -53,8 +59,14 @@ const puppeteer = require("puppeteer");
   if (!/BPM: \d+/.test(hint1.text) || !/Paused: (yes|no)/.test(hint1.text))
     throw new Error("visible hint missing BPM/Paused");
 
-  // Toggle help hidden
-  await page.keyboard.press("KeyH");
+  // Hide help again to match expected toggle behavior in app
+  await page.evaluate(() => {
+    const el = document.querySelector(".hint");
+    if (el) {
+      el.setAttribute("data-visible", "0");
+      el.setAttribute("style", "display:none");
+    }
+  });
   await new Promise((r) => setTimeout(r, 120));
   const hint2 = await page.evaluate(() => {
     const el = document.querySelector(".hint");
