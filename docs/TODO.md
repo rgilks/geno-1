@@ -38,8 +38,9 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 - [x] Ray picking (ray-sphere), hover highlight, XZ drag of voices
 - [x] Click: mute; Shift+Click: reseed; Alt+Click: solo
-- [x] Keyboard: H (help), R (reseed all), Space (pause), + / - (tempo)
-- [x] Dynamic hint overlay shows BPM and pause state
+- [x] Keyboard: R (reseed all), Space (pause), + / - (tempo), M (master mute)
+  - [x] Start overlay (gesture) and default master mute
+  - [x] Dynamic hint overlay shows BPM, paused, and muted state
 - [ ] 3D in-scene icon controls replacing keyboard (post-v1)
 - [x] Clamp drag radius to a sensible range to avoid losing objects
 
