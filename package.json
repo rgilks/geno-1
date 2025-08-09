@@ -17,7 +17,7 @@
     "native": "cargo run -p app-native",
     "build:all": "npm run build:native && npm run build:web",
     "clean": "cargo clean && rm -rf crates/app-web/pkg",
-    "check:rust": "cargo fmt --all -- --check && cargo clippy --workspace --exclude app-web --all-targets -- -D warnings && cargo build -p app-native",
+    "check:rust": "cargo fmt --all -- --check && cargo clippy --workspace --exclude app-web --all-targets -- -D warnings && cargo test --workspace --exclude app-web --all-targets && cargo build -p app-native",
     "check": "npm run check:rust && npm run ci:web"
   },
   "repository": {

@@ -184,3 +184,105 @@ impl MusicEngine {
 pub fn midi_to_hz(midi: f32) -> f32 {
     440.0 * (2.0_f32).powf((midi - 69.0) / 12.0)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::time::Duration;
+
+    fn approx_eq(a: f32, b: f32, eps: f32) -> bool {
+        (a - b).abs() <= eps
+    }
+
+    #[test]
+    fn midi_to_hz_references() {
+        assert!(approx_eq(midi_to_hz(69.0), 440.0, 0.01));
+        // Middle C ≈ 261.6256 Hz
+        assert!(approx_eq(midi_to_hz(60.0), 261.6256, 0.05));
+        // A4 ± 12 semitones should double/halve
+        assert!(approx_eq(midi_to_hz(81.0), 880.0, 0.05));
+        assert!(approx_eq(midi_to_hz(57.0), 220.0, 0.05));
+    }
+
+    #[test]
+    fn engine_tick_produces_events_with_default_params() {
+        let configs = vec![
+            VoiceConfig {
+                color_rgb: [1.0, 0.0, 0.0],
+                waveform: Waveform::Sine,
+                base_position: Vec3::new(-1.0, 0.0, 0.0),
+            },
+            VoiceConfig {
+                color_rgb: [0.0, 1.0, 0.0],
+                waveform: Waveform::Saw,
+                base_position: Vec3::new(1.0, 0.0, 0.0),
+            },
+            VoiceConfig {
+                color_rgb: [0.0, 0.0, 1.0],
+                waveform: Waveform::Triangle,
+                base_position: Vec3::new(0.0, 0.0, -1.0),
+            },
+        ];
+        let params = EngineParams::default();
+        let mut engine = MusicEngine::new(configs, params, 12345);
+        let mut out = Vec::new();
+        // Advance enough simulated time over multiple ticks to very likely produce events
+        let mut now = 0.0;
+        for _ in 0..16 {
+            engine.tick(Duration::from_millis(150), now, &mut out);
+            now += 0.15;
+        }
+        assert!(
+            !out.is_empty(),
+            "expected some NoteEvent(s) to be produced over multiple ticks"
+        );
+        // Sanity: events have valid durations and frequencies
+        for ev in &out {
+            assert!(ev.duration_sec > 0.0);
+            assert!(ev.frequency_hz > 0.0);
+            assert!(ev.velocity >= 0.0 && ev.velocity <= 1.0);
+        }
+    }
+
+    #[test]
+    fn mute_and_solo_behaviour() {
+        let configs = vec![
+            VoiceConfig {
+                color_rgb: [1.0, 0.0, 0.0],
+                waveform: Waveform::Sine,
+                base_position: Vec3::new(-1.0, 0.0, 0.0),
+            },
+            VoiceConfig {
+                color_rgb: [0.0, 1.0, 0.0],
+                waveform: Waveform::Saw,
+                base_position: Vec3::new(1.0, 0.0, 0.0),
+            },
+            VoiceConfig {
+                color_rgb: [0.0, 0.0, 1.0],
+                waveform: Waveform::Triangle,
+                base_position: Vec3::new(0.0, 0.0, -1.0),
+            },
+        ];
+        let params = EngineParams::default();
+        let mut engine = MusicEngine::new(configs, params, 7);
+
+        // Toggle mute on voice 1
+        assert!(!engine.voices[1].muted);
+        engine.toggle_mute(1);
+        assert!(engine.voices[1].muted);
+        engine.set_voice_muted(1, false);
+        assert!(!engine.voices[1].muted);
+
+        // Solo voice 2 mutes others
+        engine.toggle_solo(2);
+        assert!(engine.voices[0].muted);
+        assert!(engine.voices[1].muted);
+        assert!(!engine.voices[2].muted);
+
+        // Toggle solo off restores all
+        engine.toggle_solo(2);
+        assert!(!engine.voices[0].muted);
+        assert!(!engine.voices[1].muted);
+        assert!(!engine.voices[2].muted);
+    }
+}

@@ -30,7 +30,7 @@
 ### Pre-commit Check
 
 - Run all checks and tests locally: `npm run check`
-  - Rust: `cargo fmt --check`, `cargo clippy` (deny warnings), `cargo build -p app-native`
+  - Rust: `cargo fmt --check`, `cargo clippy` (deny warnings), `cargo test` (workspace), `cargo build -p app-native`
   - Web: build, serve, and execute the headless browser test
 
 ### Deploy (Cloudflare Workers)
