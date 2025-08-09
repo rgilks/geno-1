@@ -15,7 +15,12 @@ jobs:
         with:
           node-version: "20"
       - name: Install system deps
-        run: sudo apt-get update && sudo apt-get install -y libgtk-3-0 libgbm1 libasound2
+        run: |
+          sudo apt-get update
+          # Common Chromium deps
+          sudo apt-get install -y libgtk-3-0 libgbm1
+          # ALSA renamed on Ubuntu 24.04 to libasound2t64; fall back to libasound2 on older images
+          sudo apt-get install -y libasound2t64 || sudo apt-get install -y libasound2
       - name: Install wasm-pack
         run: curl -sSfL https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
       - name: Install node deps

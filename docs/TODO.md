@@ -9,6 +9,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Node dev server with proper COOP/COEP headers (`server.js`)
 - [x] Headless web test (Puppeteer) scripted interactions
 - [x] CI workflow to build web and run headless test
+- [x] CI: handle Ubuntu 24.04 ALSA rename (install `libasound2t64` with fallback)
 - [ ] Add LICENSE file matching workspace `license = "MIT"`
 - [ ] Fill optional `description`/`repository` fields in crate manifests
 - [ ] Add README workflow badge (done) and keep CI green
