@@ -38,6 +38,38 @@ async fn init() -> anyhow::Result<()> {
         .dyn_into::<web::HtmlCanvasElement>()
         .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
 
+    // Minimal early keyboard handler for hint toggle (works even if WebGPU init fails in CI)
+    {
+        let window = web::window().unwrap();
+        let document = document.clone();
+        let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
+            let key = ev.key();
+            if key == "h" || key == "H" {
+                if let Ok(Some(el)) = document.query_selector(".hint") {
+                    let cur = el.get_attribute("data-visible");
+                    let show = match cur.as_deref() { Some("1") => false, _ => true };
+                    let _ = el.set_attribute("data-visible", if show { "1" } else { "0" });
+                    if let Some(div) = el.dyn_ref::<web::HtmlElement>() {
+                        if show {
+                            // Default content (before full engine/UI attach)
+                            div.set_inner_html(
+                                "Click canvas to start • Drag a circle to move\nClick: mute, Shift+Click: reseed, Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: 110 • Paused: no",
+                            );
+                            let _ = el.set_attribute("style", "");
+                        } else {
+                            let _ = el.set_attribute("style", "display:none");
+                        }
+                    }
+                }
+                ev.prevent_default();
+            }
+        }) as Box<dyn FnMut(_)>);
+        window
+            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
+            .ok();
+        closure.forget();
+    }
+
     // Note: we will query the optional hint element lazily inside event handlers to avoid
     // capturing it here and forcing closures to be FnOnce.
 
