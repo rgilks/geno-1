@@ -1,5 +1,9 @@
 #![cfg(target_arch = "wasm32")]
-use app_core::{EngineParams, MusicEngine, VoiceConfig, Waveform, C_MAJOR_PENTATONIC};
+use app_core::{
+    z_offset_vec3, EngineParams, MusicEngine, VoiceConfig, Waveform, BASE_SCALE,
+    C_MAJOR_PENTATONIC, DEFAULT_VOICE_COLORS, DEFAULT_VOICE_POSITIONS, ENGINE_DRAG_MAX_RADIUS,
+    PICK_SPHERE_RADIUS, SCALE_PULSE_MULTIPLIER, SPREAD,
+};
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use instant::Instant;
 use std::cell::RefCell;
@@ -13,8 +17,6 @@ use wgpu::util::DeviceExt;
 
 // Rendering/picking shared constants to keep math consistent
 const CAMERA_Z: f32 = 6.0;
-const Z_OFFSET: Vec3 = Vec3::new(0.0, 0.0, -4.0);
-const SPREAD: f32 = 1.8;
 
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
@@ -156,19 +158,19 @@ async fn init() -> anyhow::Result<()> {
                     // Music engine
                     let voice_configs = vec![
                         VoiceConfig {
-                            color_rgb: [0.9, 0.3, 0.3],
+                            color_rgb: DEFAULT_VOICE_COLORS[0],
                             waveform: Waveform::Sine,
-                            base_position: Vec3::new(-1.0, 0.0, 0.0),
+                            base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[0]),
                         },
                         VoiceConfig {
-                            color_rgb: [0.3, 0.9, 0.4],
+                            color_rgb: DEFAULT_VOICE_COLORS[1],
                             waveform: Waveform::Saw,
-                            base_position: Vec3::new(1.0, 0.0, 0.0),
+                            base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[1]),
                         },
                         VoiceConfig {
-                            color_rgb: [0.3, 0.5, 0.9],
+                            color_rgb: DEFAULT_VOICE_COLORS[2],
                             waveform: Waveform::Triangle,
-                            base_position: Vec3::new(0.0, 0.0, -1.0),
+                            base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[2]),
                         },
                     ];
                     log::info!("[gesture] starting systems after click");
@@ -350,10 +352,12 @@ async fn init() -> anyhow::Result<()> {
                             let rd = (p1 - ro).normalize();
                             let mut best = None::<(usize, f32)>;
                             let spread = SPREAD;
-                            let z_offset = Z_OFFSET;
+                            let z_offset = z_offset_vec3();
                             for (i, v) in engine_m.borrow().voices.iter().enumerate() {
                                 let center_world = v.position * spread + z_offset;
-                                if let Some(t) = ray_sphere(ro, rd, center_world, 0.8) {
+                                if let Some(t) =
+                                    ray_sphere(ro, rd, center_world, PICK_SPHERE_RADIUS)
+                                {
                                     if t >= 0.0 {
                                         match best {
                                             Some((_, bt)) if t >= bt => {}
@@ -369,9 +373,9 @@ async fn init() -> anyhow::Result<()> {
                                     let t = (plane_z - ro.z) / rd.z;
                                     if t >= 0.0 {
                                         let hit_world = ro + rd * t;
-                                        let mut eng_pos = (hit_world - Z_OFFSET) / SPREAD;
+                                        let mut eng_pos = (hit_world - z_offset_vec3()) / SPREAD;
                                         // Clamp drag radius to avoid losing objects
-                                        let max_r = 3.0_f32; // engine-space radius
+                                        let max_r = ENGINE_DRAG_MAX_RADIUS; // engine-space radius
                                         let len =
                                             (eng_pos.x * eng_pos.x + eng_pos.z * eng_pos.z).sqrt();
                                         if len > max_r {
@@ -587,8 +591,8 @@ async fn init() -> anyhow::Result<()> {
                                 let mut ds = drag_m.borrow_mut();
                                 ds.active = true;
                                 ds.voice = i;
-                                ds.plane_z_world =
-                                    engine_m.borrow().voices[i].position.z * SPREAD + Z_OFFSET.z;
+                                ds.plane_z_world = engine_m.borrow().voices[i].position.z * SPREAD
+                                    + z_offset_vec3().z;
                                 log::info!("[mouse] begin drag on voice {}", i);
                             }
                             mouse_m.borrow_mut().down = true;
@@ -723,7 +727,7 @@ async fn init() -> anyhow::Result<()> {
                                 }
                             }
                             let e_ref = engine_tick.borrow();
-                            let z_offset = Z_OFFSET;
+                            let z_offset = z_offset_vec3();
                             let spread = SPREAD;
                             let positions: Vec<Vec3> = vec![
                                 e_ref.voices[0].position * spread + z_offset,
@@ -749,8 +753,11 @@ async fn init() -> anyhow::Result<()> {
                                     colors[i].z = (colors[i].z * 1.4).min(1.0);
                                 }
                             }
-                            let scales: Vec<f32> =
-                                vec![1.6 + ps[0] * 0.4, 1.6 + ps[1] * 0.4, 1.6 + ps[2] * 0.4];
+                            let scales: Vec<f32> = vec![
+                                BASE_SCALE + ps[0] * SCALE_PULSE_MULTIPLIER,
+                                BASE_SCALE + ps[1] * SCALE_PULSE_MULTIPLIER,
+                                BASE_SCALE + ps[2] * SCALE_PULSE_MULTIPLIER,
+                            ];
 
                             if let Some(g) = &mut gpu {
                                 // Keep WebGPU surface sized to canvas backing size

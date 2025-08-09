@@ -14,3 +14,16 @@ Pre-commit and push procedure:
 - Run `npm run check` to format, lint, build, and execute headless tests.
 - Ensure the check is green (no warnings promoted to errors, builds succeed, tests pass).
 - Commit and push only after the above succeed.
+
+Testing guidelines:
+
+- Rust unit tests live alongside code in `crates/app-core` (and other crates as added). Use `cargo test`.
+- Headless web test is executed via `npm run ci:web` which builds the WASM, serves it, and runs Puppeteer (`web-test.js`).
+- The `npm run check` command runs:
+  - `cargo fmt --check` and `cargo clippy -D warnings` for formatting/lint
+  - `cargo test` (workspace, excluding `app-web`)
+  - `cargo build -p app-native`
+  - Web CI build + headless test
+- Add tests for:
+  - Core logic invariants (e.g., frequency math, event scheduling, mute/solo behavior)
+  - Regressions for reported bugs

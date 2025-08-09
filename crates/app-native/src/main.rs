@@ -4,7 +4,10 @@ use std::time::{Duration, Instant};
 use wgpu::util::DeviceExt;
 use winit::{event::*, event_loop::EventLoop, window::WindowBuilder};
 
-use app_core::{EngineParams, MusicEngine, VoiceConfig, Waveform, C_MAJOR_PENTATONIC};
+use app_core::{
+    EngineParams, MusicEngine, VoiceConfig, Waveform, C_MAJOR_PENTATONIC, BASE_SCALE,
+    DEFAULT_VOICE_COLORS, DEFAULT_VOICE_POSITIONS, SPREAD,
+};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use glam::{Mat4, Vec3, Vec4};
 
@@ -271,17 +274,17 @@ impl<'w> GpuState<'w> {
         for p in vis.pulses.iter_mut() {
             *p = (*p - dt_sec * 1.5).max(0.0);
         }
-        let z_offset = Vec3::new(0.0, 0.0, -4.0);
-        let spread = 1.8f32;
+        let z_offset = app_core::z_offset_vec3();
+        let spread = SPREAD;
         let positions = [
             vis.positions[0] * spread + z_offset,
             vis.positions[1] * spread + z_offset,
             vis.positions[2] * spread + z_offset,
         ];
         let scales = [
-            1.6 + vis.pulses[0] * 0.4,
-            1.6 + vis.pulses[1] * 0.4,
-            1.6 + vis.pulses[2] * 0.4,
+            BASE_SCALE + vis.pulses[0] * app_core::SCALE_PULSE_MULTIPLIER,
+            BASE_SCALE + vis.pulses[1] * app_core::SCALE_PULSE_MULTIPLIER,
+            BASE_SCALE + vis.pulses[2] * app_core::SCALE_PULSE_MULTIPLIER,
         ];
         let mut instances: Vec<InstanceData> = Vec::with_capacity(3);
         for i in 0..3 {
@@ -341,14 +344,29 @@ fn main() {
     // Shared visual state between scheduler and renderer
     let shared_state = Arc::new(Mutex::new(VisState {
         positions: [
-            Vec3::new(-1.0, 0.0, 0.0),
-            Vec3::new(1.0, 0.0, 0.0),
-            Vec3::new(0.0, 0.0, -1.0),
+            Vec3::from(DEFAULT_VOICE_POSITIONS[0]),
+            Vec3::from(DEFAULT_VOICE_POSITIONS[1]),
+            Vec3::from(DEFAULT_VOICE_POSITIONS[2]),
         ],
         colors: [
-            Vec4::new(0.9, 0.3, 0.3, 1.0),
-            Vec4::new(0.3, 0.9, 0.4, 1.0),
-            Vec4::new(0.3, 0.5, 0.9, 1.0),
+            Vec4::new(
+                DEFAULT_VOICE_COLORS[0][0],
+                DEFAULT_VOICE_COLORS[0][1],
+                DEFAULT_VOICE_COLORS[0][2],
+                1.0,
+            ),
+            Vec4::new(
+                DEFAULT_VOICE_COLORS[1][0],
+                DEFAULT_VOICE_COLORS[1][1],
+                DEFAULT_VOICE_COLORS[1][2],
+                1.0,
+            ),
+            Vec4::new(
+                DEFAULT_VOICE_COLORS[2][0],
+                DEFAULT_VOICE_COLORS[2][1],
+                DEFAULT_VOICE_COLORS[2][2],
+                1.0,
+            ),
         ],
         pulses: [0.0, 0.0, 0.0],
     }));
@@ -426,19 +444,19 @@ fn start_audio_engine(shared_vis: Arc<Mutex<VisState>>) -> Option<cpal::Stream> 
             .spawn(move || {
                 let voice_configs = vec![
                     VoiceConfig {
-                        color_rgb: [0.9, 0.3, 0.3],
+                        color_rgb: DEFAULT_VOICE_COLORS[0],
                         waveform: Waveform::Sine,
-                        base_position: Vec3::new(-1.0, 0.0, 0.0),
+                        base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[0]),
                     },
                     VoiceConfig {
-                        color_rgb: [0.3, 0.9, 0.4],
+                        color_rgb: DEFAULT_VOICE_COLORS[1],
                         waveform: Waveform::Saw,
-                        base_position: Vec3::new(1.0, 0.0, 0.0),
+                        base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[1]),
                     },
                     VoiceConfig {
-                        color_rgb: [0.3, 0.5, 0.9],
+                        color_rgb: DEFAULT_VOICE_COLORS[2],
                         waveform: Waveform::Triangle,
-                        base_position: Vec3::new(0.0, 0.0, -1.0),
+                        base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[2]),
                     },
                 ];
                 let mut engine = MusicEngine::new(
