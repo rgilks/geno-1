@@ -6,7 +6,7 @@ Proceed in small iterative steps and test each change.
 Refactor the code to make it more elegant, concise and simple. It should be clear and easy to maintain.
 Improve the tests as you go, make sure the tests are clear and focused. Don't create lots of trivial tests.
 Improve the docs and diagramsas you go.
-Remove dead code.
+Remove dead and commented out code.
 Use whitespace to make the code more readable.
 
 Do not block for approvals; follow `docs/SPEC.md` and `docs/TODO.md` and keep momentum.
