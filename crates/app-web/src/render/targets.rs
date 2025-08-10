@@ -1,5 +1,5 @@
-use wgpu;
 use super::helpers;
+use wgpu;
 
 /// Offscreen color targets for the render pipeline.
 ///
@@ -36,12 +36,7 @@ impl RenderTargets {
         }
     }
 
-    pub(crate) fn recreate(
-        &mut self,
-        device: &wgpu::Device,
-        width: u32,
-        height: u32,
-    ) {
+    pub(crate) fn recreate(&mut self, device: &wgpu::Device, width: u32, height: u32) {
         let hdr_format = wgpu::TextureFormat::Rgba16Float;
         (self.hdr_tex, self.hdr_view) = helpers::create_color_texture(
             device,

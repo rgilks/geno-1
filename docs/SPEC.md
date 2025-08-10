@@ -58,7 +58,7 @@ Users can **influence and interact** with the generative music without manually 
 The system is composed of three main subsystems:
 
 1. **Audio Engine** – music generation (notes/sequences) and sound output (synthesis and spatial audio).
-2. **Visual Engine** – 3D rendering using WebGPU, including ambient waves background and a post-processing stack (bright pass, separable blur, ACES tonemap, vignette, grain).
+2. **Visual Engine** – 3D rendering using WebGPU, including ambient waves background and a post-processing stack (bright pass, separable blur, ACES tonemap, vignette, grain). The renderer is structured with small modules: `render/targets.rs` (offscreen targets), `render/waves.rs` (fullscreen waves pass), and `render/post.rs` (post pipelines, uniforms, blits, bind groups).
 3. **Interaction & UI Module** – user input (mouse, keyboard) with a minimalist hint overlay; interactive controls embedded in the 3D scene.
 
 These components will run simultaneously and communicate in real-time. The application will likely run a **main loop** (or use requestAnimationFrame in the browser) to update both audio and visuals continuously:

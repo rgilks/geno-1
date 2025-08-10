@@ -86,7 +86,7 @@ const puppeteer = require("puppeteer");
       logs.some((l) => l.includes("[keys] paused=false"));
     if (!sawPause) throw new Error("missing pause/resume logs");
 
-    // Tempo up/down (no UI assertion; rely on logs/state in future)
+    // Tempo up/down (logs only)
     await page.keyboard.down("Shift");
     await page.keyboard.press("Equal");
     await page.keyboard.up("Shift");
@@ -94,7 +94,7 @@ const puppeteer = require("puppeteer");
     await page.keyboard.press("Minus");
     await new Promise((r) => setTimeout(r, 120));
 
-    // Master mute toggle
+    // Master mute toggle (logs only)
     await page.keyboard.press("KeyM");
     await new Promise((r) => setTimeout(r, 120));
     if (!logs.some((l) => /\[keys\] master muted=true/.test(l)))
