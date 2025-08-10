@@ -1,8 +1,10 @@
+use crate::constants::*;
 use crate::input;
 use crate::render;
-use app_core::{z_offset_vec3, MusicEngine, Waveform, BASE_SCALE, SCALE_PULSE_MULTIPLIER, SPREAD};
+use app_core::{
+    z_offset_vec3, MusicEngine, NoteEvent, Waveform, BASE_SCALE, SCALE_PULSE_MULTIPLIER, SPREAD,
+};
 use glam::{Vec3, Vec4};
-use crate::constants::*;
 use instant::Instant;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -66,40 +68,25 @@ impl<'a> FrameContext<'a> {
         }
 
         {
-            let mut pulses = self.pulses.borrow_mut();
-            let n = pulses.len().min(3);
-            for ev in &note_events {
-                if ev.voice_index < n {
-                    self.pulse_energy[ev.voice_index] =
-                        (self.pulse_energy[ev.voice_index] + ev.velocity as f32).min(1.8);
+            let pulses_copy: Vec<f32> = {
+                let mut pulses_ref = self.pulses.borrow_mut();
+                let n = pulses_ref.len().min(3);
+                for ev in &note_events {
+                    if ev.voice_index < n {
+                        self.pulse_energy[ev.voice_index] =
+                            (self.pulse_energy[ev.voice_index] + ev.velocity as f32).min(1.8);
+                    }
                 }
-            }
-            smooth_pulses(&mut pulses, &mut self.pulse_energy, dt_sec);
+                smooth_pulses(&mut pulses_ref, &mut self.pulse_energy, dt_sec);
+                pulses_ref.clone()
+            }; // drop pulses_ref here
 
-            // Swirl input
+            // Swirl input and energy (no RefCell borrow active)
             let ms = self.mouse.borrow();
             let uv = input::mouse_uv(&self.canvas, &ms);
-            step_inertial_swirl(
-                &mut self.swirl_initialized,
-                &mut self.swirl_pos,
-                &mut self.swirl_vel,
-                uv,
-                dt_sec,
-            );
-            let du = uv[0] - self.prev_uv[0];
-            let dv = uv[1] - self.prev_uv[1];
-            let pointer_speed = ((du * du + dv * dv).sqrt() / (dt_sec + 1e-5)).min(POINTER_SPEED_MAX);
-            let swirl_speed = (self.swirl_vel[0] * self.swirl_vel[0]
-                + self.swirl_vel[1] * self.swirl_vel[1])
-                .sqrt();
-            let target = ((pointer_speed * SWIRL_TARGET_WEIGHT_POINTER)
-                + (swirl_speed * SWIRL_TARGET_WEIGHT_VELOCITY)
-                + if ms.down { SWIRL_TARGET_CLICK_BONUS } else { 0.0 })
-                .clamp(0.0, 1.0);
+            let mouse_down = ms.down;
             drop(ms);
-            self.swirl_energy = (1.0 - SWIRL_ENERGY_BLEND_ALPHA) * self.swirl_energy
-                + SWIRL_ENERGY_BLEND_ALPHA * target;
-            self.prev_uv = uv;
+            self.update_swirl(uv, dt_sec, mouse_down);
 
             // Global FX modulation
             apply_global_fx_swirl(
@@ -123,7 +110,7 @@ impl<'a> FrameContext<'a> {
                 let mut d_amt = (D_SEND_BASE + D_SEND_SPAN * pos.x.abs().min(1.0)).clamp(0.0, 1.0);
                 let mut r_amt = (R_SEND_BASE
                     + R_SEND_SPAN * (dist / DIST_NORM_DIVISOR).clamp(0.0, 1.0))
-                    .clamp(0.0, R_SEND_CLAMP_MAX);
+                .clamp(0.0, R_SEND_CLAMP_MAX);
                 let boost = 1.0 + SEND_BOOST_COEFF * self.swirl_energy;
                 d_amt = (d_amt * boost).clamp(0.0, D_SEND_CLAMP_MAX);
                 r_amt = (r_amt * boost).clamp(0.0, R_SEND_CLAMP_MAX);
@@ -153,9 +140,13 @@ impl<'a> FrameContext<'a> {
                     sum += lin;
                 }
                 let avg = sum / take as f32;
-                let n = pulses.len().min(3);
-                for i in 0..n {
-                    pulses[i] = (pulses[i] + avg * 0.05).min(1.5);
+                let n = pulses_copy.len().min(3);
+                {
+                    // update both self.pulses and local copy
+                    let mut pulses_ref = self.pulses.borrow_mut();
+                    for i in 0..n {
+                        pulses_ref[i] = (pulses_ref[i] + avg * 0.05).min(1.5);
+                    }
                 }
                 if let Some(g) = &mut self.gpu {
                     g.set_ambient_clear(avg * 0.9);
@@ -163,61 +154,8 @@ impl<'a> FrameContext<'a> {
             }
 
             // Build instance buffers for renderer
-            let e_ref = self.engine.borrow();
-            let z_offset = z_offset_vec3();
-            let spread = SPREAD;
-            let ring_count = RING_COUNT;
-            let mut positions: Vec<Vec3> = Vec::with_capacity(3 + ring_count * 3 + 16);
-            positions.push(e_ref.voices[0].position * spread + z_offset);
-            positions.push(e_ref.voices[1].position * spread + z_offset);
-            positions.push(e_ref.voices[2].position * spread + z_offset);
-            let mut colors: Vec<Vec4> = Vec::with_capacity(3 + ring_count * 3 + 16);
-            colors.push(Vec4::from((Vec3::from(e_ref.configs[0].color_rgb), 1.0)));
-            colors.push(Vec4::from((Vec3::from(e_ref.configs[1].color_rgb), 1.0)));
-            colors.push(Vec4::from((Vec3::from(e_ref.configs[2].color_rgb), 1.0)));
-            let hovered = *self.hover_index.borrow();
-            for i in 0..3 {
-                if e_ref.voices[i].muted {
-                    colors[i].x *= MUTE_DARKEN;
-                    colors[i].y *= MUTE_DARKEN;
-                    colors[i].z *= MUTE_DARKEN;
-                    colors[i].w = 1.0;
-                }
-                if hovered == Some(i) {
-                    colors[i].x = (colors[i].x * HOVER_BRIGHTEN).min(1.0);
-                    colors[i].y = (colors[i].y * HOVER_BRIGHTEN).min(1.0);
-                    colors[i].z = (colors[i].z * HOVER_BRIGHTEN).min(1.0);
-                }
-            }
-            let mut scales: Vec<f32> = Vec::with_capacity(3 + ring_count * 3 + 16);
-            scales.push(BASE_SCALE + pulses[0] * SCALE_PULSE_MULTIPLIER);
-            scales.push(BASE_SCALE + pulses[1] * SCALE_PULSE_MULTIPLIER);
-            scales.push(BASE_SCALE + pulses[2] * SCALE_PULSE_MULTIPLIER);
-
-            if let Some(a) = &self.analyser {
-                let bins = a.frequency_bin_count() as usize;
-                let dots = bins.min(ANALYSER_DOTS_MAX);
-                if dots > 0 {
-                    {
-                        let mut buf = self.analyser_buf.borrow_mut();
-                        if buf.len() != bins {
-                            buf.resize(bins, 0.0);
-                        }
-                        a.get_float_frequency_data(&mut buf);
-                    }
-                    let z = z_offset.z;
-                    for i in 0..dots {
-                        let v_db = self.analyser_buf.borrow()[i];
-                        let lin = ((v_db + 100.0) / 100.0).clamp(0.0, 1.0);
-                        let x = -2.8 + (i as f32) * (5.6 / (dots as f32 - 1.0));
-                        let y = -1.8;
-                        positions.push(Vec3::new(x, y, z));
-                        let c = Vec3::new(0.25 + 0.5 * lin, 0.6 + 0.3 * lin, 0.9);
-                        colors.push(Vec4::from((c, 0.95)));
-                        scales.push(0.18 + lin * 0.35);
-                    }
-                }
-            }
+            let pulses_ref = self.pulses.borrow();
+            let (positions, colors, scales) = self.build_instances(&pulses_ref);
 
             // Camera + listener
             let cam_eye = Vec3::new(0.0, 0.0, CAMERA_Z);
@@ -278,6 +216,93 @@ impl<'a> FrameContext<'a> {
                 let _ = src.stop_with_when(t0 + ev.duration_sec as f64 + 0.02);
             }
         }
+    }
+}
+
+impl<'a> FrameContext<'a> {
+    fn update_swirl(&mut self, uv: [f32; 2], dt_sec: f32, mouse_down: bool) {
+        step_inertial_swirl(
+            &mut self.swirl_initialized,
+            &mut self.swirl_pos,
+            &mut self.swirl_vel,
+            uv,
+            dt_sec,
+        );
+        let du = uv[0] - self.prev_uv[0];
+        let dv = uv[1] - self.prev_uv[1];
+        let pointer_speed = ((du * du + dv * dv).sqrt() / (dt_sec + 1e-5)).min(POINTER_SPEED_MAX);
+        let swirl_speed =
+            (self.swirl_vel[0] * self.swirl_vel[0] + self.swirl_vel[1] * self.swirl_vel[1]).sqrt();
+        let target = ((pointer_speed * SWIRL_TARGET_WEIGHT_POINTER)
+            + (swirl_speed * SWIRL_TARGET_WEIGHT_VELOCITY)
+            + if mouse_down {
+                SWIRL_TARGET_CLICK_BONUS
+            } else {
+                0.0
+            })
+        .clamp(0.0, 1.0);
+        self.swirl_energy = (1.0 - SWIRL_ENERGY_BLEND_ALPHA) * self.swirl_energy
+            + SWIRL_ENERGY_BLEND_ALPHA * target;
+        self.prev_uv = uv;
+    }
+
+    fn build_instances(&self, pulses: &[f32]) -> (Vec<Vec3>, Vec<Vec4>, Vec<f32>) {
+        let e_ref = self.engine.borrow();
+        let z_offset = z_offset_vec3();
+        let spread = SPREAD;
+        let ring_count = RING_COUNT;
+        let mut positions: Vec<Vec3> = Vec::with_capacity(3 + ring_count * 3 + 16);
+        positions.push(e_ref.voices[0].position * spread + z_offset);
+        positions.push(e_ref.voices[1].position * spread + z_offset);
+        positions.push(e_ref.voices[2].position * spread + z_offset);
+        let mut colors: Vec<Vec4> = Vec::with_capacity(3 + ring_count * 3 + 16);
+        colors.push(Vec4::from((Vec3::from(e_ref.configs[0].color_rgb), 1.0)));
+        colors.push(Vec4::from((Vec3::from(e_ref.configs[1].color_rgb), 1.0)));
+        colors.push(Vec4::from((Vec3::from(e_ref.configs[2].color_rgb), 1.0)));
+        let hovered = *self.hover_index.borrow();
+        for i in 0..3 {
+            if e_ref.voices[i].muted {
+                colors[i].x *= MUTE_DARKEN;
+                colors[i].y *= MUTE_DARKEN;
+                colors[i].z *= MUTE_DARKEN;
+                colors[i].w = 1.0;
+            }
+            if hovered == Some(i) {
+                colors[i].x = (colors[i].x * HOVER_BRIGHTEN).min(1.0);
+                colors[i].y = (colors[i].y * HOVER_BRIGHTEN).min(1.0);
+                colors[i].z = (colors[i].z * HOVER_BRIGHTEN).min(1.0);
+            }
+        }
+        let mut scales: Vec<f32> = Vec::with_capacity(3 + ring_count * 3 + 16);
+        scales.push(BASE_SCALE + pulses[0] * SCALE_PULSE_MULTIPLIER);
+        scales.push(BASE_SCALE + pulses[1] * SCALE_PULSE_MULTIPLIER);
+        scales.push(BASE_SCALE + pulses[2] * SCALE_PULSE_MULTIPLIER);
+
+        if let Some(a) = &self.analyser {
+            let bins = a.frequency_bin_count() as usize;
+            let dots = bins.min(ANALYSER_DOTS_MAX);
+            if dots > 0 {
+                {
+                    let mut buf = self.analyser_buf.borrow_mut();
+                    if buf.len() != bins {
+                        buf.resize(bins, 0.0);
+                    }
+                    a.get_float_frequency_data(&mut buf);
+                }
+                let z = z_offset.z;
+                for i in 0..dots {
+                    let v_db = self.analyser_buf.borrow()[i];
+                    let lin = ((v_db + 100.0) / 100.0).clamp(0.0, 1.0);
+                    let x = -2.8 + (i as f32) * (5.6 / (dots as f32 - 1.0));
+                    let y = -1.8;
+                    positions.push(Vec3::new(x, y, z));
+                    let c = Vec3::new(0.25 + 0.5 * lin, 0.6 + 0.3 * lin, 0.9);
+                    colors.push(Vec4::from((c, 0.95)));
+                    scales.push(0.18 + lin * 0.35);
+                }
+            }
+        }
+        (positions, colors, scales)
     }
 }
 
@@ -390,17 +415,18 @@ fn apply_global_fx_swirl(
         .gain()
         .set_value(FX_REVERB_BASE + FX_REVERB_SPAN * swirl_energy);
     let echo = (uv[0] - uv[1]).abs();
-    let delay_wet_val = (FX_DELAY_WET_BASE + FX_DELAY_WET_SWIRL * swirl_energy
-        + FX_DELAY_WET_ECHO * echo)
-        .clamp(0.0, 1.0);
-    let delay_fb_val = (FX_DELAY_FB_BASE + FX_DELAY_FB_SWIRL * swirl_energy
-        + FX_DELAY_FB_ECHO * echo)
-        .clamp(0.0, 0.95);
+    let delay_wet_val =
+        (FX_DELAY_WET_BASE + FX_DELAY_WET_SWIRL * swirl_energy + FX_DELAY_WET_ECHO * echo)
+            .clamp(0.0, 1.0);
+    let delay_fb_val =
+        (FX_DELAY_FB_BASE + FX_DELAY_FB_SWIRL * swirl_energy + FX_DELAY_FB_ECHO * echo)
+            .clamp(0.0, 0.95);
     let _ = delay_wet.gain().set_value(delay_wet_val);
     let _ = delay_feedback.gain().set_value(delay_fb_val);
     let fizz = ((uv[0] + uv[1]) * 0.5).clamp(0.0, 1.0);
-    let drive = (FX_SAT_DRIVE_MIN + (FX_SAT_DRIVE_MAX - FX_SAT_DRIVE_MIN) * ((fizz - 0.25).clamp(0.0, 1.0)))
-        .clamp(FX_SAT_DRIVE_MIN, FX_SAT_DRIVE_MAX);
+    let drive = (FX_SAT_DRIVE_MIN
+        + (FX_SAT_DRIVE_MAX - FX_SAT_DRIVE_MIN) * ((fizz - 0.25).clamp(0.0, 1.0)))
+    .clamp(FX_SAT_DRIVE_MIN, FX_SAT_DRIVE_MAX);
     let _ = sat_pre.gain().set_value(drive);
     let wet = (FX_SAT_WET_BASE + FX_SAT_WET_SPAN * fizz).clamp(0.0, 1.0);
     let _ = sat_wet.gain().set_value(wet);

@@ -1,3 +1,21 @@
+## Pre-commit safety checks
+
+To catch build breakages early, this repo includes a Husky pre-commit hook that runs the full `npm run check`:
+
+```
+npm run check
+```
+
+That script enforces Rust fmt/clippy, runs core unit tests, builds the web bundle, serves it, and executes the headless Puppeteer test. If any step fails, the commit is aborted.
+
+If you prefer Git native hooks, enable the lightweight `.githooks/pre-commit` by pointing Git to that directory:
+
+```
+git config core.hooksPath .githooks
+```
+
+The `.githooks` variant runs `npm run check:rust` (fast Rust-only checks) and can be combined with Husky as needed.
+
 ## Generative 3D Music Visualizer (Rust + WebGPU + WebAudio)
 
 [![Web build and headless test](https://github.com/rgilks/geno-1/actions/workflows/web-ci.yml/badge.svg)](https://github.com/rgilks/geno-1/actions/workflows/web-ci.yml)

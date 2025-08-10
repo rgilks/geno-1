@@ -71,5 +71,3 @@ pub fn make_post_pipeline(
         multiview: None,
     })
 }
-
-

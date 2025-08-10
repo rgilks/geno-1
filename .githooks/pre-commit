@@ -1,0 +1,12 @@
+#!/bin/sh
+# Fail fast
+set -e
+
+echo "[pre-commit] Running fast checks (fmt, clippy, unit tests)..."
+
+# Format check and lint/tests for Rust (skip app-web to keep this fast)
+npm run check:rust >/dev/null
+
+echo "[pre-commit] OK"
+
+
