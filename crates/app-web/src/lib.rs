@@ -50,7 +50,22 @@ async fn init() -> anyhow::Result<()> {
         .dyn_into::<web::HtmlCanvasElement>()
         .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
 
-    // Removed 'h' help toggle; key mapping is shown on the Start overlay instead.
+    // Bring back 'h' help toggle to show/hide hint overlay
+    {
+        let window = web::window().unwrap();
+        let document = document.clone();
+        let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
+            let key = ev.key();
+            if key == "h" || key == "H" {
+                ui::toggle_hint_visibility(&document);
+                ev.prevent_default();
+            }
+        }) as Box<dyn FnMut(_)>);
+        window
+            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
+            .ok();
+        closure.forget();
+    }
 
     // Note: we will query the optional hint element lazily inside event handlers to avoid
     // capturing it here and forcing closures to be FnOnce.

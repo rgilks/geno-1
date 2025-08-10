@@ -8,7 +8,7 @@ use winit::{event::*, event_loop::EventLoop, window::WindowBuilder};
 use app_core::{
     z_offset_vec3, EngineParams, MusicEngine, VoiceConfig, Waveform, AEOLIAN, BASE_SCALE,
     C_MAJOR_PENTATONIC, DEFAULT_VOICE_COLORS, DEFAULT_VOICE_POSITIONS, DORIAN, IONIAN, LOCRIAN,
-    LYDIAN, MIXOLYDIAN, PICK_SPHERE_RADIUS, PHRYGIAN, SPREAD,
+    LYDIAN, MIXOLYDIAN, PHRYGIAN, PICK_SPHERE_RADIUS, SPREAD,
 };
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use glam::{Mat4, Vec3, Vec4};
@@ -544,8 +544,9 @@ fn main() {
                         // Randomize root+mode
                         KeyCode::KeyT => {
                             let roots: [i32; 7] = [60, 62, 64, 65, 67, 69, 71];
-                            let modes: [&'static [i32]; 7] =
-                                [IONIAN, DORIAN, PHRYGIAN, LYDIAN, MIXOLYDIAN, AEOLIAN, LOCRIAN];
+                            let modes: [&'static [i32]; 7] = [
+                                IONIAN, DORIAN, PHRYGIAN, LYDIAN, MIXOLYDIAN, AEOLIAN, LOCRIAN,
+                            ];
                             let ix = (Instant::now().elapsed().as_nanos() as u64) as usize;
                             eng.params.root_midi = roots[ix % roots.len()];
                             eng.params.scale = modes[(ix / 7) % modes.len()];
@@ -561,7 +562,11 @@ fn main() {
                 }
                 if tone_changed {
                     let eng = engine.lock().unwrap();
-                    log::info!("[keys] root={} mode_len={}", eng.params.root_midi, eng.params.scale.len());
+                    log::info!(
+                        "[keys] root={} mode_len={}",
+                        eng.params.root_midi,
+                        eng.params.scale.len()
+                    );
                 }
             }
             Event::WindowEvent {

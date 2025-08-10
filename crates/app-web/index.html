@@ -31,8 +31,8 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        background: rgba(2, 3, 8, 0.66);
-        backdrop-filter: blur(2px);
+        background: rgba(2, 3, 8, 0.25);
+        backdrop-filter: blur(6px) saturate(1.1);
         z-index: 10;
       }
       #start-content {
@@ -44,13 +44,58 @@
         color: #cfe7ff;
       }
       #start-keys {
-        color: #9bb;
-        font: 12px/1.4 monospace;
-        max-width: 560px;
-        background: rgba(20, 20, 30, 0.55);
-        padding: 10px 12px;
+        color: #cfe7ff;
+        font:
+          13px/1.55 system-ui,
+          -apple-system,
+          Segoe UI,
+          Roboto,
+          Ubuntu,
+          Cantarell,
+          Noto Sans,
+          Arial,
+          sans-serif;
+        max-width: 760px;
+        background: rgba(10, 14, 24, 0.7);
+        padding: 16px 18px;
         border: 1px solid rgba(80, 110, 150, 0.35);
-        border-radius: 8px;
+        border-radius: 10px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+        text-align: left;
+      }
+      #start-keys h3 {
+        margin: 0 0 8px 0;
+        font-size: 13px;
+        font-weight: 700;
+        color: #a9c6ff;
+        letter-spacing: 0.02em;
+        text-transform: uppercase;
+      }
+      #start-keys .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 8px 18px;
+      }
+      #start-keys ul {
+        list-style: none;
+        margin: 6px 0 10px 0;
+        padding: 0;
+        color: #9bb;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+      }
+      #start-keys li {
+        margin: 4px 0;
+      }
+      .kbd {
+        display: inline-block;
+        padding: 1px 6px;
+        border-radius: 6px;
+        border: 1px solid rgba(120, 150, 190, 0.35);
+        background: rgba(18, 24, 38, 0.8);
+        color: #cfe7ff;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
       }
       #start-btn {
         appearance: none;
@@ -96,11 +141,45 @@
       <div id="start-content">
         <button id="start-btn">Start</button>
         <div id="start-keys">
-          Click Start to begin<br />
-          Click canvas: play a note • Mouse position affects sound<br />
-          Keys: A..F (root) • 1..7 (mode) • R (new seq) • T (random key+mode) •
-          Space (pause) • ArrowLeft/Right (tempo) • ArrowUp/Down (volume) •
-          Enter (fullscreen) • Esc (exit)
+          <h3>Welcome</h3>
+          <ul>
+            <li>
+              Click <span class="kbd">Start</span>, then click the canvas to
+              play a note. Mouse position shapes the sound.
+            </li>
+          </ul>
+          <div class="grid">
+            <div>
+              <h3>Keys</h3>
+              <ul>
+                <li><span class="kbd">A..F</span>: set root note</li>
+                <li><span class="kbd">1..7</span>: set mode (see right)</li>
+                <li><span class="kbd">R</span>: new sequence</li>
+                <li><span class="kbd">T</span>: random root + mode</li>
+                <li><span class="kbd">Space</span>: pause/resume</li>
+                <li>
+                  <span class="kbd">Enter</span>/<span class="kbd">Esc</span>:
+                  full/exit screen
+                </li>
+                <li>
+                  <span class="kbd">←/→</span>: tempo •
+                  <span class="kbd">↑/↓</span>: volume
+                </li>
+              </ul>
+            </div>
+            <div>
+              <h3>Modes (1..7)</h3>
+              <ul>
+                <li><span class="kbd">1</span>: Ionian (major)</li>
+                <li><span class="kbd">2</span>: Dorian</li>
+                <li><span class="kbd">3</span>: Phrygian</li>
+                <li><span class="kbd">4</span>: Lydian</li>
+                <li><span class="kbd">5</span>: Mixolydian</li>
+                <li><span class="kbd">6</span>: Aeolian (natural minor)</li>
+                <li><span class="kbd">7</span>: Locrian</li>
+              </ul>
+            </div>
+          </div>
         </div>
       </div>
     </div>
