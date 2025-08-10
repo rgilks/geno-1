@@ -5,7 +5,7 @@ use app_core::{
     ENGINE_DRAG_MAX_RADIUS, IONIAN, LOCRIAN, LYDIAN, MIXOLYDIAN, PHRYGIAN, PICK_SPHERE_RADIUS,
     SCALE_PULSE_MULTIPLIER, SPREAD,
 };
-use glam::{Vec2, Vec3, Vec4};
+use glam::{Vec3, Vec4};
 use instant::Instant;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -83,38 +83,7 @@ fn sync_canvas_backing_size(canvas: &web::HtmlCanvasElement) {
     }
 }
 
-// Convert a pointer event's client coordinates to canvas backing pixel coordinates
-fn pointer_canvas_px(ev: &web::PointerEvent, canvas: &web::HtmlCanvasElement) -> Vec2 {
-    let rect = canvas.get_bounding_client_rect();
-    let x_css = ev.client_x() as f32 - rect.left() as f32;
-    let y_css = ev.client_y() as f32 - rect.top() as f32;
-    let sx = (x_css / rect.width() as f32) * canvas.width() as f32;
-    let sy = (y_css / rect.height() as f32) * canvas.height() as f32;
-    Vec2::new(sx, sy)
-}
-
-// Convert a pointer event's client coordinates to normalized canvas UV in [0,1]^2 (top-left origin)
-fn pointer_canvas_uv(ev: &web::PointerEvent, canvas: &web::HtmlCanvasElement) -> [f32; 2] {
-    let rect = canvas.get_bounding_client_rect();
-    let x_css = ev.client_x() as f32 - rect.left() as f32;
-    let y_css = ev.client_y() as f32 - rect.top() as f32;
-    let w = rect.width() as f32;
-    let h = rect.height() as f32;
-    if w > 0.0 && h > 0.0 {
-        let u = (x_css / w).clamp(0.0, 1.0);
-        let v = (y_css / h).clamp(0.0, 1.0);
-        [u, v]
-    } else {
-        [0.5, 0.5]
-    }
-}
-
-// Compute mouse UV from stored mouse state and canvas size (top-left origin)
-fn mouse_uv(canvas: &web::HtmlCanvasElement, mouse: &input::MouseState) -> [f32; 2] {
-    let w = canvas.width().max(1) as f32;
-    let h = canvas.height().max(1) as f32;
-    [(mouse.x / w).clamp(0.0, 1.0), (mouse.y / h).clamp(0.0, 1.0)]
-}
+// Pointer helpers moved to input.rs
 
 // Critically-damped (slightly underdamped) spring toward target UV
 fn step_inertial_swirl(
@@ -279,7 +248,7 @@ impl<'a> FrameContext<'a> {
 
             // Swirl input
             let ms = self.mouse.borrow();
-            let uv = mouse_uv(&self.canvas, &ms);
+            let uv = input::mouse_uv(&self.canvas, &ms);
             step_inertial_swirl(
                 &mut self.swirl_initialized,
                 &mut self.swirl_pos,
@@ -933,7 +902,7 @@ async fn init() -> anyhow::Result<()> {
                     let canvas_mouse = canvas_for_click_inner.clone();
                     let canvas_connected = canvas_mouse.is_connected();
                     let closure = Closure::wrap(Box::new(move |ev: web::PointerEvent| {
-                        let pos = pointer_canvas_px(&ev, &canvas_mouse);
+                        let pos = input::pointer_canvas_px(&ev, &canvas_mouse);
                         // For CI/headless environments without real mouse, synthesize hover over center
                         if !canvas_connected {
                             return;
@@ -1094,7 +1063,7 @@ async fn init() -> anyhow::Result<()> {
                             }
                         } else {
                             // Background click: synth one-shot via WebAudio and request a ripple
-                            let [uvx, uvy] = pointer_canvas_uv(&ev, &canvas_click);
+                            let [uvx, uvy] = input::pointer_canvas_uv(&ev, &canvas_click);
                             if uvx.is_finite() && uvy.is_finite() {
                                 let midi = 60.0 + uvx * 24.0;
                                 let freq = midi_to_hz(midi as f32);

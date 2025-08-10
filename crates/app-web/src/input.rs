@@ -1,4 +1,5 @@
-use glam::Vec3;
+use glam::{Vec2, Vec3};
+use web_sys as web;
 
 #[derive(Default, Clone, Copy)]
 pub struct MouseState {
@@ -23,4 +24,38 @@ pub fn ray_sphere(ray_origin: Vec3, ray_dir: Vec3, center: Vec3, radius: f32) ->
     }
     let t = -b - disc.sqrt();
     (t >= 0.0).then_some(t)
+}
+
+// ---------------- Pointer helpers (moved from lib.rs) ----------------
+#[inline]
+pub fn pointer_canvas_px(ev: &web::PointerEvent, canvas: &web::HtmlCanvasElement) -> Vec2 {
+    let rect = canvas.get_bounding_client_rect();
+    let x_css = ev.client_x() as f32 - rect.left() as f32;
+    let y_css = ev.client_y() as f32 - rect.top() as f32;
+    let sx = (x_css / rect.width() as f32) * canvas.width() as f32;
+    let sy = (y_css / rect.height() as f32) * canvas.height() as f32;
+    Vec2::new(sx, sy)
+}
+
+#[inline]
+pub fn pointer_canvas_uv(ev: &web::PointerEvent, canvas: &web::HtmlCanvasElement) -> [f32; 2] {
+    let rect = canvas.get_bounding_client_rect();
+    let x_css = ev.client_x() as f32 - rect.left() as f32;
+    let y_css = ev.client_y() as f32 - rect.top() as f32;
+    let w = rect.width() as f32;
+    let h = rect.height() as f32;
+    if w > 0.0 && h > 0.0 {
+        let u = (x_css / w).clamp(0.0, 1.0);
+        let v = (y_css / h).clamp(0.0, 1.0);
+        [u, v]
+    } else {
+        [0.5, 0.5]
+    }
+}
+
+#[inline]
+pub fn mouse_uv(canvas: &web::HtmlCanvasElement, mouse: &MouseState) -> [f32; 2] {
+    let w = canvas.width().max(1) as f32;
+    let h = canvas.height().max(1) as f32;
+    [(mouse.x / w).clamp(0.0, 1.0), (mouse.y / h).clamp(0.0, 1.0)]
 }
