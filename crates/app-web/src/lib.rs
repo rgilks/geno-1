@@ -50,26 +50,7 @@ async fn init() -> anyhow::Result<()> {
         .dyn_into::<web::HtmlCanvasElement>()
         .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
 
-    // 'h' brings back the initial start overlay
-    {
-        let window = web::window().unwrap();
-        let document = document.clone();
-        let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
-            let key = ev.key();
-            if key == "h" || key == "H" {
-                if let Some(overlay) = document.get_element_by_id("start-overlay") {
-                    let _ = overlay.set_attribute("style", "");
-                }
-                ev.prevent_default();
-            }
-        }) as Box<dyn FnMut(_)>);
-        window
-            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
-            .ok();
-        closure.forget();
-    }
-
-    // Note: start overlay is re-shown with 'h'.
+    // Note: start overlay is handled below (toggle with 'h') once audio is initialized.
 
     // Avoid grabbing a 2D context here to allow WebGPU to acquire the canvas
 
@@ -173,6 +154,8 @@ async fn init() -> anyhow::Result<()> {
 
                 // Pause state (stops scheduling new notes but keeps rendering). Start paused until overlay OK/Close.
                 let paused = Rc::new(RefCell::new(true));
+                // Overlay element reference (style toggled on 'H')
+                let overlay_el = document.get_element_by_id("start-overlay");
 
                 // Wire OK / Close to hide overlay and start scheduling (unpause) + resume AudioContext
                 if let Some(doc2) = web::window().and_then(|w| w.document()) {
@@ -216,6 +199,34 @@ async fn init() -> anyhow::Result<()> {
                         );
                         closure.forget();
                     }
+                }
+
+                // 'H' toggles the overlay visibility
+                {
+                    let window = web::window().unwrap();
+                    let paused_for_h = paused.clone();
+                    let overlay_for_h = overlay_el.clone();
+                    let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
+                        let key = ev.key();
+                        if key == "h" || key == "H" {
+                            if let Some(el) = overlay_for_h.as_ref() {
+                                let current = el.get_attribute("style").unwrap_or_default();
+                                let hide = !current.is_empty() && current.contains("display:none");
+                                if hide {
+                                    let _ = el.set_attribute("style", "");
+                                } else {
+                                    let _ = el.set_attribute("style", "display:none");
+                                }
+                            }
+                            // If user is bringing up the overlay, we don't change paused.
+                            // If closing via 'H', keep current paused state.
+                            ev.prevent_default();
+                        }
+                    }) as Box<dyn FnMut(_)>);
+                    window
+                        .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
+                        .ok();
+                    closure.forget();
                 }
 
                 // Master mix bus -> destination
