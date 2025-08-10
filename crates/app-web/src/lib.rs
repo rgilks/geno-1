@@ -20,6 +20,7 @@ mod audio;
 mod input;
 mod overlay;
 mod render;
+mod frame;
 // ui module removed; overlay is controlled directly from here
 
 // Rendering/picking shared constants to keep math consistent
@@ -1075,11 +1076,11 @@ async fn init() -> anyhow::Result<()> {
                                     .iter()
                                     .map(|v| (v.position.x / 3.0).clamp(-1.0, 1.0) * 0.5 + 0.5)
                                     .collect();
-                                let best_i = nearest_index_by_uvx(&norm_xs, uvx);
-                                let dur = 0.35 + 0.25 * (1.0 - uvy as f64);
+                                let best_i = input::nearest_index_by_uvx(&norm_xs, uvx);
+                                        let dur = 0.35 + 0.25 * (1.0 - uvy as f64);
                                 let wf = eng.configs[best_i].waveform;
                                 drop(eng);
-                                trigger_one_shot(
+                                audio::trigger_one_shot(
                                     &audio_ctx_click,
                                     wf,
                                     freq,
@@ -1107,7 +1108,7 @@ async fn init() -> anyhow::Result<()> {
                 }
 
                 // Scheduler + renderer loop driven by requestAnimationFrame
-                let frame_ctx = Rc::new(RefCell::new(FrameContext {
+                let frame_ctx = Rc::new(RefCell::new(frame::FrameContext {
                     engine: engine.clone(),
                     paused: paused.clone(),
                     pulses: pulses.clone(),

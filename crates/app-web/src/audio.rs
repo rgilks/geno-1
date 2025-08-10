@@ -1,4 +1,5 @@
 use web_sys as web;
+use app_core::Waveform;
 
 pub struct FxBuses {
     pub master_gain: web::GainNode,
@@ -144,4 +145,41 @@ pub fn build_fx_buses(audio_ctx: &web::AudioContext) -> Result<FxBuses, ()> {
         delay_feedback,
         delay_wet,
     })
+}
+
+// Fire a simple one-shot oscillator routed through a voice's gain and sends
+pub fn trigger_one_shot(
+    audio_ctx: &web::AudioContext,
+    waveform: Waveform,
+    frequency_hz: f32,
+    velocity: f32,
+    duration_sec: f64,
+    voice_gain: &web::GainNode,
+    delay_send: &web::GainNode,
+    reverb_send: &web::GainNode,
+) {
+    if let Ok(src) = web::OscillatorNode::new(audio_ctx) {
+        match waveform {
+            Waveform::Sine => src.set_type(web::OscillatorType::Sine),
+            Waveform::Square => src.set_type(web::OscillatorType::Square),
+            Waveform::Saw => src.set_type(web::OscillatorType::Sawtooth),
+            Waveform::Triangle => src.set_type(web::OscillatorType::Triangle),
+        }
+        src.frequency().set_value(frequency_hz);
+        if let Ok(g) = web::GainNode::new(audio_ctx) {
+            g.gain().set_value(0.0);
+            let now = audio_ctx.current_time();
+            let t0 = now + 0.005;
+            let _ = g.gain().linear_ramp_to_value_at_time(velocity, t0 + 0.02);
+            let _ = g
+                .gain()
+                .linear_ramp_to_value_at_time(0.0, t0 + duration_sec);
+            let _ = src.connect_with_audio_node(&g);
+            let _ = g.connect_with_audio_node(voice_gain);
+            let _ = g.connect_with_audio_node(delay_send);
+            let _ = g.connect_with_audio_node(reverb_send);
+            let _ = src.start_with_when(t0);
+            let _ = src.stop_with_when(t0 + duration_sec + 0.05);
+        }
+    }
 }

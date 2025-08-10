@@ -59,3 +59,18 @@ pub fn mouse_uv(canvas: &web::HtmlCanvasElement, mouse: &MouseState) -> [f32; 2]
     let h = canvas.height().max(1) as f32;
     [(mouse.x / w).clamp(0.0, 1.0), (mouse.y / h).clamp(0.0, 1.0)]
 }
+
+// ---------------- Selection helpers ----------------
+#[inline]
+pub fn nearest_index_by_uvx(normalized_voice_xs: &[f32], uvx: f32) -> usize {
+    let mut best_i = 0usize;
+    let mut best_dx = f32::MAX;
+    for (i, vx) in normalized_voice_xs.iter().enumerate() {
+        let dx = (uvx - *vx).abs();
+        if dx < best_dx {
+            best_dx = dx;
+            best_i = i;
+        }
+    }
+    best_i
+}
