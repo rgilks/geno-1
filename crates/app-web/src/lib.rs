@@ -199,6 +199,20 @@ fn handle_global_keydown(
     }
 }
 
+// Create a GainNode with an initial value; logs on failure and returns None
+fn create_gain(audio_ctx: &web::AudioContext, value: f32, label: &str) -> Option<web::GainNode> {
+    match web::GainNode::new(audio_ctx) {
+        Ok(g) => {
+            g.gain().set_value(value);
+            Some(g)
+        }
+        Err(e) => {
+            log::error!("{} GainNode error: {:?}", label, e);
+            None
+        }
+    }
+}
+
 // (use overlay::hide instead of local helper)
 
 #[wasm_bindgen(start)]
@@ -373,24 +387,15 @@ async fn init() -> anyhow::Result<()> {
                 }
 
                 // Master mix bus -> destination
-                let master_gain = match web::GainNode::new(&audio_ctx) {
-                    Ok(g) => g,
-                    Err(e) => {
-                        log::error!("Master GainNode error: {:?}", e);
-                        return;
-                    }
+                let master_gain = match create_gain(&audio_ctx, 0.25, "Master") {
+                    Some(g) => g,
+                    None => return,
                 };
-                // Start very quiet by default (user can raise with ArrowUp)
-                master_gain.gain().set_value(0.25);
                 // Subtle master saturation (arctan) with wet/dry mix
-                let sat_pre = match web::GainNode::new(&audio_ctx) {
-                    Ok(g) => g,
-                    Err(e) => {
-                        log::error!("sat pre GainNode error: {:?}", e);
-                        return;
-                    }
+                let sat_pre = match create_gain(&audio_ctx, 0.9, "sat pre") {
+                    Some(g) => g,
+                    None => return,
                 };
-                sat_pre.gain().set_value(0.9);
 
                 #[allow(deprecated)]
                 let saturator = match web::WaveShaperNode::new(&audio_ctx) {
@@ -408,23 +413,15 @@ async fn init() -> anyhow::Result<()> {
                 #[allow(deprecated)]
                 saturator.set_curve(Some(curve.as_mut_slice()));
 
-                let sat_wet = match web::GainNode::new(&audio_ctx) {
-                    Ok(g) => g,
-                    Err(e) => {
-                        log::error!("sat wet GainNode error: {:?}", e);
-                        return;
-                    }
+                let sat_wet = match create_gain(&audio_ctx, 0.35, "sat wet") {
+                    Some(g) => g,
+                    None => return,
                 };
-                sat_wet.gain().set_value(0.35);
 
-                let sat_dry = match web::GainNode::new(&audio_ctx) {
-                    Ok(g) => g,
-                    Err(e) => {
-                        log::error!("sat dry GainNode error: {:?}", e);
-                        return;
-                    }
+                let sat_dry = match create_gain(&audio_ctx, 0.65, "sat dry") {
+                    Some(g) => g,
+                    None => return,
                 };
-                sat_dry.gain().set_value(0.65);
 
                 // Route master -> [dry,dst] and master -> pre -> shaper -> wet -> dst
                 let _ = master_gain.connect_with_audio_node(&sat_pre);
@@ -436,14 +433,10 @@ async fn init() -> anyhow::Result<()> {
 
                 // Global lush reverb (Convolver) and tempo-synced dark delay bus
                 // Reverb input and wet level
-                let reverb_in = match web::GainNode::new(&audio_ctx) {
-                    Ok(g) => g,
-                    Err(e) => {
-                        log::error!("Reverb in GainNode error: {:?}", e);
-                        return;
-                    }
+                let reverb_in = match create_gain(&audio_ctx, 1.0, "Reverb in") {
+                    Some(g) => g,
+                    None => return,
                 };
-                reverb_in.gain().set_value(1.0);
                 let reverb = match web::ConvolverNode::new(&audio_ctx) {
                     Ok(n) => n,
                     Err(e) => {
@@ -485,27 +478,19 @@ async fn init() -> anyhow::Result<()> {
                         reverb.set_buffer(Some(&ir));
                     }
                 }
-                let reverb_wet = match web::GainNode::new(&audio_ctx) {
-                    Ok(g) => g,
-                    Err(e) => {
-                        log::error!("Reverb wet GainNode error: {:?}", e);
-                        return;
-                    }
+                let reverb_wet = match create_gain(&audio_ctx, 0.6, "Reverb wet") {
+                    Some(g) => g,
+                    None => return,
                 };
-                reverb_wet.gain().set_value(0.6);
                 let _ = reverb_in.connect_with_audio_node(&reverb);
                 let _ = reverb.connect_with_audio_node(&reverb_wet);
                 let _ = reverb_wet.connect_with_audio_node(&master_gain);
 
                 // Delay bus with feedback loop and lowpass tone for darkness
-                let delay_in = match web::GainNode::new(&audio_ctx) {
-                    Ok(g) => g,
-                    Err(e) => {
-                        log::error!("Delay in GainNode error: {:?}", e);
-                        return;
-                    }
+                let delay_in = match create_gain(&audio_ctx, 1.0, "Delay in") {
+                    Some(g) => g,
+                    None => return,
                 };
-                delay_in.gain().set_value(1.0);
                 let delay = match audio_ctx.create_delay_with_max_delay_time(3.0) {
                     Ok(n) => n,
                     Err(e) => {
@@ -524,22 +509,14 @@ async fn init() -> anyhow::Result<()> {
                 };
                 delay_tone.set_type(web::BiquadFilterType::Lowpass);
                 delay_tone.frequency().set_value(1400.0);
-                let delay_feedback = match web::GainNode::new(&audio_ctx) {
-                    Ok(g) => g,
-                    Err(e) => {
-                        log::error!("Delay feedback GainNode error: {:?}", e);
-                        return;
-                    }
+                let delay_feedback = match create_gain(&audio_ctx, 0.6, "Delay feedback") {
+                    Some(g) => g,
+                    None => return,
                 };
-                delay_feedback.gain().set_value(0.6);
-                let delay_wet = match web::GainNode::new(&audio_ctx) {
-                    Ok(g) => g,
-                    Err(e) => {
-                        log::error!("Delay wet GainNode error: {:?}", e);
-                        return;
-                    }
+                let delay_wet = match create_gain(&audio_ctx, 0.5, "Delay wet") {
+                    Some(g) => g,
+                    None => return,
                 };
-                delay_wet.gain().set_value(0.5);
                 let _ = delay_in.connect_with_audio_node(&delay);
                 let _ = delay.connect_with_audio_node(&delay_tone);
                 let _ = delay_tone.connect_with_audio_node(&delay_feedback);
@@ -570,15 +547,11 @@ async fn init() -> anyhow::Result<()> {
                     panner.position_y().set_value(pos.y as f32);
                     panner.position_z().set_value(pos.z as f32);
 
-                    let gain = match web::GainNode::new(&audio_ctx) {
-                        Ok(g) => g,
-                        Err(e) => {
-                            log::error!("GainNode error: {:?}", e);
-                            return;
-                        }
-                    };
                     // Start muted; we will allow toggling via 'M' key
-                    gain.gain().set_value(0.0);
+                    let gain = match create_gain(&audio_ctx, 0.0, "Voice gain") {
+                        Some(g) => g,
+                        None => return,
+                    };
                     if let Err(e) = gain.connect_with_audio_node(&panner) {
                         log::error!("connect error: {:?}", e);
                         return;
@@ -588,24 +561,16 @@ async fn init() -> anyhow::Result<()> {
                         return;
                     }
                     // Per-voice sends
-                    let d_send = match web::GainNode::new(&audio_ctx) {
-                        Ok(g) => g,
-                        Err(e) => {
-                            log::error!("Delay send GainNode error: {:?}", e);
-                            return;
-                        }
+                    let d_send = match create_gain(&audio_ctx, 0.4, "Delay send") {
+                        Some(g) => g,
+                        None => return,
                     };
-                    d_send.gain().set_value(0.4);
                     let _ = d_send.connect_with_audio_node(&delay_in);
                     delay_sends_vec.push(d_send);
-                    let r_send = match web::GainNode::new(&audio_ctx) {
-                        Ok(g) => g,
-                        Err(e) => {
-                            log::error!("Reverb send GainNode error: {:?}", e);
-                            return;
-                        }
+                    let r_send = match create_gain(&audio_ctx, 0.65, "Reverb send") {
+                        Some(g) => g,
+                        None => return,
                     };
-                    r_send.gain().set_value(0.65);
                     let _ = r_send.connect_with_audio_node(&reverb_in);
                     reverb_sends_vec.push(r_send);
                     voice_gains.push(gain);
