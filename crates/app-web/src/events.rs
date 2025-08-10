@@ -1,9 +1,9 @@
 use crate::dom;
+use app_core::MusicEngine;
 use app_core::{AEOLIAN, DORIAN, IONIAN, LOCRIAN, LYDIAN, MIXOLYDIAN, PHRYGIAN};
-use web_sys as web;
 use std::cell::RefCell;
 use std::rc::Rc;
-use app_core::MusicEngine;
+use web_sys as web;
 
 #[inline]
 pub fn root_midi_for_key(key: &str) -> Option<i32> {
@@ -58,7 +58,9 @@ pub fn handle_global_keydown(
         }
         "t" | "T" => {
             let roots: [i32; 7] = [60, 62, 64, 65, 67, 69, 71];
-            let modes: [&'static [i32]; 7] = [IONIAN, DORIAN, PHRYGIAN, LYDIAN, MIXOLYDIAN, AEOLIAN, LOCRIAN];
+            let modes: [&'static [i32]; 7] = [
+                IONIAN, DORIAN, PHRYGIAN, LYDIAN, MIXOLYDIAN, AEOLIAN, LOCRIAN,
+            ];
             let ri = (js_sys::Math::random() * roots.len() as f64).floor() as usize;
             let mi = (js_sys::Math::random() * modes.len() as f64).floor() as usize;
             let mut eng = engine.borrow_mut();
@@ -117,5 +119,3 @@ pub fn handle_global_keydown(
         _ => {}
     }
 }
-
-

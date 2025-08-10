@@ -1,4 +1,5 @@
 use web_sys as web;
+use wasm_bindgen::JsCast;
 
 #[inline]
 pub fn window_document() -> Option<web::Document> {
@@ -12,7 +13,8 @@ pub fn add_click_listener(
     mut handler: impl FnMut() + 'static,
 ) {
     if let Some(el) = document.get_element_by_id(element_id) {
-        let closure = wasm_bindgen::closure::Closure::wrap(Box::new(move || handler()) as Box<dyn FnMut()>);
+        let closure =
+            wasm_bindgen::closure::Closure::wrap(Box::new(move || handler()) as Box<dyn FnMut()>);
         let _ = el.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
         closure.forget();
     }
@@ -28,5 +30,3 @@ pub fn sync_canvas_backing_size(canvas: &web::HtmlCanvasElement) {
         canvas.set_height(h_px.max(1));
     }
 }
-
-

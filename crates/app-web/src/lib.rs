@@ -17,10 +17,10 @@ use web_sys as web;
 // (DeviceExt no longer needed; legacy vertex buffers removed)
 
 mod audio;
-mod frame;
-mod input;
 mod dom;
 mod events;
+mod frame;
+mod input;
 mod overlay;
 mod render;
 // ui module removed; overlay is controlled directly from here
@@ -687,8 +687,6 @@ async fn init() -> anyhow::Result<()> {
                 let pulses = Rc::new(RefCell::new(vec![0.0_f32; engine.borrow().voices.len()]));
                 let (analyser, analyser_buf) = audio::create_analyser(&audio_ctx);
 
-                let voice_gains = Rc::new(voice_gains);
-
                 // Queued ripple UV from pointer taps (read by render tick)
                 let queued_ripple_uv: Rc<RefCell<Option<[f32; 2]>>> = Rc::new(RefCell::new(None));
 
@@ -796,7 +794,13 @@ async fn init() -> anyhow::Result<()> {
                     let master_gain_k = master_gain.clone();
                     let window = web::window().unwrap();
                     let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
-                        events::handle_global_keydown(&ev, &engine_k, &paused_k, &master_gain_k, &canvas_k);
+                        events::handle_global_keydown(
+                            &ev,
+                            &engine_k,
+                            &paused_k,
+                            &master_gain_k,
+                            &canvas_k,
+                        );
                     }) as Box<dyn FnMut(_)>);
                     window
                         .add_event_listener_with_callback(
