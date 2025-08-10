@@ -1,8 +1,7 @@
 #![cfg(target_arch = "wasm32")]
 use app_core::{
-    midi_to_hz, z_offset_vec3, EngineParams, MusicEngine, VoiceConfig, Waveform, BASE_SCALE,
-    C_MAJOR_PENTATONIC, DEFAULT_VOICE_COLORS, DEFAULT_VOICE_POSITIONS, ENGINE_DRAG_MAX_RADIUS,
-    PICK_SPHERE_RADIUS, SCALE_PULSE_MULTIPLIER, SPREAD,
+    EngineParams, MusicEngine, VoiceConfig, Waveform, C_MAJOR_PENTATONIC, DEFAULT_VOICE_COLORS,
+    DEFAULT_VOICE_POSITIONS,
 };
 use glam::Vec3;
 use instant::Instant;
@@ -238,97 +237,6 @@ async fn init() -> anyhow::Result<()> {
                 let mouse_state = Rc::new(RefCell::new(input::MouseState::default()));
                 let hover_index = Rc::new(RefCell::new(None::<usize>));
                 let drag_state = Rc::new(RefCell::new(input::DragState::default()));
-
-                // Screen -> canvas coords inline helper
-
-                // Mouse move: hover + drag
-                {
-                    let mouse_state_m = mouse_state.clone();
-                    let hover_m = hover_index.clone();
-                    let drag_m = drag_state.clone();
-                    let engine_m = engine.clone();
-                    let canvas_mouse = canvas_for_click_inner.clone();
-                    let canvas_connected = canvas_mouse.is_connected();
-                    let closure = Closure::wrap(Box::new(move |ev: web::PointerEvent| {
-                        let pos = input::pointer_canvas_px(&ev, &canvas_mouse);
-                        // For CI/headless environments without real mouse, synthesize hover over center
-                        if !canvas_connected {
-                            return;
-                        }
-                        {
-                            // Store pointer position; render() converts to uv for swirl uniforms
-                            let mut ms = mouse_state_m.borrow_mut();
-                            ms.x = pos.x;
-                            ms.y = pos.y;
-                        }
-                        // Compute hover or drag update
-                        let (ro, rd) =
-                            render::screen_to_world_ray(&canvas_mouse, pos.x, pos.y, CAMERA_Z);
-                        let mut best = None::<(usize, f32)>;
-                        let spread = SPREAD;
-                        let z_offset = z_offset_vec3();
-                        for (i, v) in engine_m.borrow().voices.iter().enumerate() {
-                            let center_world = v.position * spread + z_offset;
-                            if let Some(t) =
-                                input::ray_sphere(ro, rd, center_world, PICK_SPHERE_RADIUS)
-                            {
-                                if t >= 0.0 {
-                                    match best {
-                                        Some((_, bt)) if t >= bt => {}
-                                        _ => best = Some((i, t)),
-                                    }
-                                }
-                            }
-                        }
-                        if drag_m.borrow().active {
-                            // Drag on plane z = constant (locked at mousedown)
-                            let plane_z = drag_m.borrow().plane_z_world;
-                            if rd.z.abs() > 1e-6 {
-                                let t = (plane_z - ro.z) / rd.z;
-                                if t >= 0.0 {
-                                    let hit_world = ro + rd * t;
-                                    let mut eng_pos = (hit_world - z_offset_vec3()) / SPREAD;
-                                    // Clamp drag radius to avoid losing objects
-                                    let max_r = ENGINE_DRAG_MAX_RADIUS; // engine-space radius
-                                    let len =
-                                        (eng_pos.x * eng_pos.x + eng_pos.z * eng_pos.z).sqrt();
-                                    if len > max_r {
-                                        let scale = max_r / len;
-                                        eng_pos.x *= scale;
-                                        eng_pos.z *= scale;
-                                    }
-                                    let mut eng = engine_m.borrow_mut();
-                                    let vi = drag_m.borrow().voice;
-                                    eng.set_voice_position(
-                                        vi,
-                                        Vec3::new(eng_pos.x, 0.0, eng_pos.z),
-                                    );
-                                    // noisy drag debug log removed
-                                }
-                            } else {
-                                // noisy drag-parallel debug log removed
-                            }
-                            // While dragging, boost swirl strength (used during render)
-                        } else {
-                            match best {
-                                Some((i, _t)) => {
-                                    *hover_m.borrow_mut() = Some(i);
-                                }
-                                None => {
-                                    *hover_m.borrow_mut() = None;
-                                }
-                            }
-                        }
-                    }) as Box<dyn FnMut(_)>);
-                    if let Some(w) = web::window() {
-                        w.add_event_listener_with_callback(
-                            "pointermove",
-                            closure.as_ref().unchecked_ref(),
-                        )
-                        .ok();
-                    }
-                    closure.forget();
-                }
 
                 // Keyboard controls
                 events::wire_global_keydown(

@@ -124,6 +124,9 @@ Desktop UI support has been removed to simplify the project and focus on the web
 - [ ] app-web: extract WebGPU pipeline builders
   - Rationale: deduplicate pipeline/buffer setup for waves/post passes
   - Plan: create `pipeline.rs` helpers returning typed bundles; no functional changes
+ - [x] app-web: deduplicate pointer event wiring
+   - Rationale: avoid drift by handling `pointermove`/drag/hover in one place (`events::wire_input_handlers`)
+   - Impact: removed duplicate handler from `lib.rs`; behavior unchanged
 
 ### Testing Enhancements
 

@@ -9,7 +9,7 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys as web;
 
-const CAMERA_Z: f32 = 6.0;
+const CAMERA_Z: f32 = 6.0; // keep for local readability; matches crate-level value
 
 pub struct FrameContext<'a> {
     pub engine: Rc<RefCell<MusicEngine>>,
@@ -73,23 +73,7 @@ impl<'a> FrameContext<'a> {
                         (self.pulse_energy[ev.voice_index] + ev.velocity as f32).min(1.8);
                 }
             }
-            let energy_decay = (-dt_sec * 1.6).exp();
-            for i in 0..n {
-                self.pulse_energy[i] *= energy_decay;
-            }
-            let tau_up = 0.10_f32;
-            let tau_down = 0.45_f32;
-            let alpha_up = 1.0 - (-dt_sec / tau_up).exp();
-            let alpha_down = 1.0 - (-dt_sec / tau_down).exp();
-            for i in 0..n {
-                let target = self.pulse_energy[i].clamp(0.0, 1.5);
-                let alpha = if target > pulses[i] {
-                    alpha_up
-                } else {
-                    alpha_down
-                };
-                pulses[i] += (target - pulses[i]) * alpha;
-            }
+            smooth_pulses(&mut pulses, &mut self.pulse_energy, dt_sec);
 
             // Swirl input
             let ms = self.mouse.borrow();
@@ -287,6 +271,28 @@ impl<'a> FrameContext<'a> {
                 let _ = src.stop_with_when(t0 + ev.duration_sec as f64 + 0.02);
             }
         }
+    }
+}
+
+#[inline]
+fn smooth_pulses(pulses: &mut [f32], pulse_energy: &mut [f32; 3], dt_sec: f32) {
+    let n = pulses.len().min(3);
+    let energy_decay = (-dt_sec * 1.6).exp();
+    for i in 0..n {
+        pulse_energy[i] *= energy_decay;
+    }
+    let tau_up = 0.10_f32;
+    let tau_down = 0.45_f32;
+    let alpha_up = 1.0 - (-dt_sec / tau_up).exp();
+    let alpha_down = 1.0 - (-dt_sec / tau_down).exp();
+    for i in 0..n {
+        let target = pulse_energy[i].clamp(0.0, 1.5);
+        let alpha = if target > pulses[i] {
+            alpha_up
+        } else {
+            alpha_down
+        };
+        pulses[i] += (target - pulses[i]) * alpha;
     }
 }
 
