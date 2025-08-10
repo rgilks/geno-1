@@ -19,6 +19,8 @@ use web_sys as web;
 mod audio;
 mod frame;
 mod input;
+mod dom;
+mod events;
 mod overlay;
 mod render;
 // ui module removed; overlay is controlled directly from here
@@ -27,62 +29,7 @@ mod render;
 const CAMERA_Z: f32 = 6.0;
 const ANALYSER_FFT_SIZE: u32 = 256;
 
-// Small helper to attach a click listener to an element by id
-fn add_click_listener(
-    document: &web::Document,
-    element_id: &str,
-    mut handler: impl FnMut() + 'static,
-) {
-    if let Some(el) = document.get_element_by_id(element_id) {
-        let closure = Closure::wrap(Box::new(move || handler()) as Box<dyn FnMut()>);
-        let _ = el.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
-        closure.forget();
-    }
-}
-
-#[inline]
-fn window_document() -> Option<web::Document> {
-    web::window().and_then(|w| w.document())
-}
-
-#[inline]
-fn root_midi_for_key(key: &str) -> Option<i32> {
-    match key {
-        "a" | "A" => Some(69),
-        "b" | "B" => Some(71),
-        "c" | "C" => Some(60),
-        "d" | "D" => Some(62),
-        "e" | "E" => Some(64),
-        "f" | "F" => Some(65),
-        _ => None,
-    }
-}
-
-#[inline]
-fn mode_scale_for_digit(key: &str) -> Option<&'static [i32]> {
-    match key {
-        "1" => Some(IONIAN),
-        "2" => Some(DORIAN),
-        "3" => Some(PHRYGIAN),
-        "4" => Some(LYDIAN),
-        "5" => Some(MIXOLYDIAN),
-        "6" => Some(AEOLIAN),
-        "7" => Some(LOCRIAN),
-        _ => None,
-    }
-}
-
-// Keep canvas internal pixel size in sync with its CSS size * devicePixelRatio
-fn sync_canvas_backing_size(canvas: &web::HtmlCanvasElement) {
-    if let Some(w) = web::window() {
-        let dpr = w.device_pixel_ratio();
-        let rect = canvas.get_bounding_client_rect();
-        let w_px = (rect.width() * dpr) as u32;
-        let h_px = (rect.height() * dpr) as u32;
-        canvas.set_width(w_px.max(1));
-        canvas.set_height(h_px.max(1));
-    }
-}
+// helpers moved to dom.rs and events.rs
 
 // Pointer helpers moved to input.rs
 
@@ -499,102 +446,7 @@ fn trigger_one_shot(
 
 // analyser creation moved to audio::create_analyser
 
-// Handle global keydown logic centrally (no behavior changes)
-fn handle_global_keydown(
-    ev: &web::KeyboardEvent,
-    engine: &Rc<RefCell<MusicEngine>>,
-    paused: &Rc<RefCell<bool>>,
-    master_gain: &web::GainNode,
-    canvas: &web::HtmlCanvasElement,
-) {
-    let key = ev.key();
-    if let Some(midi) = root_midi_for_key(&key) {
-        engine.borrow_mut().params.root_midi = midi;
-        return;
-    }
-    if let Some(scale) = mode_scale_for_digit(&key) {
-        engine.borrow_mut().params.scale = scale;
-        return;
-    }
-    match key.as_str() {
-        // Reseed all voices
-        "r" | "R" => {
-            let voice_len = engine.borrow().voices.len();
-            let mut eng = engine.borrow_mut();
-            for i in 0..voice_len {
-                eng.reseed_voice(i, None);
-            }
-        }
-        // Randomize tonality (root + mode)
-        "t" | "T" => {
-            let roots: [i32; 7] = [60, 62, 64, 65, 67, 69, 71];
-            let modes: [&'static [i32]; 7] = [
-                IONIAN, DORIAN, PHRYGIAN, LYDIAN, MIXOLYDIAN, AEOLIAN, LOCRIAN,
-            ];
-            let ri = (js_sys::Math::random() * roots.len() as f64).floor() as usize;
-            let mi = (js_sys::Math::random() * modes.len() as f64).floor() as usize;
-            let mut eng = engine.borrow_mut();
-            eng.params.root_midi = roots[ri];
-            eng.params.scale = modes[mi];
-        }
-        // Pause/resume
-        " " => {
-            let mut p = paused.borrow_mut();
-            *p = !*p;
-            ev.prevent_default();
-        }
-        // Increase BPM
-        "ArrowRight" | "+" | "=" => {
-            let mut eng = engine.borrow_mut();
-            let new_bpm = (eng.params.bpm + 5.0).min(240.0);
-            eng.set_bpm(new_bpm);
-        }
-        // Decrease BPM
-        "ArrowLeft" | "-" | "_" => {
-            let mut eng = engine.borrow_mut();
-            let new_bpm = (eng.params.bpm - 5.0).max(40.0);
-            eng.set_bpm(new_bpm);
-        }
-        // Fullscreen toggle
-        "Enter" => {
-            if let Some(win) = web::window() {
-                if let Some(doc) = win.document() {
-                    if doc.fullscreen_element().is_some() {
-                        let _ = doc.exit_fullscreen();
-                    } else {
-                        let _ = canvas.request_fullscreen();
-                    }
-                }
-            }
-            ev.prevent_default();
-        }
-        // Exit fullscreen
-        "Escape" => {
-            if let Some(win) = web::window() {
-                if let Some(doc) = win.document() {
-                    let _ = doc.exit_fullscreen();
-                }
-            }
-        }
-        _ => {}
-    }
-    // Master volume on arrow keys (separate so we can prevent default only here)
-    match key.as_str() {
-        "ArrowUp" => {
-            let v = master_gain.gain().value();
-            let nv = (v + 0.05).min(1.0);
-            let _ = master_gain.gain().set_value(nv);
-            ev.prevent_default();
-        }
-        "ArrowDown" => {
-            let v = master_gain.gain().value();
-            let nv = (v - 0.05).max(0.0);
-            let _ = master_gain.gain().set_value(nv);
-            ev.prevent_default();
-        }
-        _ => {}
-    }
-}
+// global keydown moved to events.rs
 
 // Create a GainNode with an initial value; logs on failure and returns None
 fn create_gain(audio_ctx: &web::AudioContext, value: f32, label: &str) -> Option<web::GainNode> {
@@ -645,11 +497,11 @@ async fn init() -> anyhow::Result<()> {
 
     // Maintain canvas internal pixel size to match CSS size * devicePixelRatio
     {
-        sync_canvas_backing_size(&canvas);
+        dom::sync_canvas_backing_size(&canvas);
         // Listen for window resize and update canvas backing size
         let canvas_resize = canvas.clone();
         let resize_closure = Closure::wrap(Box::new(move || {
-            sync_canvas_backing_size(&canvas_resize);
+            dom::sync_canvas_backing_size(&canvas_resize);
         }) as Box<dyn FnMut()>);
         if let Some(window) = web::window() {
             let _ = window.add_event_listener_with_callback(
@@ -735,10 +587,10 @@ async fn init() -> anyhow::Result<()> {
                 let paused = Rc::new(RefCell::new(true));
 
                 // Wire OK / Close to hide overlay and start scheduling (unpause) + resume AudioContext
-                if let Some(doc2) = window_document() {
+                if let Some(doc2) = dom::window_document() {
                     let paused_ok = paused.clone();
                     let audio_ok = audio_ctx.clone();
-                    add_click_listener(&doc2, "overlay-ok", move || {
+                    dom::add_click_listener(&doc2, "overlay-ok", move || {
                         *paused_ok.borrow_mut() = false;
                         let _ = audio_ok.resume();
                         if let Some(w2) = web::window() {
@@ -750,7 +602,7 @@ async fn init() -> anyhow::Result<()> {
 
                     let paused_close = paused.clone();
                     let audio_close = audio_ctx.clone();
-                    add_click_listener(&doc2, "overlay-close", move || {
+                    dom::add_click_listener(&doc2, "overlay-close", move || {
                         *paused_close.borrow_mut() = false;
                         let _ = audio_close.resume();
                         if let Some(w2) = web::window() {
@@ -803,12 +655,8 @@ async fn init() -> anyhow::Result<()> {
                 let mut voice_panners: Vec<web::PannerNode> = Vec::new();
                 let mut delay_sends_vec: Vec<web::GainNode> = Vec::new();
                 let mut reverb_sends_vec: Vec<web::GainNode> = Vec::new();
-                let initial_positions: Vec<Vec3> = engine
-                    .borrow()
-                    .voices
-                    .iter()
-                    .map(|v| v.position)
-                    .collect();
+                let initial_positions: Vec<Vec3> =
+                    engine.borrow().voices.iter().map(|v| v.position).collect();
                 let routing = match audio::wire_voices(
                     &audio_ctx,
                     &initial_positions,
@@ -948,7 +796,7 @@ async fn init() -> anyhow::Result<()> {
                     let master_gain_k = master_gain.clone();
                     let window = web::window().unwrap();
                     let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
-                        handle_global_keydown(&ev, &engine_k, &paused_k, &master_gain_k, &canvas_k);
+                        events::handle_global_keydown(&ev, &engine_k, &paused_k, &master_gain_k, &canvas_k);
                     }) as Box<dyn FnMut(_)>);
                     window
                         .add_event_listener_with_callback(
