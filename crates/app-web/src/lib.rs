@@ -34,10 +34,8 @@ fn wire_canvas_resize(canvas: &web::HtmlCanvasElement) {
         dom::sync_canvas_backing_size(&canvas_resize);
     }) as Box<dyn FnMut()>);
     if let Some(window) = web::window() {
-        let _ = window.add_event_listener_with_callback(
-            "resize",
-            resize_closure.as_ref().unchecked_ref(),
-        );
+        let _ = window
+            .add_event_listener_with_callback("resize", resize_closure.as_ref().unchecked_ref());
     }
     resize_closure.forget();
 }
@@ -49,7 +47,7 @@ struct InitParts {
     paused: Rc<RefCell<bool>>,
 }
 
-async fn build_audio_and_engine(document: web::Document) -> anyhow::Result<InitParts> {
+async fn build_audio_and_engine(_document: web::Document) -> anyhow::Result<InitParts> {
     let audio_ctx = web::AudioContext::new().map_err(|e| anyhow::anyhow!("{:?}", e))?;
     let _ = audio_ctx.resume();
     let listener = audio_ctx.listener();
@@ -756,135 +754,27 @@ async fn init() -> anyhow::Result<()> {
                     closure.forget();
                 }
 
-                // Keyboard controls: R reseed all, Space pause, +/- bpm adjust, ArrowUp/Down volume, F/Escape fullscreen
-                {
-                    let engine_k = engine.clone();
-                    let paused_k = paused.clone();
-                    let canvas_k = canvas_for_click_inner.clone();
-                    let master_gain_k = master_gain.clone();
-                    let window = web::window().unwrap();
-                    let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
-                        events::handle_global_keydown(
-                            &ev,
-                            &engine_k,
-                            &paused_k,
-                            &master_gain_k,
-                            &canvas_k,
-                        );
-                    }) as Box<dyn FnMut(_)>);
-                    window
-                        .add_event_listener_with_callback(
-                            "keydown",
-                            closure.as_ref().unchecked_ref(),
-                        )
-                        .ok();
-                    closure.forget();
-                }
+                // Keyboard controls
+                events::wire_global_keydown(
+                    engine.clone(),
+                    paused.clone(),
+                    master_gain.clone(),
+                    canvas_for_click_inner.clone(),
+                );
 
-                // Mousedown: begin drag if over a voice
-                {
-                    let hover_m = hover_index.clone();
-                    let drag_m = drag_state.clone();
-                    let mouse_m = mouse_state.clone();
-                    let engine_m = engine.clone();
-                    let canvas_target = canvas_for_click_inner.clone();
-                    let closure = Closure::wrap(Box::new(move |ev: web::PointerEvent| {
-                        if let Some(i) = *hover_m.borrow() {
-                            let mut ds = drag_m.borrow_mut();
-                            ds.active = true;
-                            ds.voice = i;
-                            ds.plane_z_world =
-                                engine_m.borrow().voices[i].position.z * SPREAD + z_offset_vec3().z;
-                            log::info!("[mouse] begin drag on voice {}", i);
-                        }
-                        mouse_m.borrow_mut().down = true;
-                        let _ = canvas_target.set_pointer_capture(ev.pointer_id());
-                        // noisy pointer down debug log removed
-                        ev.prevent_default();
-                    }) as Box<dyn FnMut(_)>);
-                    canvas_for_click_inner
-                        .add_event_listener_with_callback(
-                            "pointerdown",
-                            closure.as_ref().unchecked_ref(),
-                        )
-                        .ok();
-                    closure.forget();
-                }
-
-                // Mouseup: click actions or end drag; also trigger background tap note+ripple
-                {
-                    let hover_m = hover_index.clone();
-                    let drag_m = drag_state.clone();
-                    let mouse_m = mouse_state.clone();
-                    let engine_m = engine.clone();
-                    let voice_gains_click = voice_gains.clone();
-                    let delay_sends_click = delay_sends.clone();
-                    let reverb_sends_click = reverb_sends.clone();
-                    let canvas_click = canvas_for_click_inner.clone();
-                    let audio_ctx_click = audio_ctx.clone();
-                    let ripple_queue = queued_ripple_uv.clone();
-                    let closure = Closure::wrap(Box::new(move |ev: web::PointerEvent| {
-                        let was_dragging = drag_m.borrow().active;
-                        if was_dragging {
-                            drag_m.borrow_mut().active = false;
-                        } else if let Some(i) = *hover_m.borrow() {
-                            // Click without drag: modifiers
-                            let shift = ev.shift_key();
-                            let alt = ev.alt_key();
-                            if alt {
-                                engine_m.borrow_mut().toggle_solo(i);
-                                // noisy click debug log removed
-                            } else if shift {
-                                engine_m.borrow_mut().reseed_voice(i, None);
-                                // noisy click debug log removed
-                            } else {
-                                engine_m.borrow_mut().toggle_mute(i);
-                                // noisy click debug log removed
-                            }
-                        } else {
-                            // Background click: synth one-shot via WebAudio and request a ripple
-                            let [uvx, uvy] = input::pointer_canvas_uv(&ev, &canvas_click);
-                            if uvx.is_finite() && uvy.is_finite() {
-                                let midi = 60.0 + uvx * 24.0;
-                                let freq = midi_to_hz(midi as f32);
-                                let vel = (0.35 + 0.65 * uvy) as f32;
-                                // Precompute normalized voice x for nearest-voice pick
-                                let eng = engine_m.borrow();
-                                let norm_xs: Vec<f32> = eng
-                                    .voices
-                                    .iter()
-                                    .map(|v| (v.position.x / 3.0).clamp(-1.0, 1.0) * 0.5 + 0.5)
-                                    .collect();
-                                let best_i = input::nearest_index_by_uvx(&norm_xs, uvx);
-                                let dur = 0.35 + 0.25 * (1.0 - uvy as f64);
-                                let wf = eng.configs[best_i].waveform;
-                                drop(eng);
-                                audio::trigger_one_shot(
-                                    &audio_ctx_click,
-                                    wf,
-                                    freq,
-                                    vel,
-                                    dur,
-                                    &voice_gains_click[best_i],
-                                    &delay_sends_click[best_i],
-                                    &reverb_sends_click[best_i],
-                                );
-                                *ripple_queue.borrow_mut() = Some([uvx, uvy]);
-                            }
-                        }
-                        // noisy pointer up debug log removed
-                        mouse_m.borrow_mut().down = false;
-                        ev.prevent_default();
-                    }) as Box<dyn FnMut(_)>);
-                    if let Some(w) = web::window() {
-                        w.add_event_listener_with_callback(
-                            "pointerup",
-                            closure.as_ref().unchecked_ref(),
-                        )
-                        .ok();
-                    }
-                    closure.forget();
-                }
+                // Pointer handlers (move/down/up)
+                events::wire_input_handlers(events::InputWiring {
+                    canvas: canvas_for_click_inner.clone(),
+                    engine: engine.clone(),
+                    mouse_state: mouse_state.clone(),
+                    hover_index: hover_index.clone(),
+                    drag_state: drag_state.clone(),
+                    voice_gains: voice_gains.clone(),
+                    delay_sends: delay_sends.clone(),
+                    reverb_sends: reverb_sends.clone(),
+                    audio_ctx: audio_ctx.clone(),
+                    queued_ripple_uv: queued_ripple_uv.clone(),
+                });
 
                 // Scheduler + renderer loop driven by requestAnimationFrame
                 let frame_ctx = Rc::new(RefCell::new(frame::FrameContext {
