@@ -790,7 +790,8 @@ async fn init() -> anyhow::Result<()> {
                             let h = rect.height() as f32;
                             if w > 0.0 && h > 0.0 {
                                 let uvx = (x_css / w).clamp(0.0, 1.0);
-                                let uvy = (1.0 - (y_css / h)).clamp(0.0, 1.0);
+                                // Use top-left origin for Y to match shader UVs (uv.y = 0 at top)
+                                let uvy = (y_css / h).clamp(0.0, 1.0);
                                 // Map X to [C4..C6]
                                 let midi = 60.0 + uvx * 24.0;
                                 let freq = midi_to_hz(midi as f32);
@@ -937,7 +938,8 @@ async fn init() -> anyhow::Result<()> {
                         let ms = mouse_tick.borrow();
                         let uv = [
                             (ms.x / w).clamp(0.0, 1.0),
-                            (1.0 - (ms.y / h)).clamp(0.0, 1.0),
+                            // Use top-left origin for Y to match shader UVs (uv.y = 0 at top)
+                            (ms.y / h).clamp(0.0, 1.0),
                         ];
                         // Inertial swirl: critically-damped spring (slightly underdamped) toward mouse UV
                         if !swirl_initialized {

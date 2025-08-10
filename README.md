@@ -34,6 +34,7 @@ Notes:
 
 - WebGL fallback is intentionally avoided; WebGPU is required.
 - If audio does not start, click the Start overlay.
+- Input coordinates: canvas UV origin is top-left (uv.y = 0 at top). Pointer-driven swirl and click ripple use this convention.
 
 ### Run (Web)
 
