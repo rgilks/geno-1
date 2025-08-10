@@ -673,88 +673,7 @@ impl<'a> GpuState<'a> {
                 .create_view(&wgpu::TextureViewDescriptor::default());
 
             // Rebuild bind groups that reference these views
-            self.bg_hdr = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("bg_hdr"),
-                layout: &self.post_bgl0,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&self.hdr_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: self.post_uniform_buffer.as_entire_binding(),
-                    },
-                ],
-            });
-            self.bg_from_bloom_a = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("bg_from_bloom_a"),
-                layout: &self.post_bgl0,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&self.bloom_a_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: self.post_uniform_buffer.as_entire_binding(),
-                    },
-                ],
-            });
-            self.bg_from_bloom_b = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("bg_from_bloom_b"),
-                layout: &self.post_bgl0,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&self.bloom_b_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 2,
-                        resource: self.post_uniform_buffer.as_entire_binding(),
-                    },
-                ],
-            });
-            self.bg_bloom_a_only = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("bg_bloom_a_only"),
-                layout: &self.post_bgl1,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&self.bloom_a_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
-                    },
-                ],
-            });
-            self.bg_bloom_b_only = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("bg_bloom_b_only"),
-                layout: &self.post_bgl1,
-                entries: &[
-                    wgpu::BindGroupEntry {
-                        binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&self.bloom_b_view),
-                    },
-                    wgpu::BindGroupEntry {
-                        binding: 1,
-                        resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
-                    },
-                ],
-            });
+            self.rebuild_post_bind_groups();
         }
     }
 
@@ -834,101 +753,184 @@ impl<'a> GpuState<'a> {
             .write_buffer(&self.post_uniform_buffer, 0, bytemuck::bytes_of(&post));
 
         // Pass 2: bright pass → bloom_a
-        {
-            let mut r = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("bright_pass"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.bloom_a_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            r.set_pipeline(&self.bright_pipeline);
-            r.set_bind_group(0, &self.bg_hdr, &[]);
-            r.draw(0..3, 0..1);
-        }
+        self.blit(
+            &mut encoder,
+            "bright_pass",
+            &self.bloom_a_view,
+            wgpu::Color::BLACK,
+            &self.bright_pipeline,
+            &self.bg_hdr,
+            None,
+        );
 
         // Pass 3: blur horizontal bloom_a -> bloom_b
         post.blur_dir = [1.0, 0.0];
         self.queue
             .write_buffer(&self.post_uniform_buffer, 0, bytemuck::bytes_of(&post));
-        {
-            let mut r = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("blur_h"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.bloom_b_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            r.set_pipeline(&self.blur_pipeline);
-            r.set_bind_group(0, &self.bg_from_bloom_a, &[]);
-            r.draw(0..3, 0..1);
-        }
+        self.blit(
+            &mut encoder,
+            "blur_h",
+            &self.bloom_b_view,
+            wgpu::Color::BLACK,
+            &self.blur_pipeline,
+            &self.bg_from_bloom_a,
+            None,
+        );
 
         // Pass 4: blur vertical bloom_b -> bloom_a
         post.blur_dir = [0.0, 1.0];
         self.queue
             .write_buffer(&self.post_uniform_buffer, 0, bytemuck::bytes_of(&post));
-        {
-            let mut r = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("blur_v"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.bloom_a_view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            r.set_pipeline(&self.blur_pipeline);
-            r.set_bind_group(0, &self.bg_from_bloom_b, &[]);
-            r.draw(0..3, 0..1);
-        }
+        self.blit(
+            &mut encoder,
+            "blur_v",
+            &self.bloom_a_view,
+            wgpu::Color::BLACK,
+            &self.blur_pipeline,
+            &self.bg_from_bloom_b,
+            None,
+        );
 
         // Pass 5: composite to swapchain
         post.blur_dir = [0.0, 0.0];
         self.queue
             .write_buffer(&self.post_uniform_buffer, 0, bytemuck::bytes_of(&post));
-        {
-            let mut r = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-                label: Some("composite"),
-                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &view,
-                    resolve_target: None,
-                    ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(self.clear_color),
-                        store: wgpu::StoreOp::Store,
-                    },
-                })],
-                depth_stencil_attachment: None,
-                timestamp_writes: None,
-                occlusion_query_set: None,
-            });
-            r.set_pipeline(&self.composite_pipeline);
-            r.set_bind_group(0, &self.bg_hdr, &[]);
-            r.set_bind_group(1, &self.bg_bloom_a_only, &[]);
-            r.draw(0..3, 0..1);
-        }
+        self.blit(
+            &mut encoder,
+            "composite",
+            &view,
+            self.clear_color,
+            &self.composite_pipeline,
+            &self.bg_hdr,
+            Some(&self.bg_bloom_a_only),
+        );
 
         self.queue.submit(Some(encoder.finish()));
         frame.present();
         Ok(())
+    }
+}
+
+impl<'a> GpuState<'a> {
+    fn rebuild_post_bind_groups(&mut self) {
+        // bg sampling HDR scene
+        self.bg_hdr = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("bg_hdr"),
+            layout: &self.post_bgl0,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.hdr_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.post_uniform_buffer.as_entire_binding(),
+                },
+            ],
+        });
+        // bg sampling bloom_a
+        self.bg_from_bloom_a = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("bg_from_bloom_a"),
+            layout: &self.post_bgl0,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.bloom_a_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.post_uniform_buffer.as_entire_binding(),
+                },
+            ],
+        });
+        // bg sampling bloom_b
+        self.bg_from_bloom_b = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("bg_from_bloom_b"),
+            layout: &self.post_bgl0,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.bloom_b_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: self.post_uniform_buffer.as_entire_binding(),
+                },
+            ],
+        });
+        // group1 variants (no uniforms)
+        self.bg_bloom_a_only = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("bg_bloom_a_only"),
+            layout: &self.post_bgl1,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.bloom_a_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
+                },
+            ],
+        });
+        self.bg_bloom_b_only = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("bg_bloom_b_only"),
+            layout: &self.post_bgl1,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: wgpu::BindingResource::TextureView(&self.bloom_b_view),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
+                },
+            ],
+        });
+    }
+
+    fn blit(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        label: &str,
+        target: &wgpu::TextureView,
+        clear: wgpu::Color,
+        pipeline: &wgpu::RenderPipeline,
+        bg0: &wgpu::BindGroup,
+        bg1: Option<&wgpu::BindGroup>,
+    ) {
+        let mut r = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some(label),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: target,
+                resolve_target: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(clear),
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
+        });
+        r.set_pipeline(pipeline);
+        r.set_bind_group(0, bg0, &[]);
+        if let Some(g1) = bg1 {
+            r.set_bind_group(1, g1, &[]);
+        }
+        r.draw(0..3, 0..1);
+        drop(r);
     }
 }
