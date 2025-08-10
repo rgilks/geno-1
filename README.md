@@ -15,9 +15,8 @@
 - Starts at a lower default volume; use ArrowUp to raise or ArrowDown to lower
 - Dynamic hint shows current BPM, paused, and muted state
 - Rich visuals: instanced voice markers with emissive pulses, ambient waves background, post bloom/tonemap/vignette; optional analyser-driven spectrum dots
-- Native front-end renders and plays synthesized audio; parity improving:
-  - Equal-power stereo panning from X position, multiple waveforms (sine/square/saw/triangle)
-  - Gentle master saturation (arctan curve); hover highlight parity; renderer uses `scene.wgsl`
+
+Note: Desktop UI has been removed to simplify the project; the focus is the web build.
 
 ### Demo
 
@@ -51,7 +50,7 @@ Quick controls (browser):
 ### Pre-commit Check
 
 - Run all checks and tests locally: `npm run check`
-  - Rust: `cargo fmt --check`, `cargo clippy` (deny warnings), `cargo test` (workspace), `cargo build -p app-native`
+  - Rust: `cargo fmt --check`, `cargo clippy` (deny warnings), `cargo test` (workspace)
   - Web: build, serve, and execute the headless browser test
 
 ### Deploy (Cloudflare Workers)
@@ -83,11 +82,7 @@ Headless test:
   - Workflow file: `.github/workflows/web-ci.yml`
   - CI tolerates missing WebGPU in headless by skipping engine-coupled assertions
 
-### Run (Native)
-
-- Build: `npm run build:native`
-- Run: `npm run native`
-  - Optional: `npm run native:smoke` runs a short smoke test and exits
+<!-- Desktop run instructions removed -->
 
 ### Media
 
@@ -106,7 +101,6 @@ Links:
 ### Workspace crates
 
 - `app-core`: shared music generation and state
-- `app-native`: native window + WebGPU rendering + basic audio
 - `app-web`: web WASM front-end with WebGPU + WebAudio
 
 ### Docs

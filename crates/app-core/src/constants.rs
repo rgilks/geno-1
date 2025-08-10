@@ -1,6 +1,6 @@
 use glam::Vec3;
 
-// Shared visual/audio tuning constants used by both web and native frontends.
+// Shared visual/audio tuning constants used by the web frontend.
 
 // Scene layout
 pub const SPREAD: f32 = 1.8; // scales engine-space positions to world-space

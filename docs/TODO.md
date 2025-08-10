@@ -4,7 +4,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 ## Setup & Tooling
 
-- [x] Workspace crates (`app-core`, `app-web`, `app-native`)
+- [x] Workspace crates (`app-core`, `app-web`)
 - [x] WebGPU initialization on web via `wgpu` v24 (no WebGL2 fallback)
 - [x] Node dev server with proper COOP/COEP headers (`server.js`)
 - [x] Headless web test (Puppeteer) scripted interactions
@@ -52,14 +52,9 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Mouse-driven FX mapping: corner-based saturation; opposite-corner delay
   - [x] Click/tap ripple expands in waves background
 
-## Cross-Platform / Native
+## Platform Notes
 
-- [x] Native window via `winit` and rendering via `wgpu`
-- [x] Basic native audio via `cpal` with envelopes
-- [x] Map native audio to per-voice waveforms (sine/square/saw/triangle)
-- [x] Stereo panning by X based on voice position (equal-power)
-- [x] Native input parity (hover, drag, click)
-  - [x] Subtle master saturation in native output
+Desktop UI support has been removed to simplify the project and focus on the web build.
 
 ## Error Handling & UX
 
@@ -80,7 +75,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 ### Planned Refactors (incremental, no behavior changes)
 
-- [ ] app-core: extract helper methods for per-voice scheduling parameters
+- [x] app-core: extract helper methods for per-voice scheduling parameters
   - Rationale: improve readability in `schedule_step` by removing inline match blocks
   - Status: implemented as private helpers (`voice_trigger_probability`, `voice_octave_offset`, `voice_base_duration`) and rustdoc added; no API change
 - [ ] app-core: document public structs and functions
@@ -98,15 +93,12 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [ ] app-web: factor large `lib.rs` into modules (`audio`, `render`, `input`, `ui`)
   - Rationale: improve maintainability of a >2k LOC file
   - Plan: create `mod` submodules and move code in small PR-sized steps; keep exports stable
-- [ ] app-web: centralize DOM/hint/UI updates behind a tiny view model
+- [x] app-web: centralize DOM/hint/UI updates behind a tiny view model (initial)
   - Rationale: reduce ad-hoc DOM writes scattered in event handlers
-  - Plan: introduce a `UiState` struct with methods to set BPM/paused/mute text
+  - Status: introduced `ui::refresh_hint_if_visible` and `set_hint_visibility` to unify updates; consider a lightweight `UiState` later if more fields accrue
 - [ ] app-web: extract WebGPU pipeline builders
   - Rationale: deduplicate pipeline/buffer setup for waves/post passes
   - Plan: create `pipeline.rs` helpers returning typed bundles; no functional changes
-- [ ] app-native: mirror `app-web` structure where practical
-  - Rationale: parity and easier cross-referencing
-  - Plan: extract `gpu.rs`, `audio.rs`, `input.rs` modules gradually
 
 ### Testing Enhancements
 
@@ -119,7 +111,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 - [x] Headless web test validates interactions and hint content
 - [x] Add assertions: BPM change reflected; solo/mute state (logs/state)
-- [x] Optional native smoke test (launch, render few frames, exit)
+
   - [x] Add unit tests for `app-core` mute/solo edge-cases with reseed & tempo changes
 
 ## Deployment
@@ -146,11 +138,6 @@ Status: In progress — core features completed; polish pending
 - Add analyser-driven ambient visuals (spectrum/particles) [optional]
 - Add mild glow/color tuning in WGSL; subtle camera motion
 
-### M3: Native parity improvements
-
-- Stereo panning by X and per-voice waveforms in native
-- Basic input parity (drag, mute/reseed/solo)
-
 ### M4: Performance & QA
 
 - Profiling and tuning for 60 FPS; audit WebAudio nodes, buffer reuse
@@ -163,5 +150,5 @@ Status: In progress — core features completed; polish pending
 
 ## Notes
 
-- Per `docs/SPEC.md`, stay pure WebGPU (wgpu v24) and prioritize desktop web. Native parity progresses where simple.
+- Per `docs/SPEC.md`, stay pure WebGPU (wgpu v24) and prioritize desktop web.
 - UI remains minimalist; in-scene icon controls can follow in v1.1.

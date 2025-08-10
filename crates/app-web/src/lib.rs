@@ -5,7 +5,7 @@ use app_core::{
     ENGINE_DRAG_MAX_RADIUS, IONIAN, LOCRIAN, LYDIAN, MIXOLYDIAN, PHRYGIAN, PICK_SPHERE_RADIUS,
     SCALE_PULSE_MULTIPLIER, SPREAD,
 };
-use glam::{Mat4, Vec2, Vec3, Vec4};
+use glam::{Vec2, Vec3, Vec4};
 use instant::Instant;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -17,8 +17,9 @@ use web_sys as web;
 // (DeviceExt no longer needed; legacy vertex buffers removed)
 
 mod input;
+mod overlay;
 mod render;
-mod ui;
+// ui module removed; overlay is controlled directly from here
 
 // Rendering/picking shared constants to keep math consistent
 const CAMERA_Z: f32 = 6.0;
@@ -50,25 +51,7 @@ async fn init() -> anyhow::Result<()> {
         .dyn_into::<web::HtmlCanvasElement>()
         .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
 
-    // Bring back 'h' help toggle to show/hide hint overlay
-    {
-        let window = web::window().unwrap();
-        let document = document.clone();
-        let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
-            let key = ev.key();
-            if key == "h" || key == "H" {
-                ui::toggle_hint_visibility(&document);
-                ev.prevent_default();
-            }
-        }) as Box<dyn FnMut(_)>);
-        window
-            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
-            .ok();
-        closure.forget();
-    }
-
-    // Note: we will query the optional hint element lazily inside event handlers to avoid
-    // capturing it here and forcing closures to be FnOnce.
+    // Note: start overlay is handled below (toggle with 'h') once audio is initialized.
 
     // Avoid grabbing a 2D context here to allow WebGPU to acquire the canvas
 
@@ -172,6 +155,8 @@ async fn init() -> anyhow::Result<()> {
 
                 // Pause state (stops scheduling new notes but keeps rendering). Start paused until overlay OK/Close.
                 let paused = Rc::new(RefCell::new(true));
+                // Overlay element reference (style toggled on 'H')
+                let overlay_el = document.get_element_by_id("start-overlay");
 
                 // Wire OK / Close to hide overlay and start scheduling (unpause) + resume AudioContext
                 if let Some(doc2) = web::window().and_then(|w| w.document()) {
@@ -215,6 +200,28 @@ async fn init() -> anyhow::Result<()> {
                         );
                         closure.forget();
                     }
+                }
+
+                // 'H' toggles the overlay visibility
+                {
+                    let window = web::window().unwrap();
+                    let document_for_h = document.clone();
+                    let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
+                        let key = ev.key();
+                        if key == "h" || key == "H" {
+                            overlay::toggle(&document_for_h);
+                            // If user is bringing up the overlay, we don't change paused.
+                            // If closing via 'H', keep current paused state.
+                            ev.prevent_default();
+                        }
+                    }) as Box<dyn FnMut(_)>);
+                    window
+                        .add_event_listener_with_callback(
+                            "keydown",
+                            closure.as_ref().unchecked_ref(),
+                        )
+                        .ok();
+                    closure.forget();
                 }
 
                 // Master mix bus -> destination
@@ -578,7 +585,7 @@ async fn init() -> anyhow::Result<()> {
                             // While dragging, boost swirl strength (used during render)
                         } else {
                             match best {
-                                Some((i, t)) => {
+                                Some((i, _t)) => {
                                     *hover_m.borrow_mut() = Some(i);
                                 }
                                 None => {
@@ -650,27 +657,7 @@ async fn init() -> anyhow::Result<()> {
                                 let mut p = paused_k.borrow_mut();
                                 *p = !*p;
                                 // noisy key debug log removed
-                                // If hint visible, refresh its content
-                                if let Some(win) = web::window() {
-                                    if let Some(doc) = win.document() {
-                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
-                                            if el.get_attribute("data-visible").as_deref()
-                                                == Some("1")
-                                            {
-                                                let bpm_now = engine_k.borrow().params.bpm;
-                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
-                                                {
-                                                    let content = format!(
-                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
-                                                            bpm_now,
-                                                            if *p { "yes" } else { "no" }
-                                                    );
-                                                    div.set_inner_html(&content);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                // No bottom-hint; overlay can be re-opened with 'h'
                                 ev.prevent_default();
                             }
                             // Increase BPM (ArrowRight or +/=)
@@ -679,27 +666,7 @@ async fn init() -> anyhow::Result<()> {
                                 let new_bpm = (eng.params.bpm + 5.0).min(240.0);
                                 eng.set_bpm(new_bpm);
                                 // noisy key debug log removed
-                                // If hint visible, refresh its content
-                                if let Some(win) = web::window() {
-                                    if let Some(doc) = win.document() {
-                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
-                                            if el.get_attribute("data-visible").as_deref()
-                                                == Some("1")
-                                            {
-                                                let paused_now = *paused_k.borrow();
-                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
-                                                {
-                                                    let content = format!(
-                                                            "Click Start to begin\nClick canvas: play a note • Mouse affects sound\nR: new sequence • Space: pause/resume • ArrowLeft/Right: tempo\nBPM: {:.0} • Paused: {}",
-                                                            new_bpm,
-                                                            if paused_now { "yes" } else { "no" }
-                                                    );
-                                                    div.set_inner_html(&content);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                // No bottom-hint; overlay can be re-opened with 'h'
                             }
                             // Decrease BPM (ArrowLeft or -/_)
                             "ArrowLeft" | "-" | "_" => {
@@ -707,27 +674,7 @@ async fn init() -> anyhow::Result<()> {
                                 let new_bpm = (eng.params.bpm - 5.0).max(40.0);
                                 eng.set_bpm(new_bpm);
                                 // noisy key debug log removed
-                                // If hint visible, refresh its content
-                                if let Some(win) = web::window() {
-                                    if let Some(doc) = win.document() {
-                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
-                                            if el.get_attribute("data-visible").as_deref()
-                                                == Some("1")
-                                            {
-                                                let paused_now = *paused_k.borrow();
-                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
-                                                {
-                                                    let content = format!(
-                                                            "Click Start to begin\nClick canvas: play a note • Mouse affects sound\nR: new sequence • Space: pause/resume • ArrowLeft/Right: tempo\nBPM: {:.0} • Paused: {}",
-                                                            new_bpm,
-                                                            if paused_now { "yes" } else { "no" }
-                                                    );
-                                                    div.set_inner_html(&content);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                                // No bottom-hint; overlay can be re-opened with 'h'
                             }
                             // Enter: Fullscreen toggle
                             "Enter" => {

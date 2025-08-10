@@ -1,10 +1,10 @@
-## Visual Pipelines (Web and Native)
+## Visual Pipeline (Web)
 
-The diagrams below summarize the rendering flow for both native and web builds, including the ambient waves background and the post-processing stack.
+The diagram below summarizes the rendering flow for the web build, including the ambient waves background and the post-processing stack.
 
 ```mermaid
 graph TD
-  %% Visual pipelines (Web + Native)
+  %% Visual pipeline (Web)
   subgraph "Input & Audio Reactivity"
     I1["Pointer / Keyboard events"]
     I2["NoteEvent Pulses\n(per voice velocity → pulse)"]
@@ -13,7 +13,7 @@ graph TD
     I2 -->|on note| I3
   end
 
-  subgraph "Scene Rendering (Native shown; Web analogous)"
+  subgraph "Scene Rendering"
     R0["WGPU Device + Surface"]
     R1["Scene Pipeline (scene.wgsl)\nInstanced voice markers (quads→disks)\nInputs: positions, colors, pulse"]
     R2["Ambient Waves (waves.wgsl)\nFullscreen pass; swirl, voice displacement, ripple"]
