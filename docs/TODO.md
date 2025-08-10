@@ -99,7 +99,7 @@ Desktop UI support has been removed to simplify the project and focus on the web
 - [ ] app-web: extract WebGPU pipeline builders
   - Rationale: deduplicate pipeline/buffer setup for waves/post passes
   - Plan: create `pipeline.rs` helpers returning typed bundles; no functional changes
-  <!-- Former native refactor tasks removed -->
+  
 
 ### Testing Enhancements
 
@@ -112,7 +112,7 @@ Desktop UI support has been removed to simplify the project and focus on the web
 
 - [x] Headless web test validates interactions and hint content
 - [x] Add assertions: BPM change reflected; solo/mute state (logs/state)
-  <!-- Former native smoke test removed -->
+  
   - [x] Add unit tests for `app-core` mute/solo edge-cases with reseed & tempo changes
 
 ## Deployment
@@ -139,7 +139,7 @@ Status: In progress — core features completed; polish pending
 - Add analyser-driven ambient visuals (spectrum/particles) [optional]
 - Add mild glow/color tuning in WGSL; subtle camera motion
 
-<!-- Removed previous native parity milestone -->
+ 
 
 ### M4: Performance & QA
 
