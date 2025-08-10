@@ -12,7 +12,7 @@ pub use crate::camera::screen_to_world_ray;
 
 // ===================== WebGPU state (moved from lib.rs) =====================
 
-use waves::{VoicePacked, WavesUniforms, WavesResources, create_waves_resources};
+use waves::{create_waves_resources, VoicePacked, WavesResources, WavesUniforms};
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -36,10 +36,7 @@ pub struct GpuState<'a> {
     targets: RenderTargets,
     linear_sampler: wgpu::Sampler,
 
-    #[allow(dead_code)]
-    post_bgl0: wgpu::BindGroupLayout, // texture+sampler+uniform
-    post_bgl1: wgpu::BindGroupLayout, // optional second texture+sampler
-    post_uniform_buffer: wgpu::Buffer,
+    post: post::PostResources,
     // Bind groups for different sources
     bg_hdr: wgpu::BindGroup,
     bg_from_bloom_a: wgpu::BindGroup,
@@ -167,70 +164,10 @@ impl<'a> GpuState<'a> {
             mipmap_filter: wgpu::FilterMode::Linear,
             ..Default::default()
         });
-        let post_bgl0 = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("post_bgl0"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    // tex
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    // sampler
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    // uniforms
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
-        let post_bgl1 = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("post_bgl1"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        multisampled: false,
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
-        let post_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("post_uniforms"),
-            size: std::mem::size_of::<PostUniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        let post = post::create_post_resources(&device, &post_shader, bloom_format, format);
         let bg_hdr = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("bg_hdr"),
-            layout: &post_bgl0,
+            layout: &post.bgl0,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -242,13 +179,13 @@ impl<'a> GpuState<'a> {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: post_uniform_buffer.as_entire_binding(),
+                    resource: post.uniform_buffer.as_entire_binding(),
                 },
             ],
         });
         let bg_from_bloom_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("bg_from_bloom_a"),
-            layout: &post_bgl0,
+            layout: &post.bgl0,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -260,13 +197,13 @@ impl<'a> GpuState<'a> {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: post_uniform_buffer.as_entire_binding(),
+                    resource: post.uniform_buffer.as_entire_binding(),
                 },
             ],
         });
         let bg_from_bloom_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("bg_from_bloom_b"),
-            layout: &post_bgl0,
+            layout: &post.bgl0,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -278,13 +215,13 @@ impl<'a> GpuState<'a> {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: post_uniform_buffer.as_entire_binding(),
+                    resource: post.uniform_buffer.as_entire_binding(),
                 },
             ],
         });
         let bg_bloom_a_only = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("bg_bloom_a_only"),
-            layout: &post_bgl1,
+            layout: &post.bgl1,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -298,7 +235,7 @@ impl<'a> GpuState<'a> {
         });
         let bg_bloom_b_only = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("bg_bloom_b_only"),
-            layout: &post_bgl1,
+            layout: &post.bgl1,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -311,40 +248,9 @@ impl<'a> GpuState<'a> {
             ],
         });
 
-        let post_pl_bright_blur = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("pl_post_0"),
-            bind_group_layouts: &[&post_bgl0],
-            push_constant_ranges: &[],
-        });
-        let post_pl_composite = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("pl_post_comp"),
-            bind_group_layouts: &[&post_bgl0, &post_bgl1],
-            push_constant_ranges: &[],
-        });
-        let bright_pipeline = helpers::make_post_pipeline(
-            &device,
-            &post_pl_bright_blur,
-            &post_shader,
-            "fs_bright",
-            bloom_format,
-            None,
-        );
-        let blur_pipeline = helpers::make_post_pipeline(
-            &device,
-            &post_pl_bright_blur,
-            &post_shader,
-            "fs_blur",
-            bloom_format,
-            None,
-        );
-        let composite_pipeline = helpers::make_post_pipeline(
-            &device,
-            &post_pl_composite,
-            &post_shader,
-            "fs_composite",
-            format,
-            Some(wgpu::BlendState::REPLACE),
-        );
+        let bright_pipeline = post.bright_pipeline.clone();
+        let blur_pipeline = post.blur_pipeline.clone();
+        let composite_pipeline = post.composite_pipeline.clone();
 
         Ok(Self {
             surface,
@@ -361,9 +267,7 @@ impl<'a> GpuState<'a> {
                 bloom_b_view,
             ),
             linear_sampler,
-            post_bgl0,
-            post_bgl1,
-            post_uniform_buffer,
+            post,
             bg_hdr,
             bg_from_bloom_a,
             bg_from_bloom_b,
@@ -543,7 +447,7 @@ impl<'a> GpuState<'a> {
             threshold: crate::constants::BLOOM_THRESHOLD,
         };
         self.queue
-            .write_buffer(&self.post_uniform_buffer, 0, bytemuck::bytes_of(&post));
+            .write_buffer(&self.post.uniform_buffer, 0, bytemuck::bytes_of(&post));
 
         // Pass 2: bright pass → bloom_a
         post::blit(
@@ -559,7 +463,7 @@ impl<'a> GpuState<'a> {
         // Pass 3: blur horizontal bloom_a -> bloom_b
         post.blur_dir = [1.0, 0.0];
         self.queue
-            .write_buffer(&self.post_uniform_buffer, 0, bytemuck::bytes_of(&post));
+            .write_buffer(&self.post.uniform_buffer, 0, bytemuck::bytes_of(&post));
         post::blit(
             &mut encoder,
             "blur_h",
@@ -573,7 +477,7 @@ impl<'a> GpuState<'a> {
         // Pass 4: blur vertical bloom_b -> bloom_a
         post.blur_dir = [0.0, 1.0];
         self.queue
-            .write_buffer(&self.post_uniform_buffer, 0, bytemuck::bytes_of(&post));
+            .write_buffer(&self.post.uniform_buffer, 0, bytemuck::bytes_of(&post));
         post::blit(
             &mut encoder,
             "blur_v",
@@ -587,7 +491,7 @@ impl<'a> GpuState<'a> {
         // Pass 5: composite to swapchain
         post.blur_dir = [0.0, 0.0];
         self.queue
-            .write_buffer(&self.post_uniform_buffer, 0, bytemuck::bytes_of(&post));
+            .write_buffer(&self.post.uniform_buffer, 0, bytemuck::bytes_of(&post));
         post::blit(
             &mut encoder,
             "composite",
@@ -609,7 +513,7 @@ impl<'a> GpuState<'a> {
         // bg sampling HDR scene
         self.bg_hdr = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("bg_hdr"),
-            layout: &self.post_bgl0,
+            layout: &self.post.bgl0,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -621,14 +525,14 @@ impl<'a> GpuState<'a> {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: self.post_uniform_buffer.as_entire_binding(),
+                    resource: self.post.uniform_buffer.as_entire_binding(),
                 },
             ],
         });
         // bg sampling bloom_a
         self.bg_from_bloom_a = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("bg_from_bloom_a"),
-            layout: &self.post_bgl0,
+            layout: &self.post.bgl0,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -640,14 +544,14 @@ impl<'a> GpuState<'a> {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: self.post_uniform_buffer.as_entire_binding(),
+                    resource: self.post.uniform_buffer.as_entire_binding(),
                 },
             ],
         });
         // bg sampling bloom_b
         self.bg_from_bloom_b = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("bg_from_bloom_b"),
-            layout: &self.post_bgl0,
+            layout: &self.post.bgl0,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -659,14 +563,14 @@ impl<'a> GpuState<'a> {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: self.post_uniform_buffer.as_entire_binding(),
+                    resource: self.post.uniform_buffer.as_entire_binding(),
                 },
             ],
         });
         // group1 variants (no uniforms)
         self.bg_bloom_a_only = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("bg_bloom_a_only"),
-            layout: &self.post_bgl1,
+            layout: &self.post.bgl1,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -680,7 +584,7 @@ impl<'a> GpuState<'a> {
         });
         self.bg_bloom_b_only = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("bg_bloom_b_only"),
-            layout: &self.post_bgl1,
+            layout: &self.post.bgl1,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
