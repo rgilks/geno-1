@@ -3,42 +3,8 @@ use glam::{Vec3, Vec4};
 use web_sys as web;
 
 mod helpers;
-
-/// Offscreen color targets for the render pipeline.
-///
-/// Contains a full-resolution HDR scene color and two half-resolution bloom
-/// ping-pong textures. Views are pre-created for convenience.
-///
-/// - `hdr_*` hold the main scene color in Rgba16Float for post-processing.
-/// - `bloom_*` are half-res buffers used for bright-pass and blur.
-pub struct RenderTargets {
-    pub hdr_tex: wgpu::Texture,
-    pub hdr_view: wgpu::TextureView,
-    pub bloom_a: wgpu::Texture,
-    pub bloom_a_view: wgpu::TextureView,
-    pub bloom_b: wgpu::Texture,
-    pub bloom_b_view: wgpu::TextureView,
-}
-
-impl RenderTargets {
-    pub fn new(
-        hdr_tex: wgpu::Texture,
-        hdr_view: wgpu::TextureView,
-        bloom_a: wgpu::Texture,
-        bloom_a_view: wgpu::TextureView,
-        bloom_b: wgpu::Texture,
-        bloom_b_view: wgpu::TextureView,
-    ) -> Self {
-        Self {
-            hdr_tex,
-            hdr_view,
-            bloom_a,
-            bloom_a_view,
-            bloom_b,
-            bloom_b_view,
-        }
-    }
-}
+mod targets;
+use targets::RenderTargets;
 
 pub use crate::camera::screen_to_world_ray;
 
