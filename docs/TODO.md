@@ -52,9 +52,9 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Mouse-driven FX mapping: corner-based saturation; opposite-corner delay
   - [x] Click/tap ripple expands in waves background
 
-## Cross-Platform / Native
+## Platform Notes
 
-Native UI support has been removed to simplify the project and focus on the web build.
+Desktop UI support has been removed to simplify the project and focus on the web build.
 
 ## Error Handling & UX
 
@@ -99,7 +99,7 @@ Native UI support has been removed to simplify the project and focus on the web 
 - [ ] app-web: extract WebGPU pipeline builders
   - Rationale: deduplicate pipeline/buffer setup for waves/post passes
   - Plan: create `pipeline.rs` helpers returning typed bundles; no functional changes
-<!-- Native refactor tasks removed -->
+  <!-- Former native refactor tasks removed -->
 
 ### Testing Enhancements
 
@@ -112,7 +112,7 @@ Native UI support has been removed to simplify the project and focus on the web 
 
 - [x] Headless web test validates interactions and hint content
 - [x] Add assertions: BPM change reflected; solo/mute state (logs/state)
-<!-- Native smoke test removed -->
+  <!-- Former native smoke test removed -->
   - [x] Add unit tests for `app-core` mute/solo edge-cases with reseed & tempo changes
 
 ## Deployment
@@ -139,10 +139,7 @@ Status: In progress — core features completed; polish pending
 - Add analyser-driven ambient visuals (spectrum/particles) [optional]
 - Add mild glow/color tuning in WGSL; subtle camera motion
 
-### M3: Native parity improvements
-
-- Stereo panning by X and per-voice waveforms in native
-- Basic input parity (drag, mute/reseed/solo)
+<!-- Removed previous native parity milestone -->
 
 ### M4: Performance & QA
 
@@ -156,5 +153,5 @@ Status: In progress — core features completed; polish pending
 
 ## Notes
 
-- Per `docs/SPEC.md`, stay pure WebGPU (wgpu v24) and prioritize desktop web. Native parity progresses where simple.
+- Per `docs/SPEC.md`, stay pure WebGPU (wgpu v24) and prioritize desktop web.
 - UI remains minimalist; in-scene icon controls can follow in v1.1.

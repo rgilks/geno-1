@@ -15,8 +15,8 @@
 - Starts at a lower default volume; use ArrowUp to raise or ArrowDown to lower
 - Dynamic hint shows current BPM, paused, and muted state
 - Rich visuals: instanced voice markers with emissive pulses, ambient waves background, post bloom/tonemap/vignette; optional analyser-driven spectrum dots
-  
-Note: Native desktop UI has been removed to simplify the project; the focus is the web build.
+
+Note: Desktop UI has been removed to simplify the project; the focus is the web build.
 
 ### Demo
 
@@ -82,7 +82,7 @@ Headless test:
   - Workflow file: `.github/workflows/web-ci.yml`
   - CI tolerates missing WebGPU in headless by skipping engine-coupled assertions
 
-<!-- Native run instructions removed -->
+<!-- Desktop run instructions removed -->
 
 ### Media
 

@@ -2,7 +2,7 @@ use glam::Vec3;
 use rand::prelude::*;
 use std::time::Duration;
 
-/// Basic oscillator shape used by synths in both native and web front-ends.
+/// Basic oscillator shape used by synths in the web front-end.
 #[derive(Clone, Copy, Debug)]
 pub enum Waveform {
     Sine,
