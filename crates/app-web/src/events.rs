@@ -1,12 +1,12 @@
+use crate::audio;
+use crate::input;
+use crate::render;
 use app_core::MusicEngine;
+use app_core::Waveform;
 use app_core::{
     midi_to_hz, z_offset_vec3, AEOLIAN, DORIAN, ENGINE_DRAG_MAX_RADIUS, IONIAN, LOCRIAN, LYDIAN,
     MIXOLYDIAN, PHRYGIAN, PICK_SPHERE_RADIUS, SPREAD,
 };
-use crate::audio;
-use crate::input;
-use crate::render;
-use app_core::Waveform;
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::JsCast;
@@ -152,10 +152,12 @@ pub fn wire_global_keydown(
     canvas: web::HtmlCanvasElement,
 ) {
     if let Some(window) = web::window() {
-        let closure = wasm_bindgen::closure::Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
-            super::events::handle_global_keydown(&ev, &engine, &paused, &master_gain, &canvas);
-        }) as Box<dyn FnMut(_)>);
-        let _ = window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+        let closure =
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
+                super::events::handle_global_keydown(&ev, &engine, &paused, &master_gain, &canvas);
+            }) as Box<dyn FnMut(_)>);
+        let _ =
+            window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
         closure.forget();
     }
 }
@@ -192,7 +194,8 @@ pub fn wire_input_handlers(w: InputWiring) {
                 ms.x = pos.x;
                 ms.y = pos.y;
             }
-            let (ro, rd) = render::screen_to_world_ray(&canvas_mouse, pos.x, pos.y, super::CAMERA_Z);
+            let (ro, rd) =
+                render::screen_to_world_ray(&canvas_mouse, pos.x, pos.y, super::CAMERA_Z);
             let mut best = None::<(usize, f32)>;
             let z_offset = z_offset_vec3();
             for (i, v) in engine_m.borrow().voices.iter().enumerate() {
@@ -237,7 +240,8 @@ pub fn wire_input_handlers(w: InputWiring) {
             }
         }) as Box<dyn FnMut(_)>);
         if let Some(wnd) = web::window() {
-            let _ = wnd.add_event_listener_with_callback("pointermove", closure.as_ref().unchecked_ref());
+            let _ = wnd
+                .add_event_listener_with_callback("pointermove", closure.as_ref().unchecked_ref());
         }
         closure.forget();
     }
@@ -254,14 +258,17 @@ pub fn wire_input_handlers(w: InputWiring) {
                 let mut ds = drag_m.borrow_mut();
                 ds.active = true;
                 ds.voice = i;
-                ds.plane_z_world = engine_m.borrow().voices[i].position.z * SPREAD + z_offset_vec3().z;
+                ds.plane_z_world =
+                    engine_m.borrow().voices[i].position.z * SPREAD + z_offset_vec3().z;
                 log::info!("[mouse] begin drag on voice {}", i);
             }
             mouse_m.borrow_mut().down = true;
             let _ = canvas_target.set_pointer_capture(ev.pointer_id());
             ev.prevent_default();
         }) as Box<dyn FnMut(_)>);
-        let _ = w.canvas.add_event_listener_with_callback("pointerdown", closure.as_ref().unchecked_ref());
+        let _ = w
+            .canvas
+            .add_event_listener_with_callback("pointerdown", closure.as_ref().unchecked_ref());
         closure.forget();
     }
 
@@ -324,7 +331,8 @@ pub fn wire_input_handlers(w: InputWiring) {
             ev.prevent_default();
         }) as Box<dyn FnMut(_)>);
         if let Some(wnd) = web::window() {
-            let _ = wnd.add_event_listener_with_callback("pointerup", closure.as_ref().unchecked_ref());
+            let _ =
+                wnd.add_event_listener_with_callback("pointerup", closure.as_ref().unchecked_ref());
         }
         closure.forget();
     }

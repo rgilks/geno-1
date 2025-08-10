@@ -640,16 +640,8 @@ async fn init() -> anyhow::Result<()> {
                 let voice_panners = routing.voice_panners;
                 let voice_gains = Rc::new(routing.voice_gains);
 
-                // Initialize WebGPU (leak a canvas clone to satisfy 'static lifetime for surface)
-                let leaked_canvas = Box::leak(Box::new(canvas_for_click_inner.clone()));
-                let gpu: Option<render::GpuState> =
-                    match render::GpuState::new(leaked_canvas, CAMERA_Z).await {
-                        Ok(g) => Some(g),
-                        Err(e) => {
-                            log::error!("WebGPU init error: {:?}", e);
-                            None
-                        }
-                    };
+                // Initialize WebGPU
+                let gpu: Option<render::GpuState> = frame::init_gpu(&canvas_for_click_inner).await;
 
                 // Visual pulses per voice and optional analyser for ambient effects
                 let pulses = Rc::new(RefCell::new(vec![0.0_f32; engine.borrow().voices.len()]));
@@ -808,27 +800,8 @@ async fn init() -> anyhow::Result<()> {
                     swirl_initialized: false,
                     pulse_energy: [0.0, 0.0, 0.0],
                 }));
-                let tick: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
-                let tick_clone = tick.clone();
-                let frame_ctx_tick = frame_ctx.clone();
-                *tick.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-                    frame_ctx_tick.borrow_mut().frame();
-                    if let Some(w) = web::window() {
-                        let _ = w.request_animation_frame(
-                            tick_clone
-                                .borrow()
-                                .as_ref()
-                                .unwrap()
-                                .as_ref()
-                                .unchecked_ref(),
-                        );
-                    }
-                }) as Box<dyn FnMut()>));
-                if let Some(w) = web::window() {
-                    let _ = w.request_animation_frame(
-                        tick.borrow().as_ref().unwrap().as_ref().unchecked_ref(),
-                    );
-                }
+                // Start RAF loop
+                frame::start_loop(frame_ctx);
             });
         }
     }

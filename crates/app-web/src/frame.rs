@@ -6,6 +6,8 @@ use instant::Instant;
 use std::cell::RefCell;
 use std::rc::Rc;
 use web_sys as web;
+use wasm_bindgen::JsCast;
+use wasm_bindgen::closure::Closure;
 
 const CAMERA_Z: f32 = 6.0;
 
@@ -285,6 +287,44 @@ impl<'a> FrameContext<'a> {
                 let _ = src.stop_with_when(t0 + ev.duration_sec as f64 + 0.02);
             }
         }
+    }
+}
+
+pub async fn init_gpu(
+    canvas: &web::HtmlCanvasElement,
+) -> Option<render::GpuState<'static>> {
+    // leak a canvas clone to satisfy 'static lifetime for surface
+    let leaked_canvas = Box::leak(Box::new(canvas.clone()));
+    match render::GpuState::new(leaked_canvas, CAMERA_Z).await {
+        Ok(g) => Some(g),
+        Err(e) => {
+            log::error!("WebGPU init error: {:?}", e);
+            None
+        }
+    }
+}
+
+pub fn start_loop(frame_ctx: Rc<RefCell<FrameContext<'static>>>) {
+    let tick: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
+    let tick_clone = tick.clone();
+    let frame_ctx_tick = frame_ctx.clone();
+    *tick.borrow_mut() = Some(Closure::wrap(Box::new(move || {
+        frame_ctx_tick.borrow_mut().frame();
+        if let Some(w) = web::window() {
+            let _ = w.request_animation_frame(
+                tick_clone
+                    .borrow()
+                    .as_ref()
+                    .unwrap()
+                    .as_ref()
+                    .unchecked_ref(),
+            );
+        }
+    }) as Box<dyn FnMut()>));
+    if let Some(w) = web::window() {
+        let _ = w.request_animation_frame(
+            tick.borrow().as_ref().unwrap().as_ref().unchecked_ref(),
+        );
     }
 }
 
