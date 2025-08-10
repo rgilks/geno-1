@@ -20,6 +20,7 @@ mod events;
 mod frame;
 mod input;
 mod overlay;
+mod camera;
 mod render;
 // ui module removed; overlay is controlled directly from here
 
