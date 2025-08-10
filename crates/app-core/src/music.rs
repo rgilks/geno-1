@@ -272,6 +272,7 @@ mod tests {
         engine.set_voice_position(0, Vec3::new(2.0, 0.0, -1.0));
         assert_eq!(engine.voices[0].position, Vec3::new(2.0, 0.0, -1.0));
     }
+    #[test]
     fn midi_to_hz_references() {
         assert!(approx_eq(midi_to_hz(69.0), 440.0, 0.01));
         // Middle C ≈ 261.6256 Hz

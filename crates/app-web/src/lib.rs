@@ -224,7 +224,10 @@ async fn init() -> anyhow::Result<()> {
                         }
                     }) as Box<dyn FnMut(_)>);
                     window
-                        .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
+                        .add_event_listener_with_callback(
+                            "keydown",
+                            closure.as_ref().unchecked_ref(),
+                        )
                         .ok();
                     closure.forget();
                 }

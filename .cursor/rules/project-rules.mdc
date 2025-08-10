@@ -3,27 +3,28 @@ alwaysApply: true
 ---
 
 Proceed in small iterative steps and test each change.
-Do not block for approvals; follow `docs/SPEC.md` and keep momentum.
+Refactor the code to make it more elegant, concise and simple. It should be clear and easy to maintain.
+Improve the tests as you go, make sure the tests are clear and focused. Don't create lots of trivial tests.
+Improve the docs and diagramsas you go.
+Remove dead code.
+
+Do not block for approvals; follow `docs/SPEC.md` and `docs/TODO.md` and keep momentum.
 Prefer WebGPU via `wgpu` v24.0 and avoid WebGL2 fallbacks.
 Prefer Node for servers/tooling; avoid Python for this project.
-Default to pure web flow first; keep native in parity where simple.
-
-Pre-commit and push procedure:
-
-- Update `README.md` and `docs/TODO.md`
-- Run `npm run check` to format, lint, build, and execute headless tests.
-- Ensure the check is green (no warnings promoted to errors, builds succeed, tests pass).
-- Commit and push only after the above succeed.
 
 Testing guidelines:
 
-- Rust unit tests live alongside code in `crates/app-core` (and other crates as added). Use `cargo test`.
+- Rust unit tests live alongside code. Use `cargo test`.
 - Headless web test is executed via `npm run ci:web` which builds the WASM, serves it, and runs Puppeteer (`web-test.js`).
 - The `npm run check` command runs:
   - `cargo fmt --check` and `cargo clippy -D warnings` for formatting/lint
   - `cargo test` (workspace, excluding `app-web`)
-  - `cargo build -p app-native`
   - Web CI build + headless test
-- Add tests for:
-  - Core logic invariants (e.g., frequency math, event scheduling, mute/solo behavior)
-  - Regressions for reported bugs
+
+Pre-commit and push procedure:
+
+- Update `README.md`, `docs/TODO.md` and `docs/SPEC.md`
+- Run `npm run check` to format, lint, build, and execute headless tests.
+- Ensure the check is green (no warnings promoted to errors, builds succeed, tests pass).
+- Also try and fix warnings.
+- Commit and push only after the above succeed.

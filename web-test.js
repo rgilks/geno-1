@@ -36,28 +36,30 @@ const puppeteer = require("puppeteer");
   await new Promise((r) => setTimeout(r, 400));
 
   // Overlay should be present initially; close it, then bring it back with 'H'
-  const overlayInitially = await page.$('#start-overlay');
-  if (!overlayInitially) throw new Error('start overlay not found');
+  const overlayInitially = await page.$("#start-overlay");
+  if (!overlayInitially) throw new Error("start overlay not found");
   // Click close to hide
-  await page.click('#overlay-close');
+  await page.click("#overlay-close");
   await new Promise((r) => setTimeout(r, 200));
   const overlayHidden = await page.evaluate(() => {
-    const el = document.getElementById('start-overlay');
-    if (!el) return 'missing';
-    const style = el.getAttribute('style') || '';
-    return /display:\s*none/.test(style) ? 'hidden' : 'visible';
+    const el = document.getElementById("start-overlay");
+    if (!el) return "missing";
+    const style = el.getAttribute("style") || "";
+    return /display:\s*none/.test(style) ? "hidden" : "visible";
   });
-  if (overlayHidden !== 'hidden') throw new Error('start overlay did not hide after close');
+  if (overlayHidden !== "hidden")
+    throw new Error("start overlay did not hide after close");
   // Press H to show again
-  await page.keyboard.press('KeyH');
+  await page.keyboard.press("KeyH");
   await new Promise((r) => setTimeout(r, 200));
   const overlayShown = await page.evaluate(() => {
-    const el = document.getElementById('start-overlay');
-    if (!el) return 'missing';
-    const style = el.getAttribute('style') || '';
-    return /display:\s*none/.test(style) ? 'hidden' : 'visible';
+    const el = document.getElementById("start-overlay");
+    if (!el) return "missing";
+    const style = el.getAttribute("style") || "";
+    return /display:\s*none/.test(style) ? "hidden" : "visible";
   });
-  if (overlayShown !== 'visible') throw new Error('start overlay did not show after H');
+  if (overlayShown !== "visible")
+    throw new Error("start overlay did not show after H");
 
   // Engine-dependent checks (only if WebGPU init succeeded and handlers are bound)
   const engineStarted =

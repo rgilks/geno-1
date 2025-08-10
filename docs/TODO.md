@@ -93,9 +93,9 @@ Desktop UI support has been removed to simplify the project and focus on the web
 - [ ] app-web: factor large `lib.rs` into modules (`audio`, `render`, `input`, `ui`)
   - Rationale: improve maintainability of a >2k LOC file
   - Plan: create `mod` submodules and move code in small PR-sized steps; keep exports stable
- - [x] app-web: centralize DOM/hint/UI updates behind a tiny view model (initial)
-   - Rationale: reduce ad-hoc DOM writes scattered in event handlers
-   - Status: introduced `ui::refresh_hint_if_visible` and `set_hint_visibility` to unify updates; consider a lightweight `UiState` later if more fields accrue
+- [x] app-web: centralize DOM/hint/UI updates behind a tiny view model (initial)
+  - Rationale: reduce ad-hoc DOM writes scattered in event handlers
+  - Status: introduced `ui::refresh_hint_if_visible` and `set_hint_visibility` to unify updates; consider a lightweight `UiState` later if more fields accrue
 - [ ] app-web: extract WebGPU pipeline builders
   - Rationale: deduplicate pipeline/buffer setup for waves/post passes
   - Plan: create `pipeline.rs` helpers returning typed bundles; no functional changes
