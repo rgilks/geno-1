@@ -16,6 +16,7 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys as web;
 // (DeviceExt no longer needed; legacy vertex buffers removed)
 
+mod audio;
 mod input;
 mod overlay;
 mod render;
@@ -23,6 +24,7 @@ mod render;
 
 // Rendering/picking shared constants to keep math consistent
 const CAMERA_Z: f32 = 6.0;
+const ANALYSER_FFT_SIZE: u32 = 256;
 
 // Small helper to attach a click listener to an element by id
 fn add_click_listener(
@@ -35,6 +37,11 @@ fn add_click_listener(
         let _ = el.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
         closure.forget();
     }
+}
+
+#[inline]
+fn window_document() -> Option<web::Document> {
+    web::window().and_then(|w| w.document())
 }
 
 #[inline]
@@ -92,7 +99,7 @@ fn create_analyser(
 ) -> (Option<web::AnalyserNode>, Rc<RefCell<Vec<f32>>>) {
     let analyser: Option<web::AnalyserNode> = web::AnalyserNode::new(audio_ctx).ok();
     if let Some(a) = &analyser {
-        a.set_fft_size(256);
+        a.set_fft_size(ANALYSER_FFT_SIZE);
     }
     let buf: Rc<RefCell<Vec<f32>>> = Rc::new(RefCell::new(Vec::new()));
     if let Some(a) = &analyser {
@@ -338,7 +345,7 @@ async fn init() -> anyhow::Result<()> {
                 let paused = Rc::new(RefCell::new(true));
 
                 // Wire OK / Close to hide overlay and start scheduling (unpause) + resume AudioContext
-                if let Some(doc2) = web::window().and_then(|w| w.document()) {
+                if let Some(doc2) = window_document() {
                     let paused_ok = paused.clone();
                     let audio_ok = audio_ctx.clone();
                     add_click_listener(&doc2, "overlay-ok", move || {
@@ -386,143 +393,20 @@ async fn init() -> anyhow::Result<()> {
                     closure.forget();
                 }
 
-                // Master mix bus -> destination
-                let master_gain = match create_gain(&audio_ctx, 0.25, "Master") {
-                    Some(g) => g,
-                    None => return,
+                // FX buses
+                let fx = match audio::build_fx_buses(&audio_ctx) {
+                    Ok(f) => f,
+                    Err(_) => return,
                 };
-                // Subtle master saturation (arctan) with wet/dry mix
-                let sat_pre = match create_gain(&audio_ctx, 0.9, "sat pre") {
-                    Some(g) => g,
-                    None => return,
-                };
-
-                #[allow(deprecated)]
-                let saturator = match web::WaveShaperNode::new(&audio_ctx) {
-                    Ok(n) => n,
-                    Err(e) => {
-                        log::error!("WaveShaperNode error: {:?}", e);
-                        return;
-                    }
-                };
-                // Build arctan curve
-                let curve_len: u32 = 2048;
-                let drive: f32 = 1.6;
-                let mut curve = make_arctan_curve(curve_len, drive);
-                // web-sys binding copies from the slice into a Float32Array under the hood
-                #[allow(deprecated)]
-                saturator.set_curve(Some(curve.as_mut_slice()));
-
-                let sat_wet = match create_gain(&audio_ctx, 0.35, "sat wet") {
-                    Some(g) => g,
-                    None => return,
-                };
-
-                let sat_dry = match create_gain(&audio_ctx, 0.65, "sat dry") {
-                    Some(g) => g,
-                    None => return,
-                };
-
-                // Route master -> [dry,dst] and master -> pre -> shaper -> wet -> dst
-                let _ = master_gain.connect_with_audio_node(&sat_pre);
-                let _ = sat_pre.connect_with_audio_node(&saturator);
-                let _ = saturator.connect_with_audio_node(&sat_wet);
-                let _ = sat_wet.connect_with_audio_node(&audio_ctx.destination());
-                let _ = master_gain.connect_with_audio_node(&sat_dry);
-                let _ = sat_dry.connect_with_audio_node(&audio_ctx.destination());
-
-                // Global lush reverb (Convolver) and tempo-synced dark delay bus
-                // Reverb input and wet level
-                let reverb_in = match create_gain(&audio_ctx, 1.0, "Reverb in") {
-                    Some(g) => g,
-                    None => return,
-                };
-                let reverb = match web::ConvolverNode::new(&audio_ctx) {
-                    Ok(n) => n,
-                    Err(e) => {
-                        log::error!("ConvolverNode error: {:?}", e);
-                        return;
-                    }
-                };
-                reverb.set_normalize(true);
-                // Create a long, dark stereo impulse response procedurally
-                {
-                    let sr = audio_ctx.sample_rate();
-                    let seconds = 5.0_f32; // lush tail
-                    let len = (sr as f32 * seconds) as u32;
-                    if let Ok(ir) = audio_ctx.create_buffer(2, len, sr) {
-                        // simple xorshift32 for deterministic noise
-                        let mut seed_l: u32 = 0x1234ABCD;
-                        let mut seed_r: u32 = 0x7890FEDC;
-                        for ch in 0..2 {
-                            let mut buf: Vec<f32> = vec![0.0; len as usize];
-                            let mut t = 0.0_f32;
-                            let dt = 1.0_f32 / sr as f32;
-                            for i in 0..len as usize {
-                                let s = if ch == 0 { &mut seed_l } else { &mut seed_r };
-                                let mut x = *s;
-                                x ^= x << 13;
-                                x ^= x >> 17;
-                                x ^= x << 5;
-                                *s = x;
-                                let n = ((x as f32 / std::u32::MAX as f32) * 2.0 - 1.0) as f32;
-                                // Exponential decay envelope, dark tilt
-                                let decay = (-t / 3.0).exp();
-                                let dark = (1.0 - (t / seconds)).max(0.0);
-                                let v = n * decay * (0.6 + 0.4 * dark);
-                                buf[i] = v;
-                                t += dt;
-                            }
-                            let _ = ir.copy_to_channel(&mut buf, ch as i32);
-                        }
-                        reverb.set_buffer(Some(&ir));
-                    }
-                }
-                let reverb_wet = match create_gain(&audio_ctx, 0.6, "Reverb wet") {
-                    Some(g) => g,
-                    None => return,
-                };
-                let _ = reverb_in.connect_with_audio_node(&reverb);
-                let _ = reverb.connect_with_audio_node(&reverb_wet);
-                let _ = reverb_wet.connect_with_audio_node(&master_gain);
-
-                // Delay bus with feedback loop and lowpass tone for darkness
-                let delay_in = match create_gain(&audio_ctx, 1.0, "Delay in") {
-                    Some(g) => g,
-                    None => return,
-                };
-                let delay = match audio_ctx.create_delay_with_max_delay_time(3.0) {
-                    Ok(n) => n,
-                    Err(e) => {
-                        log::error!("DelayNode error: {:?}", e);
-                        return;
-                    }
-                };
-                // Around ~3/8 to ~1/2 note depending on BPM 110 → ~0.55s feels lush
-                delay.delay_time().set_value(0.55);
-                let delay_tone = match web::BiquadFilterNode::new(&audio_ctx) {
-                    Ok(n) => n,
-                    Err(e) => {
-                        log::error!("BiquadFilterNode error: {:?}", e);
-                        return;
-                    }
-                };
-                delay_tone.set_type(web::BiquadFilterType::Lowpass);
-                delay_tone.frequency().set_value(1400.0);
-                let delay_feedback = match create_gain(&audio_ctx, 0.6, "Delay feedback") {
-                    Some(g) => g,
-                    None => return,
-                };
-                let delay_wet = match create_gain(&audio_ctx, 0.5, "Delay wet") {
-                    Some(g) => g,
-                    None => return,
-                };
-                let _ = delay_in.connect_with_audio_node(&delay);
-                let _ = delay.connect_with_audio_node(&delay_tone);
-                let _ = delay_tone.connect_with_audio_node(&delay_feedback);
-                let _ = delay_feedback.connect_with_audio_node(&delay);
-                let _ = delay_tone.connect_with_audio_node(&delay_wet);
-                let _ = delay_wet.connect_with_audio_node(&master_gain);
+                let master_gain = fx.master_gain.clone();
+                let sat_pre = fx.sat_pre.clone();
+                let sat_wet = fx.sat_wet.clone();
+                let sat_dry = fx.sat_dry.clone();
+                let reverb_in = fx.reverb_in.clone();
+                let reverb_wet = fx.reverb_wet.clone();
+                let delay_in = fx.delay_in.clone();
+                let delay_feedback = fx.delay_feedback.clone();
+                let delay_wet = fx.delay_wet.clone();
 
                 // Per-voice master gains -> master bus, plus effect sends
                 let mut voice_gains: Vec<web::GainNode> = Vec::new();
@@ -581,13 +465,14 @@ async fn init() -> anyhow::Result<()> {
 
                 // Initialize WebGPU (leak a canvas clone to satisfy 'static lifetime for surface)
                 let leaked_canvas = Box::leak(Box::new(canvas_for_click_inner.clone()));
-                let mut gpu: Option<GpuState> = match GpuState::new(leaked_canvas).await {
-                    Ok(g) => Some(g),
-                    Err(e) => {
-                        log::error!("WebGPU init error: {:?}", e);
-                        None
-                    }
-                };
+                let mut gpu: Option<render::GpuState> =
+                    match render::GpuState::new(leaked_canvas, CAMERA_Z).await {
+                        Ok(g) => Some(g),
+                        Err(e) => {
+                            log::error!("WebGPU init error: {:?}", e);
+                            None
+                        }
+                    };
 
                 // Visual pulses per voice and optional analyser for ambient effects
                 let pulses = Rc::new(RefCell::new(vec![0.0_f32; engine.borrow().voices.len()]));
@@ -1233,42 +1118,7 @@ async fn init() -> anyhow::Result<()> {
 }
 
 // ===================== WebGPU state =====================
-
-// (legacy scene Uniforms/InstanceData removed)
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct VoicePacked {
-    pos_pulse: [f32; 4],
-    color: [f32; 4],
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct WavesUniforms {
-    resolution: [f32; 2],
-    time: f32,
-    ambient: f32,
-    voices: [VoicePacked; 3],
-    swirl_uv: [f32; 2],
-    swirl_strength: f32,
-    swirl_active: f32,
-    ripple_uv: [f32; 2],
-    ripple_t0: f32,
-    ripple_amp: f32,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-struct PostUniforms {
-    resolution: [f32; 2],
-    time: f32,
-    ambient: f32,
-    blur_dir: [f32; 2],
-    bloom_strength: f32,
-    threshold: f32,
-}
-
+// Moved to render.rs
 struct GpuState<'a> {
     surface: wgpu::Surface<'a>,
     device: wgpu::Device,
@@ -1318,6 +1168,7 @@ struct GpuState<'a> {
     ripple_amp: f32,
 }
 
+/* impl moved to render.rs
 impl<'a> GpuState<'a> {
     async fn new(canvas: &'a web::HtmlCanvasElement) -> anyhow::Result<Self> {
         let width = canvas.width();
@@ -1474,7 +1325,7 @@ impl<'a> GpuState<'a> {
         });
         let waves_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("waves_uniforms"),
-            size: std::mem::size_of::<WavesUniforms>() as u64,
+            size: std::mem::size_of::<render::WavesUniforms>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -1559,7 +1410,7 @@ impl<'a> GpuState<'a> {
         });
         let post_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("post_uniforms"),
-            size: std::mem::size_of::<PostUniforms>() as u64,
+            size: std::mem::size_of::<render::PostUniforms>() as u64,
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
@@ -2005,7 +1856,7 @@ impl<'a> GpuState<'a> {
                 occlusion_query_set: None,
             });
             // Waves uniforms from current voice positions/pulses
-            let pack = |i: usize| VoicePacked {
+            let pack = |i: usize| render::VoicePacked {
                 pos_pulse: [
                     positions[i].x,
                     positions[i].y,
@@ -2015,7 +1866,7 @@ impl<'a> GpuState<'a> {
                 ],
                 color: colors[i].to_array(),
             };
-            let w = WavesUniforms {
+            let w = render::WavesUniforms {
                 resolution: [self.width as f32, self.height as f32],
                 time: self.time_accum,
                 ambient: self.ambient_energy,
@@ -2040,7 +1891,7 @@ impl<'a> GpuState<'a> {
 
         // Update post uniforms base
         let res = [self.width as f32 / 2.0, self.height as f32 / 2.0];
-        let mut post = PostUniforms {
+        let mut post = render::PostUniforms {
             resolution: res,
             time: self.time_accum,
             ambient: self.ambient_energy,
@@ -2150,3 +2001,4 @@ impl<'a> GpuState<'a> {
         Ok(())
     }
 }
+*/
