@@ -31,5 +31,3 @@ pub fn toggle(document: &web::Document) {
         hide(document);
     }
 }
-
-
