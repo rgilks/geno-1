@@ -41,6 +41,7 @@ pub struct VoiceState {
 pub struct EngineParams {
     pub bpm: f32,
     pub scale: &'static [i32],
+    pub root_midi: i32,
 }
 
 impl Default for EngineParams {
@@ -48,12 +49,22 @@ impl Default for EngineParams {
         Self {
             bpm: 110.0,
             scale: C_MAJOR_PENTATONIC,
+            root_midi: 60, // Middle C
         }
     }
 }
 
 /// Default five-note scale centered around middle C.
 pub const C_MAJOR_PENTATONIC: &[i32] = &[0, 2, 4, 7, 9, 12];
+
+/// Diatonic modes (relative semitone degrees)
+pub const IONIAN: &[i32] = &[0, 2, 4, 5, 7, 9, 11, 12]; // major
+pub const DORIAN: &[i32] = &[0, 2, 3, 5, 7, 9, 10, 12];
+pub const PHRYGIAN: &[i32] = &[0, 1, 3, 5, 7, 8, 10, 12];
+pub const LYDIAN: &[i32] = &[0, 2, 4, 6, 7, 9, 11, 12];
+pub const MIXOLYDIAN: &[i32] = &[0, 2, 4, 5, 7, 9, 10, 12];
+pub const AEOLIAN: &[i32] = &[0, 2, 3, 5, 7, 8, 10, 12]; // natural minor
+pub const LOCRIAN: &[i32] = &[0, 1, 3, 5, 6, 8, 10, 12];
 
 /// Random generative scheduler producing `NoteEvent`s on an eighth-note grid.
 pub struct MusicEngine {
@@ -169,7 +180,7 @@ impl MusicEngine {
             if rng.gen::<f32>() < prob {
                 let degree = *self.params.scale.choose(rng).unwrap_or(&0);
                 let octave = MusicEngine::voice_octave_offset(i);
-                let midi = 60 + degree + octave * 12; // around middle C
+                let midi = self.params.root_midi + degree + octave * 12;
                 let freq = midi_to_hz(midi as f32);
                 let vel = 0.4 + rng.gen::<f32>() * 0.6;
                 let dur = MusicEngine::voice_base_duration(i) + rng.gen::<f32>() * 0.2;

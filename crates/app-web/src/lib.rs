@@ -1,8 +1,9 @@
 #![cfg(target_arch = "wasm32")]
 use app_core::{
-    midi_to_hz, z_offset_vec3, EngineParams, MusicEngine, VoiceConfig, Waveform, BASE_SCALE,
-    C_MAJOR_PENTATONIC, DEFAULT_VOICE_COLORS, DEFAULT_VOICE_POSITIONS, ENGINE_DRAG_MAX_RADIUS,
-    PICK_SPHERE_RADIUS, SCALE_PULSE_MULTIPLIER, SPREAD,
+    midi_to_hz, z_offset_vec3, EngineParams, MusicEngine, VoiceConfig, Waveform, AEOLIAN,
+    BASE_SCALE, C_MAJOR_PENTATONIC, DEFAULT_VOICE_COLORS, DEFAULT_VOICE_POSITIONS, DORIAN,
+    ENGINE_DRAG_MAX_RADIUS, IONIAN, LOCRIAN, LYDIAN, MIXOLYDIAN, PHRYGIAN, PICK_SPHERE_RADIUS,
+    SCALE_PULSE_MULTIPLIER, SPREAD,
 };
 use glam::{Mat4, Vec2, Vec3, Vec4};
 use instant::Instant;
@@ -153,6 +154,7 @@ async fn init() -> anyhow::Result<()> {
                         EngineParams {
                             bpm: 110.0,
                             scale: C_MAJOR_PENTATONIC,
+                            root_midi: 60,
                         },
                         42,
                     )));
@@ -571,6 +573,36 @@ async fn init() -> anyhow::Result<()> {
                                     }
                                     // noisy key debug log removed
                                 }
+                                // Root note selection (A..F)
+                                "a" | "A" => engine_k.borrow_mut().params.root_midi = 69,
+                                "b" | "B" => engine_k.borrow_mut().params.root_midi = 71,
+                                "c" | "C" => engine_k.borrow_mut().params.root_midi = 60,
+                                "d" | "D" => engine_k.borrow_mut().params.root_midi = 62,
+                                "e" | "E" => engine_k.borrow_mut().params.root_midi = 64,
+                                "f" | "F" => engine_k.borrow_mut().params.root_midi = 65,
+                                // Mode selection (1..7)
+                                "1" => engine_k.borrow_mut().params.scale = IONIAN,
+                                "2" => engine_k.borrow_mut().params.scale = DORIAN,
+                                "3" => engine_k.borrow_mut().params.scale = PHRYGIAN,
+                                "4" => engine_k.borrow_mut().params.scale = LYDIAN,
+                                "5" => engine_k.borrow_mut().params.scale = MIXOLYDIAN,
+                                "6" => engine_k.borrow_mut().params.scale = AEOLIAN,
+                                "7" => engine_k.borrow_mut().params.scale = LOCRIAN,
+                                // Randomize tonality (root + mode)
+                                "t" | "T" => {
+                                    let roots: [i32; 7] = [60, 62, 64, 65, 67, 69, 71];
+                                    let modes: [&'static [i32]; 7] = [
+                                        IONIAN, DORIAN, PHRYGIAN, LYDIAN, MIXOLYDIAN, AEOLIAN,
+                                        LOCRIAN,
+                                    ];
+                                    let ri = (js_sys::Math::random() * roots.len() as f64).floor()
+                                        as usize;
+                                    let mi = (js_sys::Math::random() * modes.len() as f64).floor()
+                                        as usize;
+                                    let mut eng = engine_k.borrow_mut();
+                                    eng.params.root_midi = roots[ri];
+                                    eng.params.scale = modes[mi];
+                                }
                                 // Pause/resume scheduling
                                 " " => {
                                     let mut p = paused_k.borrow_mut();
@@ -658,14 +690,13 @@ async fn init() -> anyhow::Result<()> {
                                         }
                                     }
                                 }
-                                // Fullscreen toggle
-                                "f" | "F" => {
+                                // Enter: Fullscreen toggle
+                                "Enter" => {
                                     if let Some(win) = web::window() {
                                         if let Some(doc) = win.document() {
                                             if doc.fullscreen_element().is_some() {
                                                 let _ = doc.exit_fullscreen();
                                             } else {
-                                                // Request fullscreen on the canvas
                                                 let _ = canvas_k.request_fullscreen();
                                             }
                                         }

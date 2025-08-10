@@ -6,8 +6,9 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::{event::*, event_loop::EventLoop, window::WindowBuilder};
 
 use app_core::{
-    z_offset_vec3, EngineParams, MusicEngine, VoiceConfig, Waveform, BASE_SCALE,
-    C_MAJOR_PENTATONIC, DEFAULT_VOICE_COLORS, DEFAULT_VOICE_POSITIONS, PICK_SPHERE_RADIUS, SPREAD,
+    z_offset_vec3, EngineParams, MusicEngine, VoiceConfig, Waveform, AEOLIAN, BASE_SCALE,
+    C_MAJOR_PENTATONIC, DEFAULT_VOICE_COLORS, DEFAULT_VOICE_POSITIONS, DORIAN, IONIAN, LOCRIAN,
+    LYDIAN, MIXOLYDIAN, PICK_SPHERE_RADIUS, PHRYGIAN, SPREAD,
 };
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use glam::{Mat4, Vec3, Vec4};
@@ -412,6 +413,7 @@ fn main() {
         EngineParams {
             bpm: 110.0,
             scale: C_MAJOR_PENTATONIC,
+            root_midi: 60,
         },
         42,
     )));
@@ -464,6 +466,8 @@ fn main() {
                 ..
             } => {
                 let mut vol_changed = false;
+                let mut tone_changed = false;
+                // Update audio volume
                 {
                     let mut st = audio_state.lock().unwrap();
                     let step = 0.05f32;
@@ -479,11 +483,85 @@ fn main() {
                         _ => {}
                     }
                 }
+                // Update engine key/mode (shared engine)
+                {
+                    let mut eng = engine.lock().unwrap();
+                    match code {
+                        // Root A..F
+                        KeyCode::KeyA => {
+                            eng.params.root_midi = 69;
+                            tone_changed = true;
+                        }
+                        KeyCode::KeyB => {
+                            eng.params.root_midi = 71;
+                            tone_changed = true;
+                        }
+                        KeyCode::KeyC => {
+                            eng.params.root_midi = 60;
+                            tone_changed = true;
+                        }
+                        KeyCode::KeyD => {
+                            eng.params.root_midi = 62;
+                            tone_changed = true;
+                        }
+                        KeyCode::KeyE => {
+                            eng.params.root_midi = 64;
+                            tone_changed = true;
+                        }
+                        KeyCode::KeyF => {
+                            eng.params.root_midi = 65;
+                            tone_changed = true;
+                        }
+                        // Modes 1..7
+                        KeyCode::Digit1 => {
+                            eng.params.scale = IONIAN;
+                            tone_changed = true;
+                        }
+                        KeyCode::Digit2 => {
+                            eng.params.scale = DORIAN;
+                            tone_changed = true;
+                        }
+                        KeyCode::Digit3 => {
+                            eng.params.scale = PHRYGIAN;
+                            tone_changed = true;
+                        }
+                        KeyCode::Digit4 => {
+                            eng.params.scale = LYDIAN;
+                            tone_changed = true;
+                        }
+                        KeyCode::Digit5 => {
+                            eng.params.scale = MIXOLYDIAN;
+                            tone_changed = true;
+                        }
+                        KeyCode::Digit6 => {
+                            eng.params.scale = AEOLIAN;
+                            tone_changed = true;
+                        }
+                        KeyCode::Digit7 => {
+                            eng.params.scale = LOCRIAN;
+                            tone_changed = true;
+                        }
+                        // Randomize root+mode
+                        KeyCode::KeyT => {
+                            let roots: [i32; 7] = [60, 62, 64, 65, 67, 69, 71];
+                            let modes: [&'static [i32]; 7] =
+                                [IONIAN, DORIAN, PHRYGIAN, LYDIAN, MIXOLYDIAN, AEOLIAN, LOCRIAN];
+                            let ix = (Instant::now().elapsed().as_nanos() as u64) as usize;
+                            eng.params.root_midi = roots[ix % roots.len()];
+                            eng.params.scale = modes[(ix / 7) % modes.len()];
+                            tone_changed = true;
+                        }
+                        _ => {}
+                    }
+                }
                 if vol_changed {
-                    // Optionally log new volume for visibility
                     if let Ok(st) = audio_state.lock() {
                         log::info!("[keys] volume={:.2}", st.master_volume);
                     }
+                }
+                if tone_changed {
+                    let eng = engine.lock().unwrap();
+                    log::info!("[keys] root={} mode_len={}", eng.params.root_midi, eng.params.scale.len());
                 }
             }
             Event::WindowEvent {
@@ -647,10 +725,11 @@ fn start_audio_engine(
                     last = now;
                     let now_sec = start_instant.elapsed().as_secs_f64();
                     events.clear();
-                    // Pull latest voice state from shared engine to reflect input changes
+                    // Pull latest voice state and params from shared engine to reflect input changes
                     {
                         if let Ok(guard) = shared.lock() {
                             engine.voices = guard.voices.clone();
+                            engine.params = guard.params.clone();
                         }
                     }
                     engine.tick(dt, now_sec, &mut events);
