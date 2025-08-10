@@ -19,7 +19,6 @@ wasm-bindgen-futures = { workspace = true }
 js-sys = { workspace = true }
 web-sys = { workspace = true }
 wgpu = { workspace = true }
-winit = { workspace = true }
 glam = { workspace = true }
 bytemuck = { workspace = true }
 app-core = { path = "../app-core" }

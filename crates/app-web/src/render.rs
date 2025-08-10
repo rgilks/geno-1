@@ -4,6 +4,28 @@ use web_sys as web;
 // wgpu types are used below
 use wgpu;
 
+pub struct RenderTargets {
+    pub hdr_tex: wgpu::Texture,
+    pub hdr_view: wgpu::TextureView,
+    pub bloom_a: wgpu::Texture,
+    pub bloom_a_view: wgpu::TextureView,
+    pub bloom_b: wgpu::Texture,
+    pub bloom_b_view: wgpu::TextureView,
+}
+
+impl RenderTargets {
+    pub fn new(
+        hdr_tex: wgpu::Texture,
+        hdr_view: wgpu::TextureView,
+        bloom_a: wgpu::Texture,
+        bloom_a_view: wgpu::TextureView,
+        bloom_b: wgpu::Texture,
+        bloom_b_view: wgpu::TextureView,
+    ) -> Self {
+        Self { hdr_tex, hdr_view, bloom_a, bloom_a_view, bloom_b, bloom_b_view }
+    }
+}
+
 #[inline]
 pub fn screen_to_world_ray(
     canvas: &web::HtmlCanvasElement,
@@ -73,12 +95,7 @@ pub struct GpuState<'a> {
     waves_uniform_buffer: wgpu::Buffer,
     waves_bind_group: wgpu::BindGroup,
     // Post-processing resources
-    hdr_tex: wgpu::Texture,
-    hdr_view: wgpu::TextureView,
-    bloom_a: wgpu::Texture,
-    bloom_a_view: wgpu::TextureView,
-    bloom_b: wgpu::Texture,
-    bloom_b_view: wgpu::TextureView,
+    targets: RenderTargets,
     linear_sampler: wgpu::Sampler,
 
     #[allow(dead_code)]
@@ -531,12 +548,7 @@ impl<'a> GpuState<'a> {
             waves_pipeline,
             waves_uniform_buffer,
             waves_bind_group,
-            hdr_tex,
-            hdr_view,
-            bloom_a,
-            bloom_a_view,
-            bloom_b,
-            bloom_b_view,
+            targets: RenderTargets::new(hdr_tex, hdr_view, bloom_a, bloom_a_view, bloom_b, bloom_b_view),
             linear_sampler,
             post_bgl0,
             post_bgl1,
@@ -614,7 +626,7 @@ impl<'a> GpuState<'a> {
 
             // Recreate offscreen render targets and dependent bind groups
             let hdr_format = wgpu::TextureFormat::Rgba16Float;
-            self.hdr_tex = self.device.create_texture(&wgpu::TextureDescriptor {
+            self.targets.hdr_tex = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("hdr_tex"),
                 size: wgpu::Extent3d {
                     width,
@@ -629,13 +641,13 @@ impl<'a> GpuState<'a> {
                     | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             });
-            self.hdr_view = self
-                .hdr_tex
+            self.targets.hdr_view = self
+                .targets.hdr_tex
                 .create_view(&wgpu::TextureViewDescriptor::default());
             let bw = (width.max(1) / 2).max(1);
             let bh = (height.max(1) / 2).max(1);
             let bloom_format = wgpu::TextureFormat::Rgba16Float;
-            self.bloom_a = self.device.create_texture(&wgpu::TextureDescriptor {
+            self.targets.bloom_a = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("bloom_a"),
                 size: wgpu::Extent3d {
                     width: bw,
@@ -650,7 +662,7 @@ impl<'a> GpuState<'a> {
                     | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             });
-            self.bloom_b = self.device.create_texture(&wgpu::TextureDescriptor {
+            self.targets.bloom_b = self.device.create_texture(&wgpu::TextureDescriptor {
                 label: Some("bloom_b"),
                 size: wgpu::Extent3d {
                     width: bw,
@@ -665,11 +677,11 @@ impl<'a> GpuState<'a> {
                     | wgpu::TextureUsages::TEXTURE_BINDING,
                 view_formats: &[],
             });
-            self.bloom_a_view = self
-                .bloom_a
+            self.targets.bloom_a_view = self
+                .targets.bloom_a
                 .create_view(&wgpu::TextureViewDescriptor::default());
-            self.bloom_b_view = self
-                .bloom_b
+            self.targets.bloom_b_view = self
+                .targets.bloom_b
                 .create_view(&wgpu::TextureViewDescriptor::default());
 
             // Rebuild bind groups that reference these views
@@ -698,7 +710,7 @@ impl<'a> GpuState<'a> {
             let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("scene_pass"),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                    view: &self.hdr_view,
+                    view: &self.targets.hdr_view,
                     resolve_target: None,
                     ops: wgpu::Operations {
                         load: wgpu::LoadOp::Clear(self.clear_color),
@@ -820,7 +832,7 @@ impl<'a> GpuState<'a> {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.hdr_view),
+                        resource: wgpu::BindingResource::TextureView(&self.targets.hdr_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -839,7 +851,7 @@ impl<'a> GpuState<'a> {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.bloom_a_view),
+                        resource: wgpu::BindingResource::TextureView(&self.targets.bloom_a_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -858,7 +870,7 @@ impl<'a> GpuState<'a> {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.bloom_b_view),
+                        resource: wgpu::BindingResource::TextureView(&self.targets.bloom_b_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -877,7 +889,7 @@ impl<'a> GpuState<'a> {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.bloom_a_view),
+                        resource: wgpu::BindingResource::TextureView(&self.targets.bloom_a_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -891,7 +903,7 @@ impl<'a> GpuState<'a> {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.bloom_b_view),
+                        resource: wgpu::BindingResource::TextureView(&self.targets.bloom_b_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
