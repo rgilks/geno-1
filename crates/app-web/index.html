@@ -17,14 +17,6 @@
         display: block;
         touch-action: none;
       }
-      .hint {
-        position: fixed;
-        left: 12px;
-        bottom: 12px;
-        color: #9bb;
-        font: 12px/1.3 monospace;
-        opacity: 0.8;
-      }
       #start-overlay {
         position: fixed;
         inset: 0;
@@ -213,13 +205,6 @@
       </div>
     </div>
     <canvas id="app-canvas" width="1280" height="720"></canvas>
-    <div class="hint" data-visible="0" style="display: none">
-      Click Start to begin<br />
-      Click canvas: play a note • Mouse position affects sound<br />
-      A..F: root • 1..7: mode • R: new seq • T: random key+mode • Space:
-      pause/resume • ArrowLeft/Right: tempo • Enter: fullscreen<br />
-      BPM: 110 • Paused: no
-    </div>
     <div
       id="audio-error"
       style="

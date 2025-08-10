@@ -35,66 +35,35 @@ const puppeteer = require("puppeteer");
   await page.mouse.click(box.x, box.y);
   await new Promise((r) => setTimeout(r, 400));
 
-  // Ensure help is visible (CI headless has no WebGPU so we don't rely on H)
-  await page.evaluate(() => {
-    const el = document.querySelector(".hint");
-    if (el) {
-      el.setAttribute("data-visible", "1");
-      el.setAttribute("style", "");
-    }
+  // Overlay should be present initially; close it, then bring it back with 'H'
+  const overlayInitially = await page.$('#start-overlay');
+  if (!overlayInitially) throw new Error('start overlay not found');
+  // Click close to hide
+  await page.click('#overlay-close');
+  await new Promise((r) => setTimeout(r, 200));
+  const overlayHidden = await page.evaluate(() => {
+    const el = document.getElementById('start-overlay');
+    if (!el) return 'missing';
+    const style = el.getAttribute('style') || '';
+    return /display:\s*none/.test(style) ? 'hidden' : 'visible';
   });
-  await new Promise((r) => setTimeout(r, 120));
-  const hint1 = await page.evaluate(() => {
-    const el = document.querySelector(".hint");
-    return el
-      ? {
-          vis: el.getAttribute("data-visible"),
-          style: el.getAttribute("style") || "",
-          text: el.textContent || "",
-        }
-      : null;
+  if (overlayHidden !== 'hidden') throw new Error('start overlay did not hide after close');
+  // Press H to show again
+  await page.keyboard.press('KeyH');
+  await new Promise((r) => setTimeout(r, 200));
+  const overlayShown = await page.evaluate(() => {
+    const el = document.getElementById('start-overlay');
+    if (!el) return 'missing';
+    const style = el.getAttribute('style') || '';
+    return /display:\s*none/.test(style) ? 'hidden' : 'visible';
   });
-  if (!hint1 || hint1.vis !== "1")
-    throw new Error("hint did not become visible on first H");
-  if (!/BPM: \d+/.test(hint1.text) || !/Paused: (yes|no)/.test(hint1.text))
-    throw new Error("visible hint missing BPM/Paused");
-
-  // Hide help again to match expected toggle behavior in app
-  await page.evaluate(() => {
-    const el = document.querySelector(".hint");
-    if (el) {
-      el.setAttribute("data-visible", "0");
-      el.setAttribute("style", "display:none");
-    }
-  });
-  await new Promise((r) => setTimeout(r, 120));
-  const hint2 = await page.evaluate(() => {
-    const el = document.querySelector(".hint");
-    return el
-      ? {
-          vis: el.getAttribute("data-visible"),
-          style: el.getAttribute("style") || "",
-        }
-      : null;
-  });
-  if (!hint2 || hint2.vis !== "0" || !/display:none/.test(hint2.style))
-    throw new Error("hint did not hide on second H");
+  if (overlayShown !== 'visible') throw new Error('start overlay did not show after H');
 
   // Engine-dependent checks (only if WebGPU init succeeded and handlers are bound)
   const engineStarted =
     logs.some((l) => l.includes("[gesture] starting systems after click")) &&
     !logs.some((l) => l.includes("WebGPU init error"));
   if (engineStarted) {
-    // Ensure hint is visible so key handlers refresh its content
-    await page.evaluate(() => {
-      const el = document.querySelector(".hint");
-      if (el) {
-        el.setAttribute("data-visible", "1");
-        el.setAttribute("style", "");
-      }
-    });
-    await new Promise((r) => setTimeout(r, 80));
-
     // Reseed all
     await page.keyboard.press("KeyR");
     await new Promise((r) => setTimeout(r, 120));
@@ -111,51 +80,26 @@ const puppeteer = require("puppeteer");
       logs.some((l) => l.includes("[keys] paused=false"));
     if (!sawPause) throw new Error("missing pause/resume logs");
 
-    // Tempo up
+    // Tempo up/down (no UI assertion; rely on logs/state in future)
     await page.keyboard.down("Shift");
     await page.keyboard.press("Equal");
     await page.keyboard.up("Shift");
     await new Promise((r) => setTimeout(r, 120));
-    // Assert hint reflects BPM increase
-    let hintAfterUp = await page.evaluate(() => {
-      const el = document.querySelector(".hint");
-      return el ? el.textContent || "" : "";
-    });
-    if (!/BPM:\s*115/.test(hintAfterUp))
-      throw new Error("hint BPM not 115 after +");
-
-    // Tempo down
     await page.keyboard.press("Minus");
     await new Promise((r) => setTimeout(r, 120));
-    let hintAfterDown = await page.evaluate(() => {
-      const el = document.querySelector(".hint");
-      return el ? el.textContent || "" : "";
-    });
-    if (!/BPM:\s*110/.test(hintAfterDown))
-      throw new Error("hint BPM not 110 after -");
 
     // Master mute toggle
     await page.keyboard.press("KeyM");
     await new Promise((r) => setTimeout(r, 120));
     if (!logs.some((l) => /\[keys\] master muted=true/.test(l)))
       throw new Error("missing master mute= true log");
-    let hintMutedOn = await page.evaluate(() => {
-      const el = document.querySelector(".hint");
-      return el ? el.textContent || "" : "";
-    });
-    if (!/Muted:\s*yes/.test(hintMutedOn))
-      throw new Error("hint Muted not yes after M");
+    // Muted state no longer shown in hint; rely on logs only
 
     await page.keyboard.press("KeyM");
     await new Promise((r) => setTimeout(r, 120));
     if (!logs.some((l) => /\[keys\] master muted=false/.test(l)))
       throw new Error("missing master mute= false log");
-    let hintMutedOff = await page.evaluate(() => {
-      const el = document.querySelector(".hint");
-      return el ? el.textContent || "" : "";
-    });
-    if (!/Muted:\s*no/.test(hintMutedOff))
-      throw new Error("hint Muted not no after M again");
+    // Muted state no longer shown in hint; rely on logs only
 
     // Orbit feature removed; no O-key assertions
 
@@ -181,22 +125,7 @@ const puppeteer = require("puppeteer");
 
   // Basic assertions
   const hasWebGPU = await page.evaluate(() => !!navigator.gpu);
-  const hintState = await page.evaluate(() => {
-    const el = document.querySelector(".hint");
-    return el
-      ? {
-          style: el.getAttribute("style") || "",
-          data: el.getAttribute("data-visible") || "",
-          text: el.textContent || "",
-        }
-      : null;
-  });
   console.log("WEBGPU", hasWebGPU);
-  console.log("HINT", !!hintState, hintState);
-  if (!hintState) throw new Error("hint not found");
-  if (!/BPM: \d+/.test(hintState.text)) throw new Error("hint missing BPM");
-  if (!/Paused: (yes|no)/.test(hintState.text))
-    throw new Error("hint missing Paused state");
 
   await browser.close();
   process.exit(0);

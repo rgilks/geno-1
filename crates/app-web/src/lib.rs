@@ -18,7 +18,7 @@ use web_sys as web;
 
 mod input;
 mod render;
-mod ui;
+// ui module removed; overlay is controlled directly from here
 
 // Rendering/picking shared constants to keep math consistent
 const CAMERA_Z: f32 = 6.0;
@@ -50,14 +50,16 @@ async fn init() -> anyhow::Result<()> {
         .dyn_into::<web::HtmlCanvasElement>()
         .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
 
-    // Bring back 'h' help toggle to show/hide hint overlay
+    // 'h' brings back the initial start overlay
     {
         let window = web::window().unwrap();
         let document = document.clone();
         let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
             let key = ev.key();
             if key == "h" || key == "H" {
-                ui::toggle_hint_visibility(&document);
+                if let Some(overlay) = document.get_element_by_id("start-overlay") {
+                    let _ = overlay.set_attribute("style", "");
+                }
                 ev.prevent_default();
             }
         }) as Box<dyn FnMut(_)>);
@@ -67,8 +69,7 @@ async fn init() -> anyhow::Result<()> {
         closure.forget();
     }
 
-    // Note: we will query the optional hint element lazily inside event handlers to avoid
-    // capturing it here and forcing closures to be FnOnce.
+    // Note: start overlay is re-shown with 'h'.
 
     // Avoid grabbing a 2D context here to allow WebGPU to acquire the canvas
 
@@ -650,12 +651,7 @@ async fn init() -> anyhow::Result<()> {
                                 let mut p = paused_k.borrow_mut();
                                 *p = !*p;
                                 // noisy key debug log removed
-                                // If hint visible, refresh its content
-                                if let Some(win) = web::window() {
-                                    if let Some(doc) = win.document() {
-                                        ui::refresh_hint_if_visible(&doc, engine_k.borrow().params.bpm, *p);
-                                    }
-                                }
+                                // No bottom-hint; overlay can be re-opened with 'h'
                                 ev.prevent_default();
                             }
                             // Increase BPM (ArrowRight or +/=)
@@ -664,12 +660,7 @@ async fn init() -> anyhow::Result<()> {
                                 let new_bpm = (eng.params.bpm + 5.0).min(240.0);
                                 eng.set_bpm(new_bpm);
                                 // noisy key debug log removed
-                                // If hint visible, refresh its content
-                                if let Some(win) = web::window() {
-                                    if let Some(doc) = win.document() {
-                                        ui::refresh_hint_if_visible(&doc, new_bpm, *paused_k.borrow());
-                                    }
-                                }
+                                // No bottom-hint; overlay can be re-opened with 'h'
                             }
                             // Decrease BPM (ArrowLeft or -/_)
                             "ArrowLeft" | "-" | "_" => {
@@ -677,12 +668,7 @@ async fn init() -> anyhow::Result<()> {
                                 let new_bpm = (eng.params.bpm - 5.0).max(40.0);
                                 eng.set_bpm(new_bpm);
                                 // noisy key debug log removed
-                                // If hint visible, refresh its content
-                                if let Some(win) = web::window() {
-                                    if let Some(doc) = win.document() {
-                                        ui::refresh_hint_if_visible(&doc, new_bpm, *paused_k.borrow());
-                                    }
-                                }
+                                // No bottom-hint; overlay can be re-opened with 'h'
                             }
                             // Enter: Fullscreen toggle
                             "Enter" => {
