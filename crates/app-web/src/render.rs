@@ -22,7 +22,14 @@ impl RenderTargets {
         bloom_b: wgpu::Texture,
         bloom_b_view: wgpu::TextureView,
     ) -> Self {
-        Self { hdr_tex, hdr_view, bloom_a, bloom_a_view, bloom_b, bloom_b_view }
+        Self {
+            hdr_tex,
+            hdr_view,
+            bloom_a,
+            bloom_a_view,
+            bloom_b,
+            bloom_b_view,
+        }
     }
 }
 
@@ -548,7 +555,14 @@ impl<'a> GpuState<'a> {
             waves_pipeline,
             waves_uniform_buffer,
             waves_bind_group,
-            targets: RenderTargets::new(hdr_tex, hdr_view, bloom_a, bloom_a_view, bloom_b, bloom_b_view),
+            targets: RenderTargets::new(
+                hdr_tex,
+                hdr_view,
+                bloom_a,
+                bloom_a_view,
+                bloom_b,
+                bloom_b_view,
+            ),
             linear_sampler,
             post_bgl0,
             post_bgl1,
@@ -642,7 +656,8 @@ impl<'a> GpuState<'a> {
                 view_formats: &[],
             });
             self.targets.hdr_view = self
-                .targets.hdr_tex
+                .targets
+                .hdr_tex
                 .create_view(&wgpu::TextureViewDescriptor::default());
             let bw = (width.max(1) / 2).max(1);
             let bh = (height.max(1) / 2).max(1);
@@ -678,10 +693,12 @@ impl<'a> GpuState<'a> {
                 view_formats: &[],
             });
             self.targets.bloom_a_view = self
-                .targets.bloom_a
+                .targets
+                .bloom_a
                 .create_view(&wgpu::TextureViewDescriptor::default());
             self.targets.bloom_b_view = self
-                .targets.bloom_b
+                .targets
+                .bloom_b
                 .create_view(&wgpu::TextureViewDescriptor::default());
 
             // Rebuild bind groups that reference these views
@@ -768,7 +785,7 @@ impl<'a> GpuState<'a> {
         self.blit(
             &mut encoder,
             "bright_pass",
-            &self.bloom_a_view,
+            &self.targets.bloom_a_view,
             wgpu::Color::BLACK,
             &self.bright_pipeline,
             &self.bg_hdr,
@@ -782,7 +799,7 @@ impl<'a> GpuState<'a> {
         self.blit(
             &mut encoder,
             "blur_h",
-            &self.bloom_b_view,
+            &self.targets.bloom_b_view,
             wgpu::Color::BLACK,
             &self.blur_pipeline,
             &self.bg_from_bloom_a,
@@ -796,7 +813,7 @@ impl<'a> GpuState<'a> {
         self.blit(
             &mut encoder,
             "blur_v",
-            &self.bloom_a_view,
+            &self.targets.bloom_a_view,
             wgpu::Color::BLACK,
             &self.blur_pipeline,
             &self.bg_from_bloom_b,
@@ -832,7 +849,7 @@ impl<'a> GpuState<'a> {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&self.targets.hdr_view),
+                    resource: wgpu::BindingResource::TextureView(&self.targets.hdr_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -851,7 +868,7 @@ impl<'a> GpuState<'a> {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&self.targets.bloom_a_view),
+                    resource: wgpu::BindingResource::TextureView(&self.targets.bloom_a_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -870,7 +887,7 @@ impl<'a> GpuState<'a> {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&self.targets.bloom_b_view),
+                    resource: wgpu::BindingResource::TextureView(&self.targets.bloom_b_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -889,7 +906,7 @@ impl<'a> GpuState<'a> {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&self.targets.bloom_a_view),
+                    resource: wgpu::BindingResource::TextureView(&self.targets.bloom_a_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
@@ -903,7 +920,7 @@ impl<'a> GpuState<'a> {
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                        resource: wgpu::BindingResource::TextureView(&self.targets.bloom_b_view),
+                    resource: wgpu::BindingResource::TextureView(&self.targets.bloom_b_view),
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,

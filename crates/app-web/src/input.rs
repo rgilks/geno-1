@@ -1,4 +1,5 @@
 use glam::{Vec2, Vec3};
+use wasm_bindgen::JsCast;
 use web_sys as web;
 
 #[derive(Default, Clone, Copy)]
@@ -29,7 +30,8 @@ pub fn ray_sphere(ray_origin: Vec3, ray_dir: Vec3, center: Vec3, radius: f32) ->
 // ---------------- Pointer helpers (moved from lib.rs) ----------------
 #[inline]
 pub fn pointer_canvas_px(ev: &web::PointerEvent, canvas: &web::HtmlCanvasElement) -> Vec2 {
-    let rect = canvas.get_bounding_client_rect();
+    let el: web::Element = canvas.clone().unchecked_into();
+    let rect = el.get_bounding_client_rect();
     let x_css = ev.client_x() as f32 - rect.left() as f32;
     let y_css = ev.client_y() as f32 - rect.top() as f32;
     let sx = (x_css / rect.width() as f32) * canvas.width() as f32;
@@ -39,7 +41,8 @@ pub fn pointer_canvas_px(ev: &web::PointerEvent, canvas: &web::HtmlCanvasElement
 
 #[inline]
 pub fn pointer_canvas_uv(ev: &web::PointerEvent, canvas: &web::HtmlCanvasElement) -> [f32; 2] {
-    let rect = canvas.get_bounding_client_rect();
+    let el: web::Element = canvas.clone().unchecked_into();
+    let rect = el.get_bounding_client_rect();
     let x_css = ev.client_x() as f32 - rect.left() as f32;
     let y_css = ev.client_y() as f32 - rect.top() as f32;
     let w = rect.width() as f32;
