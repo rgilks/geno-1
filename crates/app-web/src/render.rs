@@ -4,6 +4,7 @@ use web_sys as web;
 
 mod helpers;
 mod targets;
+mod post;
 use targets::RenderTargets;
 
 pub use crate::camera::screen_to_world_ray;
@@ -474,7 +475,6 @@ impl<'a> GpuState<'a> {
             ripple_amp: 0.0,
         })
     }
-
     pub fn set_ambient_clear(&mut self, energy01: f32) {
         // Subtle brighten and slight hue shift with ambient energy
         let e = energy01.clamp(0.0, 1.0);
@@ -629,7 +629,7 @@ impl<'a> GpuState<'a> {
             .write_buffer(&self.post_uniform_buffer, 0, bytemuck::bytes_of(&post));
 
         // Pass 2: bright pass → bloom_a
-        self.blit(
+        post::blit(
             &mut encoder,
             "bright_pass",
             &self.targets.bloom_a_view,
@@ -643,7 +643,7 @@ impl<'a> GpuState<'a> {
         post.blur_dir = [1.0, 0.0];
         self.queue
             .write_buffer(&self.post_uniform_buffer, 0, bytemuck::bytes_of(&post));
-        self.blit(
+        post::blit(
             &mut encoder,
             "blur_h",
             &self.targets.bloom_b_view,
@@ -657,7 +657,7 @@ impl<'a> GpuState<'a> {
         post.blur_dir = [0.0, 1.0];
         self.queue
             .write_buffer(&self.post_uniform_buffer, 0, bytemuck::bytes_of(&post));
-        self.blit(
+        post::blit(
             &mut encoder,
             "blur_v",
             &self.targets.bloom_a_view,
@@ -671,7 +671,7 @@ impl<'a> GpuState<'a> {
         post.blur_dir = [0.0, 0.0];
         self.queue
             .write_buffer(&self.post_uniform_buffer, 0, bytemuck::bytes_of(&post));
-        self.blit(
+        post::blit(
             &mut encoder,
             "composite",
             &view,
@@ -777,36 +777,5 @@ impl<'a> GpuState<'a> {
         });
     }
 
-    fn blit(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        label: &str,
-        target: &wgpu::TextureView,
-        clear: wgpu::Color,
-        pipeline: &wgpu::RenderPipeline,
-        bg0: &wgpu::BindGroup,
-        bg1: Option<&wgpu::BindGroup>,
-    ) {
-        let mut r = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
-            label: Some(label),
-            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
-                view: target,
-                resolve_target: None,
-                ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(clear),
-                    store: wgpu::StoreOp::Store,
-                },
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
-        r.set_pipeline(pipeline);
-        r.set_bind_group(0, bg0, &[]);
-        if let Some(g1) = bg1 {
-            r.set_bind_group(1, g1, &[]);
-        }
-        r.draw(0..3, 0..1);
-        drop(r);
-    }
+    
 }
