@@ -24,12 +24,20 @@ mod render;
 // Rendering/picking shared constants to keep math consistent
 const CAMERA_Z: f32 = 6.0;
 
-// Helper to hide the start overlay consistently
-fn hide_overlay(document: &web::Document) {
-    if let Some(overlay) = document.get_element_by_id("start-overlay") {
-        let _ = overlay.set_attribute("style", "display:none");
+// Small helper to attach a click listener to an element by id
+fn add_click_listener(
+    document: &web::Document,
+    element_id: &str,
+    mut handler: impl FnMut() + 'static,
+) {
+    if let Some(el) = document.get_element_by_id(element_id) {
+        let closure = Closure::wrap(Box::new(move || handler()) as Box<dyn FnMut()>);
+        let _ = el.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+        closure.forget();
     }
 }
+
+// (use overlay::hide instead of local helper)
 
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
@@ -165,42 +173,29 @@ async fn init() -> anyhow::Result<()> {
 
                 // Wire OK / Close to hide overlay and start scheduling (unpause) + resume AudioContext
                 if let Some(doc2) = web::window().and_then(|w| w.document()) {
-                    if let Some(ok_btn) = doc2.get_element_by_id("overlay-ok") {
-                        let paused_for_ok = paused.clone();
-                        let audio_ctx_for_ok = audio_ctx.clone();
-                        let closure = Closure::wrap(Box::new(move || {
-                            *paused_for_ok.borrow_mut() = false;
-                            let _ = audio_ctx_for_ok.resume();
-                            if let Some(w2) = web::window() {
-                                if let Some(d2) = w2.document() {
-                                    hide_overlay(&d2);
-                                }
+                    let paused_ok = paused.clone();
+                    let audio_ok = audio_ctx.clone();
+                    add_click_listener(&doc2, "overlay-ok", move || {
+                        *paused_ok.borrow_mut() = false;
+                        let _ = audio_ok.resume();
+                        if let Some(w2) = web::window() {
+                            if let Some(d2) = w2.document() {
+                                overlay::hide(&d2);
                             }
-                        }) as Box<dyn FnMut()>);
-                        let _ = ok_btn.add_event_listener_with_callback(
-                            "click",
-                            closure.as_ref().unchecked_ref(),
-                        );
-                        closure.forget();
-                    }
-                    if let Some(close_btn) = doc2.get_element_by_id("overlay-close") {
-                        let paused_for_ok = paused.clone();
-                        let audio_ctx_for_ok2 = audio_ctx.clone();
-                        let closure = Closure::wrap(Box::new(move || {
-                            *paused_for_ok.borrow_mut() = false;
-                            let _ = audio_ctx_for_ok2.resume();
-                            if let Some(w2) = web::window() {
-                                if let Some(d2) = w2.document() {
-                                    hide_overlay(&d2);
-                                }
+                        }
+                    });
+
+                    let paused_close = paused.clone();
+                    let audio_close = audio_ctx.clone();
+                    add_click_listener(&doc2, "overlay-close", move || {
+                        *paused_close.borrow_mut() = false;
+                        let _ = audio_close.resume();
+                        if let Some(w2) = web::window() {
+                            if let Some(d2) = w2.document() {
+                                overlay::hide(&d2);
                             }
-                        }) as Box<dyn FnMut()>);
-                        let _ = close_btn.add_event_listener_with_callback(
-                            "click",
-                            closure.as_ref().unchecked_ref(),
-                        );
-                        closure.forget();
-                    }
+                        }
+                    });
                 }
 
                 // 'H' toggles the overlay visibility

@@ -11,8 +11,7 @@ Users can **influence and interact** with the generative music without manually 
 - 3 generative voices (sine/saw/triangle) with scale-constrained pitches (C major pentatonic by default), scheduler on an eighth-note grid
 - Web Audio graph with per-voice `PannerNode` and master reverb/delay buses; starts muted with Start overlay; gesture unlock required by browsers
 - Visuals: instanced voice markers, ambient waves background with pointer swirl and click ripples, post-processing (bright pass, blur, ACES tonemap, vignette, grain)
-- Interactions: drag voices in XZ, click= mute, Shift+Click= reseed, Alt+Click= solo; keys: R, Space, +/- (tempo), M (mute)
-
+- Planned microtonality: global detune in cents and additional microtonal scale families (19-TET, 24-TET, 31-TET); keyboard shortcuts for detune and scale selection
 
 ## Goals and Use Cases
 
@@ -53,8 +52,6 @@ Users can **influence and interact** with the generative music without manually 
   - We may use smaller utility crates (for example, `rand` for randomness, `serde` if any config, etc.), but the core logic is custom.
 
 - **Browser Compatibility:** The application targets browsers with WebGPU enabled; WebGL fallback is intentionally avoided. A Start overlay handles user gesture unlock for audio.
-
-
 
 ## System Architecture
 
@@ -105,7 +102,6 @@ The audio engine is responsible for producing continuous music with multiple voi
   - By adjusting a voice’s PannerNode position, the sound will pan between left/right and attenuate with distance, giving a sense of space. We can initialize each voice at a default position (e.g., spread them out a bit in the scene – one to the left, one to the right, one center or back, etc.).
   - If the user moves the camera or if we allow user to move the sound sources (dragging objects), update the PannerNode positions accordingly. Use an appropriate `distanceModel` (probably “linear” or “inverse”) so that distance affects volume naturally, and maybe set maxDistance so sounds don’t completely disappear if far.
   - Ensure that spatialization is subtle enough to be pleasant – for example, not panning extremely hard unless intended. The goal is immersive sound, not distraction.
-  
 
 - **Timing and Scheduling:** The audio engine should run on a stable timing mechanism:
 
@@ -235,14 +231,9 @@ We identify the key interactions the user needs and map them to in-scene control
 
 ### Cross-Platform Development Strategy
 
-
-
-
-
 - **Testing:** Use `npm run check` to format, lint, test Rust, and build/serve the web bundle, then run the headless browser test (Puppeteer). CI skips engine-coupled assertions when WebGPU is unavailable in headless.
 - **Platform Specific Limitations:**
 
-  
   - Browser is single-threaded by default for WASM (unless using threading with Web Workers and shared memory, which is advanced). It may not be necessary to multi-thread this project heavily due to the scope (generating a few voices and moderate graphics can likely run on one thread). But if needed (for example heavy audio processing), consider using the web’s AudioWorklet (runs audio in a separate thread) or offload some calculations to a web worker.
 
 - **Ignoring Mobile:** As stated, we will not optimize for mobile. If a user tries on mobile, one of two things likely happen: WebGPU not available (so it won’t run), or if it is (future), performance may be low. We can detect small screens and either warn or not officially support it. The UI also might not be touch-optimized yet (dragging with touch etc., which is additional complexity – not in scope now).

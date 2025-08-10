@@ -28,6 +28,18 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [ ] Optional AudioWorklet path (future)
 - Notes: Master starts muted; Start overlay ensures gesture unlock. Pointer corners map to saturation/delay; click injects ripple into background waves.
 
+### Microtonality (planned)
+
+- [ ] Global microtonal detune (in cents) applied to all generated notes
+  - [ ] Add `detune_cents: f32` to `EngineParams` (default 0.0)
+  - [ ] Update pitch conversion to support fractional semitones: generalize `midi_to_hz(midi: f32)` to accept fractional values, or introduce `pitch_to_hz(semitones_from_a4: f32)`
+  - [ ] Unit tests: verify 50¢ up/down relative to reference (A4) and round-trip expectations
+- [ ] Microtonal scales support
+  - [ ] Represent scales as `&'static [f32]` steps (semitones as floats) instead of `&'static [i32]`
+  - [ ] Add example scales: 24-TET (quarter tones), 19-TET, 31-TET; optionally a simple JI pentatonic (ratios converted to cents)
+  - [ ] Keep existing diatonic constants (IONIAN…LOCRIAN) by converting to `f32` for backward compatibility
+  - [ ] Tests: ensure selection applies expected offsets and produces monotonically increasing Hz across steps
+
 ## Visual Engine (Web)
 
 - [x] Instanced rendering of voice markers (circle mask, emissive pulse)
@@ -51,6 +63,16 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Clamp drag radius to a sensible range to avoid losing objects
 - [x] Mouse-driven FX mapping: corner-based saturation; opposite-corner delay
   - [x] Click/tap ripple expands in waves background
+
+### Keyboard – Microtonal Controls (planned)
+
+- [ ] Bind keys for microtonal nudge
+  - [ ] `,` decrease global detune by 50¢; `.` increase by 50¢ (hold Shift for 10¢ fine step)
+  - [ ] `/` reset detune to 0¢
+  - [ ] Update hint overlay to display current detune (e.g., “Detune: +50¢”)
+- [ ] Add microtonal scale selection shortcuts (avoiding conflicts with 1–7 mode keys)
+  - [ ] Proposed: `8` → 19-TET, `9` → 24-TET, `0` → 31-TET; repeat key to cycle variants if multiple
+  - [ ] Update hint overlay to show active scale family (e.g., “Scale: 24-TET pentatonic”)
 
 ## Platform Notes
 
