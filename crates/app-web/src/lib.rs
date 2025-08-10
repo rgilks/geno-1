@@ -17,10 +17,10 @@ use web_sys as web;
 // (DeviceExt no longer needed; legacy vertex buffers removed)
 
 mod audio;
+mod frame;
 mod input;
 mod overlay;
 mod render;
-mod frame;
 // ui module removed; overlay is controlled directly from here
 
 // Rendering/picking shared constants to keep math consistent
@@ -497,21 +497,7 @@ fn trigger_one_shot(
     }
 }
 
-// Create analyser and an appropriately sized buffer
-fn create_analyser(
-    audio_ctx: &web::AudioContext,
-) -> (Option<web::AnalyserNode>, Rc<RefCell<Vec<f32>>>) {
-    let analyser: Option<web::AnalyserNode> = web::AnalyserNode::new(audio_ctx).ok();
-    if let Some(a) = &analyser {
-        a.set_fft_size(ANALYSER_FFT_SIZE);
-    }
-    let buf: Rc<RefCell<Vec<f32>>> = Rc::new(RefCell::new(Vec::new()));
-    if let Some(a) = &analyser {
-        let bins = a.frequency_bin_count() as usize;
-        buf.borrow_mut().resize(bins, 0.0);
-    }
-    (analyser, buf)
-}
+// analyser creation moved to audio::create_analyser
 
 // Handle global keydown logic centrally (no behavior changes)
 fn handle_global_keydown(
@@ -817,55 +803,26 @@ async fn init() -> anyhow::Result<()> {
                 let mut voice_panners: Vec<web::PannerNode> = Vec::new();
                 let mut delay_sends_vec: Vec<web::GainNode> = Vec::new();
                 let mut reverb_sends_vec: Vec<web::GainNode> = Vec::new();
-                for v in 0..engine.borrow().voices.len() {
-                    let panner = match web::PannerNode::new(&audio_ctx) {
-                        Ok(p) => p,
-                        Err(e) => {
-                            log::error!("PannerNode error: {:?}", e);
-                            return;
-                        }
-                    };
-                    panner.set_panning_model(web::PanningModelType::Hrtf);
-                    panner.set_distance_model(web::DistanceModelType::Inverse);
-                    panner.set_ref_distance(0.5);
-                    panner.set_max_distance(50.0);
-                    let pos = engine.borrow().voices[v].position;
-                    // Use AudioParam positionX/Y/Z for Firefox compatibility
-                    panner.position_x().set_value(pos.x as f32);
-                    panner.position_y().set_value(pos.y as f32);
-                    panner.position_z().set_value(pos.z as f32);
-
-                    // Start muted; we will allow toggling via 'M' key
-                    let gain = match create_gain(&audio_ctx, 0.0, "Voice gain") {
-                        Some(g) => g,
-                        None => return,
-                    };
-                    if let Err(e) = gain.connect_with_audio_node(&panner) {
-                        log::error!("connect error: {:?}", e);
-                        return;
-                    }
-                    if let Err(e) = panner.connect_with_audio_node(&master_gain) {
-                        log::error!("connect error: {:?}", e);
-                        return;
-                    }
-                    // Per-voice sends
-                    let d_send = match create_gain(&audio_ctx, 0.4, "Delay send") {
-                        Some(g) => g,
-                        None => return,
-                    };
-                    let _ = d_send.connect_with_audio_node(&delay_in);
-                    delay_sends_vec.push(d_send);
-                    let r_send = match create_gain(&audio_ctx, 0.65, "Reverb send") {
-                        Some(g) => g,
-                        None => return,
-                    };
-                    let _ = r_send.connect_with_audio_node(&reverb_in);
-                    reverb_sends_vec.push(r_send);
-                    voice_gains.push(gain);
-                    voice_panners.push(panner);
-                }
-                let delay_sends = Rc::new(delay_sends_vec);
-                let reverb_sends = Rc::new(reverb_sends_vec);
+                let initial_positions: Vec<Vec3> = engine
+                    .borrow()
+                    .voices
+                    .iter()
+                    .map(|v| v.position)
+                    .collect();
+                let routing = match audio::wire_voices(
+                    &audio_ctx,
+                    &initial_positions,
+                    &master_gain,
+                    &delay_in,
+                    &reverb_in,
+                ) {
+                    Ok(r) => r,
+                    Err(_) => return,
+                };
+                let delay_sends = Rc::new(routing.delay_sends);
+                let reverb_sends = Rc::new(routing.reverb_sends);
+                let voice_panners = routing.voice_panners;
+                let voice_gains = Rc::new(routing.voice_gains);
 
                 // Initialize WebGPU (leak a canvas clone to satisfy 'static lifetime for surface)
                 let leaked_canvas = Box::leak(Box::new(canvas_for_click_inner.clone()));
@@ -880,7 +837,7 @@ async fn init() -> anyhow::Result<()> {
 
                 // Visual pulses per voice and optional analyser for ambient effects
                 let pulses = Rc::new(RefCell::new(vec![0.0_f32; engine.borrow().voices.len()]));
-                let (analyser, analyser_buf) = create_analyser(&audio_ctx);
+                let (analyser, analyser_buf) = audio::create_analyser(&audio_ctx);
 
                 let voice_gains = Rc::new(voice_gains);
 
@@ -1077,7 +1034,7 @@ async fn init() -> anyhow::Result<()> {
                                     .map(|v| (v.position.x / 3.0).clamp(-1.0, 1.0) * 0.5 + 0.5)
                                     .collect();
                                 let best_i = input::nearest_index_by_uvx(&norm_xs, uvx);
-                                        let dur = 0.35 + 0.25 * (1.0 - uvy as f64);
+                                let dur = 0.35 + 0.25 * (1.0 - uvy as f64);
                                 let wf = eng.configs[best_i].waveform;
                                 drop(eng);
                                 audio::trigger_one_shot(

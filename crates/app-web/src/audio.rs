@@ -1,5 +1,8 @@
-use web_sys as web;
 use app_core::Waveform;
+use glam::Vec3;
+use std::cell::RefCell;
+use std::rc::Rc;
+use web_sys as web;
 
 pub struct FxBuses {
     pub master_gain: web::GainNode,
@@ -11,6 +14,13 @@ pub struct FxBuses {
     pub delay_in: web::GainNode,
     pub delay_feedback: web::GainNode,
     pub delay_wet: web::GainNode,
+}
+
+pub struct VoiceRouting {
+    pub voice_gains: Vec<web::GainNode>,
+    pub voice_panners: Vec<web::PannerNode>,
+    pub delay_sends: Vec<web::GainNode>,
+    pub reverb_sends: Vec<web::GainNode>,
 }
 
 fn create_gain(
@@ -182,4 +192,71 @@ pub fn trigger_one_shot(
             let _ = src.stop_with_when(t0 + duration_sec + 0.05);
         }
     }
+}
+
+// Create analyser and an appropriately sized buffer
+pub fn create_analyser(
+    audio_ctx: &web::AudioContext,
+) -> (Option<web::AnalyserNode>, Rc<RefCell<Vec<f32>>>) {
+    let analyser: Option<web::AnalyserNode> = web::AnalyserNode::new(audio_ctx).ok();
+    if let Some(a) = &analyser {
+        a.set_fft_size(256);
+    }
+    let buf: Rc<RefCell<Vec<f32>>> = Rc::new(RefCell::new(Vec::new()));
+    if let Some(a) = &analyser {
+        let bins = a.frequency_bin_count() as usize;
+        buf.borrow_mut().resize(bins, 0.0);
+    }
+    (analyser, buf)
+}
+
+// Wire per-voice panners, gains and effect sends
+pub fn wire_voices(
+    audio_ctx: &web::AudioContext,
+    initial_positions: &[Vec3],
+    master_gain: &web::GainNode,
+    delay_in: &web::GainNode,
+    reverb_in: &web::GainNode,
+) -> Result<VoiceRouting, ()> {
+    let mut voice_gains: Vec<web::GainNode> = Vec::new();
+    let mut voice_panners: Vec<web::PannerNode> = Vec::new();
+    let mut delay_sends_vec: Vec<web::GainNode> = Vec::new();
+    let mut reverb_sends_vec: Vec<web::GainNode> = Vec::new();
+
+    for pos in initial_positions.iter() {
+        let panner = web::PannerNode::new(audio_ctx)
+            .map_err(|e| {
+                log::error!("PannerNode error: {:?}", e);
+            })
+            .map_err(|_| ())?;
+        panner.set_panning_model(web::PanningModelType::Hrtf);
+        panner.set_distance_model(web::DistanceModelType::Inverse);
+        panner.set_ref_distance(0.5);
+        panner.set_max_distance(50.0);
+        panner.position_x().set_value(pos.x as f32);
+        panner.position_y().set_value(pos.y as f32);
+        panner.position_z().set_value(pos.z as f32);
+
+        let gain = create_gain(audio_ctx, 0.0, "Voice gain").map_err(|_| ())?;
+        let _ = gain.connect_with_audio_node(&panner);
+        let _ = panner.connect_with_audio_node(master_gain);
+
+        let d_send = create_gain(audio_ctx, 0.4, "Delay send").map_err(|_| ())?;
+        let _ = d_send.connect_with_audio_node(delay_in);
+        delay_sends_vec.push(d_send);
+
+        let r_send = create_gain(audio_ctx, 0.65, "Reverb send").map_err(|_| ())?;
+        let _ = r_send.connect_with_audio_node(reverb_in);
+        reverb_sends_vec.push(r_send);
+
+        voice_gains.push(gain);
+        voice_panners.push(panner);
+    }
+
+    Ok(VoiceRouting {
+        voice_gains,
+        voice_panners,
+        delay_sends: delay_sends_vec,
+        reverb_sends: reverb_sends_vec,
+    })
 }
