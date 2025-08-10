@@ -17,6 +17,7 @@ use web_sys as web;
 // (DeviceExt no longer needed; legacy vertex buffers removed)
 
 mod input;
+mod overlay;
 mod render;
 // ui module removed; overlay is controlled directly from here
 
@@ -204,20 +205,11 @@ async fn init() -> anyhow::Result<()> {
                 // 'H' toggles the overlay visibility
                 {
                     let window = web::window().unwrap();
-                    let paused_for_h = paused.clone();
-                    let overlay_for_h = overlay_el.clone();
+                    let document_for_h = document.clone();
                     let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
                         let key = ev.key();
                         if key == "h" || key == "H" {
-                            if let Some(el) = overlay_for_h.as_ref() {
-                                let current = el.get_attribute("style").unwrap_or_default();
-                                let hide = !current.is_empty() && current.contains("display:none");
-                                if hide {
-                                    let _ = el.set_attribute("style", "");
-                                } else {
-                                    let _ = el.set_attribute("style", "display:none");
-                                }
-                            }
+                            overlay::toggle(&document_for_h);
                             // If user is bringing up the overlay, we don't change paused.
                             // If closing via 'H', keep current paused state.
                             ev.prevent_default();
