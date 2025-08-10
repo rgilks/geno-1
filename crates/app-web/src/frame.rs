@@ -5,9 +5,9 @@ use glam::{Vec3, Vec4};
 use instant::Instant;
 use std::cell::RefCell;
 use std::rc::Rc;
-use web_sys as web;
-use wasm_bindgen::JsCast;
 use wasm_bindgen::closure::Closure;
+use wasm_bindgen::JsCast;
+use web_sys as web;
 
 const CAMERA_Z: f32 = 6.0;
 
@@ -290,9 +290,7 @@ impl<'a> FrameContext<'a> {
     }
 }
 
-pub async fn init_gpu(
-    canvas: &web::HtmlCanvasElement,
-) -> Option<render::GpuState<'static>> {
+pub async fn init_gpu(canvas: &web::HtmlCanvasElement) -> Option<render::GpuState<'static>> {
     // leak a canvas clone to satisfy 'static lifetime for surface
     let leaked_canvas = Box::leak(Box::new(canvas.clone()));
     match render::GpuState::new(leaked_canvas, CAMERA_Z).await {
@@ -322,9 +320,7 @@ pub fn start_loop(frame_ctx: Rc<RefCell<FrameContext<'static>>>) {
         }
     }) as Box<dyn FnMut()>));
     if let Some(w) = web::window() {
-        let _ = w.request_animation_frame(
-            tick.borrow().as_ref().unwrap().as_ref().unchecked_ref(),
-        );
+        let _ = w.request_animation_frame(tick.borrow().as_ref().unwrap().as_ref().unchecked_ref());
     }
 }
 
