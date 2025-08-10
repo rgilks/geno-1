@@ -1,10 +1,8 @@
 use app_core::MusicEngine;
-use app_core::{
-    midi_to_hz, z_offset_vec3, AEOLIAN, DORIAN, ENGINE_DRAG_MAX_RADIUS, IONIAN, LOCRIAN, LYDIAN,
-    MIXOLYDIAN, PHRYGIAN, PICK_SPHERE_RADIUS, SPREAD,
-};
+use app_core::{AEOLIAN, DORIAN, IONIAN, LOCRIAN, LYDIAN, MIXOLYDIAN, PHRYGIAN};
 use std::cell::RefCell;
 use std::rc::Rc;
+use wasm_bindgen::JsCast;
 use web_sys as web;
 
 #[inline]
@@ -150,13 +148,15 @@ pub fn wire_global_keydown(
         let closure =
             wasm_bindgen::closure::Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
                 super::keyboard::handle_global_keydown(
-                    &ev, &engine, &paused, &master_gain, &canvas,
+                    &ev,
+                    &engine,
+                    &paused,
+                    &master_gain,
+                    &canvas,
                 );
             }) as Box<dyn FnMut(_)>);
-        let _ = window
-            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+        let _ =
+            window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
         closure.forget();
     }
 }
-
-

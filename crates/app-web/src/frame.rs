@@ -92,11 +92,13 @@ impl<'a> FrameContext<'a> {
             let swirl_speed = (self.swirl_vel[0] * self.swirl_vel[0]
                 + self.swirl_vel[1] * self.swirl_vel[1])
                 .sqrt();
-            let target =
-                ((pointer_speed * 0.2) + (swirl_speed * 0.35) + if ms.down { 0.5 } else { 0.0 })
-                    .clamp(0.0, 1.0);
+            let target = ((pointer_speed * SWIRL_TARGET_WEIGHT_POINTER)
+                + (swirl_speed * SWIRL_TARGET_WEIGHT_VELOCITY)
+                + if ms.down { SWIRL_TARGET_CLICK_BONUS } else { 0.0 })
+                .clamp(0.0, 1.0);
             drop(ms);
-            self.swirl_energy = 0.85 * self.swirl_energy + 0.15 * target;
+            self.swirl_energy = (1.0 - SWIRL_ENERGY_BLEND_ALPHA) * self.swirl_energy
+                + SWIRL_ENERGY_BLEND_ALPHA * target;
             self.prev_uv = uv;
 
             // Global FX modulation
