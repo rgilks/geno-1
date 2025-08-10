@@ -3,35 +3,16 @@ use glam::{Vec3, Vec4};
 use web_sys as web;
 
 mod helpers;
-mod targets;
 mod post;
+mod targets;
+mod waves;
 use targets::RenderTargets;
 
 pub use crate::camera::screen_to_world_ray;
 
 // ===================== WebGPU state (moved from lib.rs) =====================
 
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub(crate) struct VoicePacked {
-    pos_pulse: [f32; 4],
-    color: [f32; 4],
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
-pub(crate) struct WavesUniforms {
-    resolution: [f32; 2],
-    time: f32,
-    ambient: f32,
-    voices: [VoicePacked; 3],
-    swirl_uv: [f32; 2],
-    swirl_strength: f32,
-    swirl_active: f32,
-    ripple_uv: [f32; 2],
-    ripple_t0: f32,
-    ripple_amp: f32,
-}
+use waves::{VoicePacked, WavesUniforms, WavesResources, create_waves_resources};
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -50,9 +31,7 @@ pub struct GpuState<'a> {
     queue: wgpu::Queue,
     config: wgpu::SurfaceConfiguration,
     // Waves full-screen layer
-    waves_pipeline: wgpu::RenderPipeline,
-    waves_uniform_buffer: wgpu::Buffer,
-    waves_bind_group: wgpu::BindGroup,
+    waves: WavesResources,
     // Post-processing resources
     targets: RenderTargets,
     linear_sampler: wgpu::Sampler,
@@ -171,67 +150,7 @@ impl<'a> GpuState<'a> {
         );
 
         // Waves fullscreen pass (drawn into HDR before bloom)
-        let waves_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("waves_shader"),
-            source: wgpu::ShaderSource::Wgsl(app_core::WAVES_WGSL.into()),
-        });
-        let waves_bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("waves_bgl"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::FRAGMENT,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Uniform,
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
-        });
-        let waves_pl = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("waves_pl"),
-            bind_group_layouts: &[&waves_bgl],
-            push_constant_ranges: &[],
-        });
-        let waves_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("waves_pipeline"),
-            layout: Some(&waves_pl),
-            vertex: wgpu::VertexState {
-                module: &waves_shader,
-                entry_point: Some("vs_fullscreen"),
-                buffers: &[],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &waves_shader,
-                entry_point: Some("fs_waves"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: hdr_format,
-                    blend: Some(wgpu::BlendState::ALPHA_BLENDING),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            cache: None,
-            multiview: None,
-        });
-        let waves_uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("waves_uniforms"),
-            size: std::mem::size_of::<WavesUniforms>() as u64,
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-        let waves_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("waves_bg"),
-            layout: &waves_bgl,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: waves_uniform_buffer.as_entire_binding(),
-            }],
-        });
+        let waves = create_waves_resources(&device, hdr_format);
 
         // Post shader + pipelines
         let post_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -432,9 +351,7 @@ impl<'a> GpuState<'a> {
             device,
             queue,
             config,
-            waves_pipeline,
-            waves_uniform_buffer,
-            waves_bind_group,
+            waves,
             targets: RenderTargets::new(
                 hdr_tex,
                 hdr_view,
@@ -610,9 +527,9 @@ impl<'a> GpuState<'a> {
                 ripple_amp: self.ripple_amp,
             };
             self.queue
-                .write_buffer(&self.waves_uniform_buffer, 0, bytemuck::bytes_of(&w));
-            rpass.set_pipeline(&self.waves_pipeline);
-            rpass.set_bind_group(0, &self.waves_bind_group, &[]);
+                .write_buffer(&self.waves.uniform_buffer, 0, bytemuck::bytes_of(&w));
+            rpass.set_pipeline(&self.waves.pipeline);
+            rpass.set_bind_group(0, &self.waves.bind_group, &[]);
             rpass.draw(0..3, 0..1);
         }
 
@@ -776,6 +693,4 @@ impl<'a> GpuState<'a> {
             ],
         });
     }
-
-    
 }
