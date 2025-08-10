@@ -37,6 +37,168 @@ fn add_click_listener(
     }
 }
 
+#[inline]
+fn root_midi_for_key(key: &str) -> Option<i32> {
+    match key {
+        "a" | "A" => Some(69),
+        "b" | "B" => Some(71),
+        "c" | "C" => Some(60),
+        "d" | "D" => Some(62),
+        "e" | "E" => Some(64),
+        "f" | "F" => Some(65),
+        _ => None,
+    }
+}
+
+#[inline]
+fn mode_scale_for_digit(key: &str) -> Option<&'static [i32]> {
+    match key {
+        "1" => Some(IONIAN),
+        "2" => Some(DORIAN),
+        "3" => Some(PHRYGIAN),
+        "4" => Some(LYDIAN),
+        "5" => Some(MIXOLYDIAN),
+        "6" => Some(AEOLIAN),
+        "7" => Some(LOCRIAN),
+        _ => None,
+    }
+}
+
+// Keep canvas internal pixel size in sync with its CSS size * devicePixelRatio
+fn sync_canvas_backing_size(canvas: &web::HtmlCanvasElement) {
+    if let Some(w) = web::window() {
+        let dpr = w.device_pixel_ratio();
+        let rect = canvas.get_bounding_client_rect();
+        let w_px = (rect.width() * dpr) as u32;
+        let h_px = (rect.height() * dpr) as u32;
+        canvas.set_width(w_px.max(1));
+        canvas.set_height(h_px.max(1));
+    }
+}
+
+// Build an arctangent waveshaper curve
+fn make_arctan_curve(curve_len: u32, drive: f32) -> Vec<f32> {
+    let mut curve: Vec<f32> = Vec::with_capacity(curve_len as usize);
+    for i in 0..curve_len {
+        let x = (i as f32 / (curve_len - 1) as f32) * 2.0 - 1.0;
+        curve.push((2.0 / std::f32::consts::PI) * (drive * x).atan());
+    }
+    curve
+}
+
+// Create analyser and an appropriately sized buffer
+fn create_analyser(
+    audio_ctx: &web::AudioContext,
+) -> (Option<web::AnalyserNode>, Rc<RefCell<Vec<f32>>>) {
+    let analyser: Option<web::AnalyserNode> = web::AnalyserNode::new(audio_ctx).ok();
+    if let Some(a) = &analyser {
+        a.set_fft_size(256);
+    }
+    let buf: Rc<RefCell<Vec<f32>>> = Rc::new(RefCell::new(Vec::new()));
+    if let Some(a) = &analyser {
+        let bins = a.frequency_bin_count() as usize;
+        buf.borrow_mut().resize(bins, 0.0);
+    }
+    (analyser, buf)
+}
+
+// Handle global keydown logic centrally (no behavior changes)
+fn handle_global_keydown(
+    ev: &web::KeyboardEvent,
+    engine: &Rc<RefCell<MusicEngine>>,
+    paused: &Rc<RefCell<bool>>,
+    master_gain: &web::GainNode,
+    canvas: &web::HtmlCanvasElement,
+) {
+    let key = ev.key();
+    if let Some(midi) = root_midi_for_key(&key) {
+        engine.borrow_mut().params.root_midi = midi;
+        return;
+    }
+    if let Some(scale) = mode_scale_for_digit(&key) {
+        engine.borrow_mut().params.scale = scale;
+        return;
+    }
+    match key.as_str() {
+        // Reseed all voices
+        "r" | "R" => {
+            let voice_len = engine.borrow().voices.len();
+            let mut eng = engine.borrow_mut();
+            for i in 0..voice_len {
+                eng.reseed_voice(i, None);
+            }
+        }
+        // Randomize tonality (root + mode)
+        "t" | "T" => {
+            let roots: [i32; 7] = [60, 62, 64, 65, 67, 69, 71];
+            let modes: [&'static [i32]; 7] = [
+                IONIAN, DORIAN, PHRYGIAN, LYDIAN, MIXOLYDIAN, AEOLIAN, LOCRIAN,
+            ];
+            let ri = (js_sys::Math::random() * roots.len() as f64).floor() as usize;
+            let mi = (js_sys::Math::random() * modes.len() as f64).floor() as usize;
+            let mut eng = engine.borrow_mut();
+            eng.params.root_midi = roots[ri];
+            eng.params.scale = modes[mi];
+        }
+        // Pause/resume
+        " " => {
+            let mut p = paused.borrow_mut();
+            *p = !*p;
+            ev.prevent_default();
+        }
+        // Increase BPM
+        "ArrowRight" | "+" | "=" => {
+            let mut eng = engine.borrow_mut();
+            let new_bpm = (eng.params.bpm + 5.0).min(240.0);
+            eng.set_bpm(new_bpm);
+        }
+        // Decrease BPM
+        "ArrowLeft" | "-" | "_" => {
+            let mut eng = engine.borrow_mut();
+            let new_bpm = (eng.params.bpm - 5.0).max(40.0);
+            eng.set_bpm(new_bpm);
+        }
+        // Fullscreen toggle
+        "Enter" => {
+            if let Some(win) = web::window() {
+                if let Some(doc) = win.document() {
+                    if doc.fullscreen_element().is_some() {
+                        let _ = doc.exit_fullscreen();
+                    } else {
+                        let _ = canvas.request_fullscreen();
+                    }
+                }
+            }
+            ev.prevent_default();
+        }
+        // Exit fullscreen
+        "Escape" => {
+            if let Some(win) = web::window() {
+                if let Some(doc) = win.document() {
+                    let _ = doc.exit_fullscreen();
+                }
+            }
+        }
+        _ => {}
+    }
+    // Master volume on arrow keys (separate so we can prevent default only here)
+    match key.as_str() {
+        "ArrowUp" => {
+            let v = master_gain.gain().value();
+            let nv = (v + 0.05).min(1.0);
+            let _ = master_gain.gain().set_value(nv);
+            ev.prevent_default();
+        }
+        "ArrowDown" => {
+            let v = master_gain.gain().value();
+            let nv = (v - 0.05).max(0.0);
+            let _ = master_gain.gain().set_value(nv);
+            ev.prevent_default();
+        }
+        _ => {}
+    }
+}
+
 // (use overlay::hide instead of local helper)
 
 #[wasm_bindgen(start)]
@@ -72,28 +234,18 @@ async fn init() -> anyhow::Result<()> {
 
     // Maintain canvas internal pixel size to match CSS size * devicePixelRatio
     {
-        let window = web::window().unwrap();
-        let dpr = window.device_pixel_ratio();
-        let rect = canvas.get_bounding_client_rect();
-        let width = (rect.width() * dpr) as u32;
-        let height = (rect.height() * dpr) as u32;
-        canvas.set_width(width.max(1));
-        canvas.set_height(height.max(1));
+        sync_canvas_backing_size(&canvas);
         // Listen for window resize and update canvas backing size
         let canvas_resize = canvas.clone();
         let resize_closure = Closure::wrap(Box::new(move || {
-            if let Some(w) = web::window() {
-                let dpr = w.device_pixel_ratio();
-                let rect = canvas_resize.get_bounding_client_rect();
-                let w_px = (rect.width() * dpr) as u32;
-                let h_px = (rect.height() * dpr) as u32;
-                canvas_resize.set_width(w_px.max(1));
-                canvas_resize.set_height(h_px.max(1));
-            }
+            sync_canvas_backing_size(&canvas_resize);
         }) as Box<dyn FnMut()>);
-        window
-            .add_event_listener_with_callback("resize", resize_closure.as_ref().unchecked_ref())
-            .ok();
+        if let Some(window) = web::window() {
+            let _ = window.add_event_listener_with_callback(
+                "resize",
+                resize_closure.as_ref().unchecked_ref(),
+            );
+        }
         resize_closure.forget();
     }
 
@@ -251,11 +403,7 @@ async fn init() -> anyhow::Result<()> {
                 // Build arctan curve
                 let curve_len: u32 = 2048;
                 let drive: f32 = 1.6;
-                let mut curve: Vec<f32> = Vec::with_capacity(curve_len as usize);
-                for i in 0..curve_len {
-                    let x = (i as f32 / (curve_len - 1) as f32) * 2.0 - 1.0;
-                    curve.push((2.0 / std::f32::consts::PI) * (drive * x).atan());
-                }
+                let mut curve = make_arctan_curve(curve_len, drive);
                 // web-sys binding copies from the slice into a Float32Array under the hood
                 #[allow(deprecated)]
                 saturator.set_curve(Some(curve.as_mut_slice()));
@@ -478,16 +626,7 @@ async fn init() -> anyhow::Result<()> {
 
                 // Visual pulses per voice and optional analyser for ambient effects
                 let pulses = Rc::new(RefCell::new(vec![0.0_f32; engine.borrow().voices.len()]));
-                let analyser: Option<web::AnalyserNode> = web::AnalyserNode::new(&audio_ctx).ok();
-                if let Some(a) = &analyser {
-                    a.set_fft_size(256);
-                }
-                // Reusable buffer for analyser to avoid per-frame allocations/GC pauses
-                let analyser_buf: Rc<RefCell<Vec<f32>>> = Rc::new(RefCell::new(Vec::new()));
-                if let Some(a) = &analyser {
-                    let bins = a.frequency_bin_count() as usize;
-                    analyser_buf.borrow_mut().resize(bins, 0.0);
-                }
+                let (analyser, analyser_buf) = create_analyser(&audio_ctx);
 
                 let voice_gains = Rc::new(voice_gains);
 
@@ -603,109 +742,7 @@ async fn init() -> anyhow::Result<()> {
                     let master_gain_k = master_gain.clone();
                     let window = web::window().unwrap();
                     let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
-                        let key = ev.key();
-                        match key.as_str() {
-                            // Reseed all voices
-                            "r" | "R" => {
-                                let voice_len = engine_k.borrow().voices.len();
-                                let mut eng = engine_k.borrow_mut();
-                                for i in 0..voice_len {
-                                    eng.reseed_voice(i, None);
-                                }
-                                // noisy key debug log removed
-                            }
-                            // Root note selection (A..F)
-                            "a" | "A" => engine_k.borrow_mut().params.root_midi = 69,
-                            "b" | "B" => engine_k.borrow_mut().params.root_midi = 71,
-                            "c" | "C" => engine_k.borrow_mut().params.root_midi = 60,
-                            "d" | "D" => engine_k.borrow_mut().params.root_midi = 62,
-                            "e" | "E" => engine_k.borrow_mut().params.root_midi = 64,
-                            "f" | "F" => engine_k.borrow_mut().params.root_midi = 65,
-                            // Mode selection (1..7)
-                            "1" => engine_k.borrow_mut().params.scale = IONIAN,
-                            "2" => engine_k.borrow_mut().params.scale = DORIAN,
-                            "3" => engine_k.borrow_mut().params.scale = PHRYGIAN,
-                            "4" => engine_k.borrow_mut().params.scale = LYDIAN,
-                            "5" => engine_k.borrow_mut().params.scale = MIXOLYDIAN,
-                            "6" => engine_k.borrow_mut().params.scale = AEOLIAN,
-                            "7" => engine_k.borrow_mut().params.scale = LOCRIAN,
-                            // Randomize tonality (root + mode)
-                            "t" | "T" => {
-                                let roots: [i32; 7] = [60, 62, 64, 65, 67, 69, 71];
-                                let modes: [&'static [i32]; 7] = [
-                                    IONIAN, DORIAN, PHRYGIAN, LYDIAN, MIXOLYDIAN, AEOLIAN, LOCRIAN,
-                                ];
-                                let ri =
-                                    (js_sys::Math::random() * roots.len() as f64).floor() as usize;
-                                let mi =
-                                    (js_sys::Math::random() * modes.len() as f64).floor() as usize;
-                                let mut eng = engine_k.borrow_mut();
-                                eng.params.root_midi = roots[ri];
-                                eng.params.scale = modes[mi];
-                            }
-                            // Pause/resume scheduling
-                            " " => {
-                                let mut p = paused_k.borrow_mut();
-                                *p = !*p;
-                                // noisy key debug log removed
-                                // No bottom-hint; overlay can be re-opened with 'h'
-                                ev.prevent_default();
-                            }
-                            // Increase BPM (ArrowRight or +/=)
-                            "ArrowRight" | "+" | "=" => {
-                                let mut eng = engine_k.borrow_mut();
-                                let new_bpm = (eng.params.bpm + 5.0).min(240.0);
-                                eng.set_bpm(new_bpm);
-                                // noisy key debug log removed
-                                // No bottom-hint; overlay can be re-opened with 'h'
-                            }
-                            // Decrease BPM (ArrowLeft or -/_)
-                            "ArrowLeft" | "-" | "_" => {
-                                let mut eng = engine_k.borrow_mut();
-                                let new_bpm = (eng.params.bpm - 5.0).max(40.0);
-                                eng.set_bpm(new_bpm);
-                                // noisy key debug log removed
-                                // No bottom-hint; overlay can be re-opened with 'h'
-                            }
-                            // Enter: Fullscreen toggle
-                            "Enter" => {
-                                if let Some(win) = web::window() {
-                                    if let Some(doc) = win.document() {
-                                        if doc.fullscreen_element().is_some() {
-                                            let _ = doc.exit_fullscreen();
-                                        } else {
-                                            let _ = canvas_k.request_fullscreen();
-                                        }
-                                    }
-                                }
-                                ev.prevent_default();
-                            }
-                            // Exit fullscreen
-                            "Escape" => {
-                                if let Some(win) = web::window() {
-                                    if let Some(doc) = win.document() {
-                                        let _ = doc.exit_fullscreen();
-                                    }
-                                }
-                            }
-                            _ => {}
-                        }
-                        // Master volume on arrow keys (after other handlers so prevent_default only for arrows)
-                        match key.as_str() {
-                            "ArrowUp" => {
-                                let v = master_gain_k.gain().value();
-                                let nv = (v + 0.05).min(1.0);
-                                let _ = master_gain_k.gain().set_value(nv);
-                                ev.prevent_default();
-                            }
-                            "ArrowDown" => {
-                                let v = master_gain_k.gain().value();
-                                let nv = (v - 0.05).max(0.0);
-                                let _ = master_gain_k.gain().set_value(nv);
-                                ev.prevent_default();
-                            }
-                            _ => {}
-                        }
+                        handle_global_keydown(&ev, &engine_k, &paused_k, &master_gain_k, &canvas_k);
                     }) as Box<dyn FnMut(_)>);
                     window
                         .add_event_listener_with_callback(
