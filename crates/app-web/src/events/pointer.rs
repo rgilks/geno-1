@@ -1,4 +1,5 @@
 use crate::audio;
+use crate::constants::CAMERA_Z;
 use crate::input;
 use crate::render;
 use app_core::MusicEngine;
@@ -40,8 +41,7 @@ pub fn wire_input_handlers(w: InputWiring) {
                 ms.x = pos.x;
                 ms.y = pos.y;
             }
-            let (ro, rd) =
-                render::screen_to_world_ray(&canvas_mouse, pos.x, pos.y, super::super::CAMERA_Z);
+            let (ro, rd) = render::screen_to_world_ray(&canvas_mouse, pos.x, pos.y, CAMERA_Z);
             let mut best = None::<(usize, f32)>;
             let z_offset = z_offset_vec3();
             for (i, v) in engine_m.borrow().voices.iter().enumerate() {
@@ -104,7 +104,8 @@ pub fn wire_input_handlers(w: InputWiring) {
                 let mut ds = drag_m.borrow_mut();
                 ds.active = true;
                 ds.voice = i;
-                ds.plane_z_world = engine_m.borrow().voices[i].position.z * SPREAD + z_offset_vec3().z;
+                ds.plane_z_world =
+                    engine_m.borrow().voices[i].position.z * SPREAD + z_offset_vec3().z;
                 log::info!("[mouse] begin drag on voice {}", i);
             }
             mouse_m.borrow_mut().down = true;
@@ -176,10 +177,9 @@ pub fn wire_input_handlers(w: InputWiring) {
             ev.prevent_default();
         }) as Box<dyn FnMut(_)>);
         if let Some(wnd) = web::window() {
-            let _ = wnd.add_event_listener_with_callback("pointerup", closure.as_ref().unchecked_ref());
+            let _ =
+                wnd.add_event_listener_with_callback("pointerup", closure.as_ref().unchecked_ref());
         }
         closure.forget();
     }
 }
-
-

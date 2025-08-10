@@ -25,8 +25,7 @@ mod overlay;
 mod render;
 // ui module removed; overlay is controlled directly from here
 
-// Rendering/picking shared constants to keep math consistent
-const CAMERA_Z: f32 = 6.0;
+// Rendering/picking shared constants live in `constants.rs`
 fn wire_canvas_resize(canvas: &web::HtmlCanvasElement) {
     dom::sync_canvas_backing_size(canvas);
     let canvas_resize = canvas.clone();

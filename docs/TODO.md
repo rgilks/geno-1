@@ -121,6 +121,9 @@ Desktop UI support has been removed to simplify the project and focus on the web
 - [x] app-web: small readability refactors in `lib.rs` (no behavior changes)
   - Rationale: reduce duplication and magic numbers
   - Status: added `hide_overlay()` helper, deduplicated pointer position set, and replaced magic numbers with `BASE_SCALE`/`SCALE_PULSE_MULTIPLIER`
+- [x] app-web: centralize camera distance constant
+  - Rationale: avoid duplication between picking, listener, and renderer
+  - Status: added `CAMERA_Z` to `constants.rs` and updated imports in `frame.rs`, `lib.rs`, and `events/pointer.rs`
 - [ ] app-web: extract WebGPU pipeline builders
   - Rationale: deduplicate pipeline/buffer setup for waves/post passes
   - Plan: create `pipeline.rs` helpers returning typed bundles; no functional changes

@@ -12,7 +12,7 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::JsCast;
 use web_sys as web;
 
-const CAMERA_Z: f32 = 6.0; // keep for local readability; matches crate-level value
+use crate::constants::CAMERA_Z;
 
 pub struct FrameContext<'a> {
     pub engine: Rc<RefCell<MusicEngine>>,

@@ -62,3 +62,7 @@ pub const LEVEL_SPAN: f32 = 0.45;
 // Color adjustments
 pub const MUTE_DARKEN: f32 = 0.35;
 pub const HOVER_BRIGHTEN: f32 = 1.4;
+
+// Camera
+// Z distance used by both picking and audio listener alignment.
+pub const CAMERA_Z: f32 = 6.0;
