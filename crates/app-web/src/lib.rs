@@ -170,6 +170,9 @@ async fn init() -> anyhow::Result<()> {
                     );
                 }
 
+                // Pause state (stops scheduling new notes but keeps rendering). Start paused until overlay OK/Close.
+                let paused = Rc::new(RefCell::new(true));
+
                 // Wire OK / Close to hide overlay and start scheduling (unpause) + resume AudioContext
                 if let Some(doc2) = web::window().and_then(|w| w.document()) {
                     if let Some(ok_btn) = doc2.get_element_by_id("overlay-ok") {
@@ -483,8 +486,6 @@ async fn init() -> anyhow::Result<()> {
                     analyser_buf.borrow_mut().resize(bins, 0.0);
                 }
 
-                // Pause state (stops scheduling new notes but keeps rendering). Start paused until overlay OK/Close.
-                let paused = Rc::new(RefCell::new(true));
                 let voice_gains = Rc::new(voice_gains);
 
                 // Queued ripple UV from pointer taps (read by render tick)
