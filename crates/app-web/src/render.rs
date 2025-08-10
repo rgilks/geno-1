@@ -113,6 +113,27 @@ pub struct GpuState<'a> {
 }
 
 impl<'a> GpuState<'a> {
+    fn create_color_texture(
+        &self,
+        label: &str,
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+        usage: wgpu::TextureUsages,
+    ) -> (wgpu::Texture, wgpu::TextureView) {
+        let tex = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage,
+            view_formats: &[],
+        });
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+        (tex, view)
+    }
     pub async fn new(canvas: &'a web::HtmlCanvasElement, camera_z: f32) -> anyhow::Result<Self> {
         let width = canvas.width();
         let height = canvas.height();
@@ -616,66 +637,30 @@ impl<'a> GpuState<'a> {
 
             // Recreate offscreen render targets and dependent bind groups
             let hdr_format = wgpu::TextureFormat::Rgba16Float;
-            self.targets.hdr_tex = self.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("hdr_tex"),
-                size: wgpu::Extent3d {
-                    width,
-                    height,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: hdr_format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            });
-            self.targets.hdr_view = self
-                .targets
-                .hdr_tex
-                .create_view(&wgpu::TextureViewDescriptor::default());
+            (self.targets.hdr_tex, self.targets.hdr_view) = self.create_color_texture(
+                "hdr_tex",
+                width,
+                height,
+                hdr_format,
+                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            );
             let bw = (width.max(1) / 2).max(1);
             let bh = (height.max(1) / 2).max(1);
             let bloom_format = wgpu::TextureFormat::Rgba16Float;
-            self.targets.bloom_a = self.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("bloom_a"),
-                size: wgpu::Extent3d {
-                    width: bw,
-                    height: bh,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: bloom_format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            });
-            self.targets.bloom_b = self.device.create_texture(&wgpu::TextureDescriptor {
-                label: Some("bloom_b"),
-                size: wgpu::Extent3d {
-                    width: bw,
-                    height: bh,
-                    depth_or_array_layers: 1,
-                },
-                mip_level_count: 1,
-                sample_count: 1,
-                dimension: wgpu::TextureDimension::D2,
-                format: bloom_format,
-                usage: wgpu::TextureUsages::RENDER_ATTACHMENT
-                    | wgpu::TextureUsages::TEXTURE_BINDING,
-                view_formats: &[],
-            });
-            self.targets.bloom_a_view = self
-                .targets
-                .bloom_a
-                .create_view(&wgpu::TextureViewDescriptor::default());
-            self.targets.bloom_b_view = self
-                .targets
-                .bloom_b
-                .create_view(&wgpu::TextureViewDescriptor::default());
+            (self.targets.bloom_a, self.targets.bloom_a_view) = self.create_color_texture(
+                "bloom_a",
+                bw,
+                bh,
+                bloom_format,
+                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            );
+            (self.targets.bloom_b, self.targets.bloom_b_view) = self.create_color_texture(
+                "bloom_b",
+                bw,
+                bh,
+                bloom_format,
+                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+            );
 
             // Rebuild bind groups that reference these views
             self.rebuild_post_bind_groups();

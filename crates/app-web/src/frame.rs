@@ -2,6 +2,7 @@ use crate::input;
 use crate::render;
 use app_core::{z_offset_vec3, MusicEngine, Waveform, BASE_SCALE, SCALE_PULSE_MULTIPLIER, SPREAD};
 use glam::{Vec3, Vec4};
+use crate::constants::*;
 use instant::Instant;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -87,7 +88,7 @@ impl<'a> FrameContext<'a> {
             );
             let du = uv[0] - self.prev_uv[0];
             let dv = uv[1] - self.prev_uv[1];
-            let pointer_speed = ((du * du + dv * dv).sqrt() / (dt_sec + 1e-5)).min(10.0);
+            let pointer_speed = ((du * du + dv * dv).sqrt() / (dt_sec + 1e-5)).min(POINTER_SPEED_MAX);
             let swirl_speed = (self.swirl_vel[0] * self.swirl_vel[0]
                 + self.swirl_vel[1] * self.swirl_vel[1])
                 .sqrt();
@@ -277,12 +278,12 @@ impl<'a> FrameContext<'a> {
 #[inline]
 fn smooth_pulses(pulses: &mut [f32], pulse_energy: &mut [f32; 3], dt_sec: f32) {
     let n = pulses.len().min(3);
-    let energy_decay = (-dt_sec * 1.6).exp();
+    let energy_decay = (-dt_sec * PULSE_ENERGY_DECAY_PER_SEC).exp();
     for i in 0..n {
         pulse_energy[i] *= energy_decay;
     }
-    let tau_up = 0.10_f32;
-    let tau_down = 0.45_f32;
+    let tau_up = PULSE_RISE_TAU_SEC;
+    let tau_down = PULSE_FALL_TAU_SEC;
     let alpha_up = 1.0 - (-dt_sec / tau_up).exp();
     let alpha_down = 1.0 - (-dt_sec / tau_down).exp();
     for i in 0..n {
@@ -345,9 +346,9 @@ fn step_inertial_swirl(
         *initialized = true;
         return;
     }
-    let omega = 1.1_f32;
+    let omega = SWIRL_OMEGA;
     let k = omega * omega;
-    let c = 2.0 * omega * 0.5;
+    let c = 2.0 * omega * SWIRL_DAMPING_RATIO;
     let dx = target_uv[0] - swirl_pos[0];
     let dy = target_uv[1] - swirl_pos[1];
     let ax = k * dx - c * swirl_vel[0];
@@ -359,7 +360,7 @@ fn step_inertial_swirl(
     let sdx = nx - swirl_pos[0];
     let sdy = ny - swirl_pos[1];
     let step = (sdx * sdx + sdy * sdy).sqrt();
-    let max_step = 0.50_f32 * dt_sec;
+    let max_step = SWIRL_MAX_STEP_PER_SEC * dt_sec;
     if step > max_step {
         let inv = 1.0 / (step + 1e-6);
         nx = swirl_pos[0] + sdx * inv * max_step;
@@ -379,16 +380,23 @@ fn apply_global_fx_swirl(
     swirl_energy: f32,
     uv: [f32; 2],
 ) {
-    let _ = reverb_wet.gain().set_value(0.35 + 0.65 * swirl_energy);
+    let _ = reverb_wet
+        .gain()
+        .set_value(FX_REVERB_BASE + FX_REVERB_SPAN * swirl_energy);
     let echo = (uv[0] - uv[1]).abs();
-    let delay_wet_val = (0.15 + 0.55 * swirl_energy + 0.30 * echo).clamp(0.0, 1.0);
-    let delay_fb_val = (0.35 + 0.35 * swirl_energy + 0.25 * echo).clamp(0.0, 0.95);
+    let delay_wet_val = (FX_DELAY_WET_BASE + FX_DELAY_WET_SWIRL * swirl_energy
+        + FX_DELAY_WET_ECHO * echo)
+        .clamp(0.0, 1.0);
+    let delay_fb_val = (FX_DELAY_FB_BASE + FX_DELAY_FB_SWIRL * swirl_energy
+        + FX_DELAY_FB_ECHO * echo)
+        .clamp(0.0, 0.95);
     let _ = delay_wet.gain().set_value(delay_wet_val);
     let _ = delay_feedback.gain().set_value(delay_fb_val);
     let fizz = ((uv[0] + uv[1]) * 0.5).clamp(0.0, 1.0);
-    let drive = (0.6 + 2.4 * fizz).clamp(0.2, 3.0);
+    let drive = (FX_SAT_DRIVE_MIN + (FX_SAT_DRIVE_MAX - FX_SAT_DRIVE_MIN) * ((fizz - 0.25).clamp(0.0, 1.0)))
+        .clamp(FX_SAT_DRIVE_MIN, FX_SAT_DRIVE_MAX);
     let _ = sat_pre.gain().set_value(drive);
-    let wet = (0.15 + 0.85 * fizz).clamp(0.0, 1.0);
+    let wet = (FX_SAT_WET_BASE + FX_SAT_WET_SPAN * fizz).clamp(0.0, 1.0);
     let _ = sat_wet.gain().set_value(wet);
     let _ = sat_dry.gain().set_value(1.0 - wet);
 }

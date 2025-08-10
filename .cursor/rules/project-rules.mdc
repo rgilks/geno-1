@@ -5,13 +5,12 @@ alwaysApply: true
 Proceed in small iterative steps and test each change.
 Refactor the code to make it more elegant, concise and simple. It should be clear and easy to maintain.
 Improve the tests as you go, make sure the tests are clear and focused. Don't create lots of trivial tests.
-Improve the docs and diagramsas you go.
+Improve the docs and diagrams as you go.
 Remove dead and commented out code.
 Use whitespace to make the code more readable.
 Try and keep functions less that 20 lines, the shorter the better.
 Try and keep files less that 200 lines, the smaller the better.
 
-Do not block for approvals; follow `docs/SPEC.md` and `docs/TODO.md` and keep momentum.
 Prefer WebGPU via `wgpu` v24.0 and avoid WebGL2 fallbacks.
 Prefer Node for servers/tooling; avoid Python for this project.
 
@@ -31,3 +30,5 @@ Pre-commit and push procedure:
 - Ensure the check is green (no warnings promoted to errors, builds succeed, tests pass).
 - Also try and fix warnings.
 - Commit and push only after the above succeed.
+
+Do not block for approvals; follow `docs/SPEC.md` and `docs/TODO.md` and keep momentum.

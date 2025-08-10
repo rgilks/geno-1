@@ -16,6 +16,7 @@ use web_sys as web;
 
 mod audio;
 mod camera;
+mod constants;
 mod dom;
 mod events;
 mod frame;
