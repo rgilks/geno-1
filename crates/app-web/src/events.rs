@@ -1,4 +1,3 @@
-use crate::dom;
 use app_core::MusicEngine;
 use app_core::{AEOLIAN, DORIAN, IONIAN, LOCRIAN, LYDIAN, MIXOLYDIAN, PHRYGIAN};
 use std::cell::RefCell;
@@ -117,5 +116,23 @@ pub fn handle_global_keydown(
             ev.prevent_default();
         }
         _ => {}
+    }
+}
+
+// Wire an 'H' key handler to toggle the overlay without affecting pause state
+pub fn wire_overlay_toggle_h(document: &web::Document) {
+    if let Some(window) = web::window() {
+        let doc = document.clone();
+        let closure =
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
+                let key = ev.key();
+                if key == "h" || key == "H" {
+                    crate::overlay::toggle(&doc);
+                    ev.prevent_default();
+                }
+            }) as Box<dyn FnMut(_)>);
+        let _ =
+            window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+        closure.forget();
     }
 }

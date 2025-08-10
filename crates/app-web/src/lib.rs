@@ -27,6 +27,106 @@ mod render;
 
 // Rendering/picking shared constants to keep math consistent
 const CAMERA_Z: f32 = 6.0;
+fn wire_canvas_resize(canvas: &web::HtmlCanvasElement) {
+    dom::sync_canvas_backing_size(canvas);
+    let canvas_resize = canvas.clone();
+    let resize_closure = Closure::wrap(Box::new(move || {
+        dom::sync_canvas_backing_size(&canvas_resize);
+    }) as Box<dyn FnMut()>);
+    if let Some(window) = web::window() {
+        let _ = window.add_event_listener_with_callback(
+            "resize",
+            resize_closure.as_ref().unchecked_ref(),
+        );
+    }
+    resize_closure.forget();
+}
+
+struct InitParts {
+    audio_ctx: web::AudioContext,
+    listener_for_tick: web::AudioListener,
+    engine: Rc<RefCell<MusicEngine>>,
+    paused: Rc<RefCell<bool>>,
+}
+
+async fn build_audio_and_engine(document: web::Document) -> anyhow::Result<InitParts> {
+    let audio_ctx = web::AudioContext::new().map_err(|e| anyhow::anyhow!("{:?}", e))?;
+    let _ = audio_ctx.resume();
+    let listener = audio_ctx.listener();
+    listener.set_position(0.0, 0.0, 1.5);
+
+    let voice_configs = vec![
+        VoiceConfig {
+            color_rgb: DEFAULT_VOICE_COLORS[0],
+            waveform: Waveform::Sine,
+            base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[0]),
+        },
+        VoiceConfig {
+            color_rgb: DEFAULT_VOICE_COLORS[1],
+            waveform: Waveform::Saw,
+            base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[1]),
+        },
+        VoiceConfig {
+            color_rgb: DEFAULT_VOICE_COLORS[2],
+            waveform: Waveform::Triangle,
+            base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[2]),
+        },
+    ];
+    let engine = Rc::new(RefCell::new(MusicEngine::new(
+        voice_configs,
+        EngineParams {
+            bpm: 110.0,
+            scale: C_MAJOR_PENTATONIC,
+            root_midi: 60,
+        },
+        42,
+    )));
+    {
+        let e = engine.borrow();
+        log::info!(
+            "[engine] voices={} pos0=({:.2},{:.2},{:.2}) pos1=({:.2},{:.2},{:.2}) pos2=({:.2},{:.2},{:.2})",
+            e.voices.len(),
+            e.voices[0].position.x, e.voices[0].position.y, e.voices[0].position.z,
+            e.voices[1].position.x, e.voices[1].position.y, e.voices[1].position.z,
+            e.voices[2].position.x, e.voices[2].position.y, e.voices[2].position.z
+        );
+    }
+    let paused = Rc::new(RefCell::new(true));
+    Ok(InitParts {
+        audio_ctx,
+        listener_for_tick: listener,
+        engine,
+        paused,
+    })
+}
+
+fn wire_overlay_buttons(audio_ctx: &web::AudioContext, paused: &Rc<RefCell<bool>>) {
+    if let Some(doc2) = dom::window_document() {
+        let paused_ok = paused.clone();
+        let audio_ok = audio_ctx.clone();
+        dom::add_click_listener(&doc2, "overlay-ok", move || {
+            *paused_ok.borrow_mut() = false;
+            let _ = audio_ok.resume();
+            if let Some(w2) = web::window() {
+                if let Some(d2) = w2.document() {
+                    overlay::hide(&d2);
+                }
+            }
+        });
+
+        let paused_close = paused.clone();
+        let audio_close = audio_ctx.clone();
+        dom::add_click_listener(&doc2, "overlay-close", move || {
+            *paused_close.borrow_mut() = false;
+            let _ = audio_close.resume();
+            if let Some(w2) = web::window() {
+                if let Some(d2) = w2.document() {
+                    overlay::hide(&d2);
+                }
+            }
+        });
+    }
+}
 const ANALYSER_FFT_SIZE: u32 = 256;
 
 // helpers moved to dom.rs and events.rs
@@ -449,18 +549,7 @@ fn trigger_one_shot(
 // global keydown moved to events.rs
 
 // Create a GainNode with an initial value; logs on failure and returns None
-fn create_gain(audio_ctx: &web::AudioContext, value: f32, label: &str) -> Option<web::GainNode> {
-    match web::GainNode::new(audio_ctx) {
-        Ok(g) => {
-            g.gain().set_value(value);
-            Some(g)
-        }
-        Err(e) => {
-            log::error!("{} GainNode error: {:?}", label, e);
-            None
-        }
-    }
-}
+// create_gain moved to audio.rs
 
 // (use overlay::hide instead of local helper)
 
@@ -496,21 +585,7 @@ async fn init() -> anyhow::Result<()> {
     // Avoid grabbing a 2D context here to allow WebGPU to acquire the canvas
 
     // Maintain canvas internal pixel size to match CSS size * devicePixelRatio
-    {
-        dom::sync_canvas_backing_size(&canvas);
-        // Listen for window resize and update canvas backing size
-        let canvas_resize = canvas.clone();
-        let resize_closure = Closure::wrap(Box::new(move || {
-            dom::sync_canvas_backing_size(&canvas_resize);
-        }) as Box<dyn FnMut()>);
-        if let Some(window) = web::window() {
-            let _ = window.add_event_listener_with_callback(
-                "resize",
-                resize_closure.as_ref().unchecked_ref(),
-            );
-        }
-        resize_closure.forget();
-    }
+    wire_canvas_resize(&canvas);
 
     // Prepare a clone for use inside the click closure
     let canvas_for_click = canvas.clone();
@@ -521,119 +596,18 @@ async fn init() -> anyhow::Result<()> {
         if STARTED.swap(true, Ordering::SeqCst) == false {
             let canvas_for_click_inner = canvas_for_click.clone();
             spawn_local(async move {
-                // Build AudioContext
-                let audio_ctx = match web::AudioContext::new() {
-                    Ok(ctx) => ctx,
-                    Err(e) => {
-                        log::error!("AudioContext error: {:?}", e);
-                        if let Some(win) = web::window() {
-                            if let Some(doc) = win.document() {
-                                if let Ok(Some(el)) = doc.query_selector("#audio-error") {
-                                    if let Some(div) = el.dyn_ref::<web::HtmlElement>() {
-                                        let _ = div.set_attribute("style", "");
-                                    }
-                                }
-                            }
-                        }
-                        return;
-                    }
+                let InitParts {
+                    audio_ctx,
+                    listener_for_tick,
+                    engine,
+                    paused,
+                } = match build_audio_and_engine(document.clone()).await {
+                    Ok(p) => p,
+                    Err(_) => return,
                 };
-                // Ensure context is running (Firefox may leave it suspended)
-                let _ = audio_ctx.resume();
-                let listener = audio_ctx.listener();
-                listener.set_position(0.0, 0.0, 1.5);
-                let listener_for_tick = listener.clone();
 
-                // Music engine
-                let voice_configs = vec![
-                    VoiceConfig {
-                        color_rgb: DEFAULT_VOICE_COLORS[0],
-                        waveform: Waveform::Sine,
-                        base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[0]),
-                    },
-                    VoiceConfig {
-                        color_rgb: DEFAULT_VOICE_COLORS[1],
-                        waveform: Waveform::Saw,
-                        base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[1]),
-                    },
-                    VoiceConfig {
-                        color_rgb: DEFAULT_VOICE_COLORS[2],
-                        waveform: Waveform::Triangle,
-                        base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[2]),
-                    },
-                ];
-                // starting systems after click
-                let engine = Rc::new(RefCell::new(MusicEngine::new(
-                    voice_configs,
-                    EngineParams {
-                        bpm: 110.0,
-                        scale: C_MAJOR_PENTATONIC,
-                        root_midi: 60,
-                    },
-                    42,
-                )));
-                {
-                    let e = engine.borrow();
-                    log::info!(
-                        "[engine] voices={} pos0=({:.2},{:.2},{:.2}) pos1=({:.2},{:.2},{:.2}) pos2=({:.2},{:.2},{:.2})",
-                        e.voices.len(),
-                        e.voices[0].position.x, e.voices[0].position.y, e.voices[0].position.z,
-                        e.voices[1].position.x, e.voices[1].position.y, e.voices[1].position.z,
-                        e.voices[2].position.x, e.voices[2].position.y, e.voices[2].position.z
-                    );
-                }
-
-                // Pause state (stops scheduling new notes but keeps rendering). Start paused until overlay OK/Close.
-                let paused = Rc::new(RefCell::new(true));
-
-                // Wire OK / Close to hide overlay and start scheduling (unpause) + resume AudioContext
-                if let Some(doc2) = dom::window_document() {
-                    let paused_ok = paused.clone();
-                    let audio_ok = audio_ctx.clone();
-                    dom::add_click_listener(&doc2, "overlay-ok", move || {
-                        *paused_ok.borrow_mut() = false;
-                        let _ = audio_ok.resume();
-                        if let Some(w2) = web::window() {
-                            if let Some(d2) = w2.document() {
-                                overlay::hide(&d2);
-                            }
-                        }
-                    });
-
-                    let paused_close = paused.clone();
-                    let audio_close = audio_ctx.clone();
-                    dom::add_click_listener(&doc2, "overlay-close", move || {
-                        *paused_close.borrow_mut() = false;
-                        let _ = audio_close.resume();
-                        if let Some(w2) = web::window() {
-                            if let Some(d2) = w2.document() {
-                                overlay::hide(&d2);
-                            }
-                        }
-                    });
-                }
-
-                // 'H' toggles the overlay visibility
-                {
-                    let window = web::window().unwrap();
-                    let document_for_h = document.clone();
-                    let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
-                        let key = ev.key();
-                        if key == "h" || key == "H" {
-                            overlay::toggle(&document_for_h);
-                            // If user is bringing up the overlay, we don't change paused.
-                            // If closing via 'H', keep current paused state.
-                            ev.prevent_default();
-                        }
-                    }) as Box<dyn FnMut(_)>);
-                    window
-                        .add_event_listener_with_callback(
-                            "keydown",
-                            closure.as_ref().unchecked_ref(),
-                        )
-                        .ok();
-                    closure.forget();
-                }
+                wire_overlay_buttons(&audio_ctx, &paused);
+                events::wire_overlay_toggle_h(&document);
 
                 // FX buses
                 let fx = match audio::build_fx_buses(&audio_ctx) {
@@ -651,10 +625,6 @@ async fn init() -> anyhow::Result<()> {
                 let delay_wet = fx.delay_wet.clone();
 
                 // Per-voice master gains -> master bus, plus effect sends
-                let mut voice_gains: Vec<web::GainNode> = Vec::new();
-                let mut voice_panners: Vec<web::PannerNode> = Vec::new();
-                let mut delay_sends_vec: Vec<web::GainNode> = Vec::new();
-                let mut reverb_sends_vec: Vec<web::GainNode> = Vec::new();
                 let initial_positions: Vec<Vec3> =
                     engine.borrow().voices.iter().map(|v| v.position).collect();
                 let routing = match audio::wire_voices(

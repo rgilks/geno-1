@@ -1,5 +1,5 @@
-use web_sys as web;
 use wasm_bindgen::JsCast;
+use web_sys as web;
 
 #[inline]
 pub fn window_document() -> Option<web::Document> {

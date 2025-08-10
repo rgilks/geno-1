@@ -260,3 +260,6 @@ pub fn wire_voices(
         reverb_sends: reverb_sends_vec,
     })
 }
+
+// Public create_gain used across modules
+// (no-op) use the Result-returning `create_gain` defined above for internal wiring
