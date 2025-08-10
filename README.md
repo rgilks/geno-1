@@ -124,7 +124,7 @@ Links:
   - `src/render/targets.rs`: HDR/bloom textures create/recreate
   - `src/render/post.rs`: post pipelines, uniforms, blit, bind-group rebuild
   - `src/render/waves.rs`: waves pass uniforms and pipeline bundle
-  - `src/render.rs`: orchestrates passes using the render/* helpers
+  - `src/render.rs`: orchestrates passes using the render/\* helpers
 
 ### Docs
 

@@ -11,7 +11,12 @@ pub enum Waveform {
     Triangle,
 }
 
-/// Static configuration for a voice: color, waveform and initial position.
+/// Static configuration for a voice used at engine construction time.
+///
+/// Fields:
+/// - `color_rgb`: base RGB color used by the visualizer for this voice
+/// - `waveform`: oscillator type to synthesize this voice in the web frontend
+/// - `base_position`: initial engine-space position (XZ plane; Y is typically 0)
 #[derive(Clone, Debug)]
 pub struct VoiceConfig {
     pub color_rgb: [f32; 3],
@@ -19,7 +24,14 @@ pub struct VoiceConfig {
     pub base_position: Vec3,
 }
 
-/// Scheduled note event produced by the music engine.
+/// A scheduled musical event produced by the engine for playback.
+///
+/// Fields:
+/// - `voice_index`: which voice this event belongs to (index into `voices`)
+/// - `frequency_hz`: target pitch in Hertz (already converted from MIDI)
+/// - `velocity`: normalized loudness 0..1 (mapped to gain envelope)
+/// - `start_time_sec`: absolute start time (AudioContext time) in seconds
+/// - `duration_sec`: nominal duration in seconds (envelope length)
 #[derive(Clone, Debug, Default)]
 pub struct NoteEvent {
     pub voice_index: usize,
@@ -71,6 +83,17 @@ pub const AEOLIAN: &[i32] = &[0, 2, 3, 5, 7, 8, 10, 12]; // natural minor
 pub const LOCRIAN: &[i32] = &[0, 1, 3, 5, 6, 8, 10, 12];
 
 /// Random generative scheduler producing `NoteEvent`s on an eighth-note grid.
+///
+/// The engine maintains per-voice state and RNGs. On each tick, it advances an
+/// internal accumulator based on the configured tempo (`params.bpm`) and emits
+/// events aligned to an eighth-note grid. Voices have distinct trigger
+/// probabilities, octave ranges, and base durations to create a simple texture.
+///
+/// Typical usage:
+/// - Construct with `MusicEngine::new(configs, params, seed)`
+/// - Call `tick(dt, now_sec, &mut out_events)` regularly to schedule audio
+/// - Use `toggle_mute`, `toggle_solo`, `reseed_voice`, and `set_voice_position`
+///   to interact with the engine state
 pub struct MusicEngine {
     pub voices: Vec<VoiceState>,
     pub configs: Vec<VoiceConfig>,
