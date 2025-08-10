@@ -339,34 +339,7 @@ impl<'a> GpuState<'a> {
             self.surface.configure(&self.device, &self.config);
 
             // Recreate offscreen render targets and dependent bind groups
-            let hdr_format = wgpu::TextureFormat::Rgba16Float;
-            (self.targets.hdr_tex, self.targets.hdr_view) = helpers::create_color_texture(
-                &self.device,
-                "hdr_tex",
-                width,
-                height,
-                hdr_format,
-                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            );
-            let bw = (width.max(1) / 2).max(1);
-            let bh = (height.max(1) / 2).max(1);
-            let bloom_format = wgpu::TextureFormat::Rgba16Float;
-            (self.targets.bloom_a, self.targets.bloom_a_view) = helpers::create_color_texture(
-                &self.device,
-                "bloom_a",
-                bw,
-                bh,
-                bloom_format,
-                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            );
-            (self.targets.bloom_b, self.targets.bloom_b_view) = helpers::create_color_texture(
-                &self.device,
-                "bloom_b",
-                bw,
-                bh,
-                bloom_format,
-                wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            );
+            self.targets.recreate(&self.device, width, height);
 
             // Rebuild bind groups that reference these views
             self.rebuild_post_bind_groups();
@@ -438,16 +411,14 @@ impl<'a> GpuState<'a> {
         }
 
         let res = [self.width as f32 / 2.0, self.height as f32 / 2.0];
-        let mut post = PostUniforms {
-            resolution: res,
-            time: self.time_accum,
-            ambient: self.ambient_energy,
-            blur_dir: [0.0, 0.0],
-            bloom_strength: crate::constants::BLOOM_STRENGTH,
-            threshold: crate::constants::BLOOM_THRESHOLD,
-        };
-        self.queue
-            .write_buffer(&self.post.uniform_buffer, 0, bytemuck::bytes_of(&post));
+        post::write_post_uniforms(
+            &self.queue,
+            &self.post.uniform_buffer,
+            res,
+            self.time_accum,
+            self.ambient_energy,
+            [0.0, 0.0],
+        );
 
         // Pass 2: bright pass → bloom_a
         post::blit(
@@ -461,9 +432,14 @@ impl<'a> GpuState<'a> {
         );
 
         // Pass 3: blur horizontal bloom_a -> bloom_b
-        post.blur_dir = [1.0, 0.0];
-        self.queue
-            .write_buffer(&self.post.uniform_buffer, 0, bytemuck::bytes_of(&post));
+        post::write_post_uniforms(
+            &self.queue,
+            &self.post.uniform_buffer,
+            res,
+            self.time_accum,
+            self.ambient_energy,
+            [1.0, 0.0],
+        );
         post::blit(
             &mut encoder,
             "blur_h",
@@ -475,9 +451,14 @@ impl<'a> GpuState<'a> {
         );
 
         // Pass 4: blur vertical bloom_b -> bloom_a
-        post.blur_dir = [0.0, 1.0];
-        self.queue
-            .write_buffer(&self.post.uniform_buffer, 0, bytemuck::bytes_of(&post));
+        post::write_post_uniforms(
+            &self.queue,
+            &self.post.uniform_buffer,
+            res,
+            self.time_accum,
+            self.ambient_energy,
+            [0.0, 1.0],
+        );
         post::blit(
             &mut encoder,
             "blur_v",
@@ -489,9 +470,14 @@ impl<'a> GpuState<'a> {
         );
 
         // Pass 5: composite to swapchain
-        post.blur_dir = [0.0, 0.0];
-        self.queue
-            .write_buffer(&self.post.uniform_buffer, 0, bytemuck::bytes_of(&post));
+        post::write_post_uniforms(
+            &self.queue,
+            &self.post.uniform_buffer,
+            res,
+            self.time_accum,
+            self.ambient_energy,
+            [0.0, 0.0],
+        );
         post::blit(
             &mut encoder,
             "composite",

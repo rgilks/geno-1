@@ -1,3 +1,4 @@
+use crate::constants;
 use wgpu;
 
 pub(crate) struct PostResources {
@@ -253,4 +254,23 @@ pub(crate) fn rebuild_bind_groups(
         bg_bloom_a_only,
         bg_bloom_b_only,
     )
+}
+
+pub(crate) fn write_post_uniforms(
+    queue: &wgpu::Queue,
+    buffer: &wgpu::Buffer,
+    resolution: [f32; 2],
+    time: f32,
+    ambient: f32,
+    blur_dir: [f32; 2],
+) {
+    let post = super::PostUniforms {
+        resolution,
+        time,
+        ambient,
+        blur_dir,
+        bloom_strength: constants::BLOOM_STRENGTH,
+        threshold: constants::BLOOM_THRESHOLD,
+    };
+    queue.write_buffer(buffer, 0, bytemuck::bytes_of(&post));
 }
