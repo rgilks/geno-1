@@ -149,3 +149,108 @@ pub(crate) fn blit(
     r.draw(0..3, 0..1);
     drop(r);
 }
+
+pub(crate) fn rebuild_bind_groups(
+    device: &wgpu::Device,
+    post: &super::post::PostResources,
+    linear_sampler: &wgpu::Sampler,
+    hdr_view: &wgpu::TextureView,
+    bloom_a_view: &wgpu::TextureView,
+    bloom_b_view: &wgpu::TextureView,
+) -> (
+    wgpu::BindGroup, // bg_hdr
+    wgpu::BindGroup, // bg_from_bloom_a
+    wgpu::BindGroup, // bg_from_bloom_b
+    wgpu::BindGroup, // bg_bloom_a_only
+    wgpu::BindGroup, // bg_bloom_b_only
+) {
+    let bg_hdr = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("bg_hdr"),
+        layout: &post.bgl0,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(hdr_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(linear_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: post.uniform_buffer.as_entire_binding(),
+            },
+        ],
+    });
+    let bg_from_bloom_a = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("bg_from_bloom_a"),
+        layout: &post.bgl0,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(bloom_a_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(linear_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: post.uniform_buffer.as_entire_binding(),
+            },
+        ],
+    });
+    let bg_from_bloom_b = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("bg_from_bloom_b"),
+        layout: &post.bgl0,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(bloom_b_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(linear_sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: post.uniform_buffer.as_entire_binding(),
+            },
+        ],
+    });
+    let bg_bloom_a_only = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("bg_bloom_a_only"),
+        layout: &post.bgl1,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(bloom_a_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(linear_sampler),
+            },
+        ],
+    });
+    let bg_bloom_b_only = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        label: Some("bg_bloom_b_only"),
+        layout: &post.bgl1,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(bloom_b_view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(linear_sampler),
+            },
+        ],
+    });
+    (
+        bg_hdr,
+        bg_from_bloom_a,
+        bg_from_bloom_b,
+        bg_bloom_a_only,
+        bg_bloom_b_only,
+    )
+}

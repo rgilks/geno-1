@@ -37,6 +37,10 @@ pub struct VoiceState {
 }
 
 /// Global engine parameters controlling tempo and scale.
+///
+/// - `bpm` controls the tempo of the scheduler (beats per minute)
+/// - `scale` is the allowed pitch degree set, expressed as semitone offsets
+/// - `root_midi` is the MIDI note number of the tonal center (e.g., 60 for C4)
 #[derive(Clone, Debug)]
 pub struct EngineParams {
     pub bpm: f32,
@@ -224,6 +228,8 @@ impl MusicEngine {
 }
 
 /// Convert a MIDI note number to Hertz (A4=440 Hz).
+///
+/// Monotonic and exhibits octave symmetry: +12 semitones doubles the frequency.
 pub fn midi_to_hz(midi: f32) -> f32 {
     440.0 * (2.0_f32).powf((midi - 69.0) / 12.0)
 }
@@ -280,6 +286,23 @@ mod tests {
         // A4 ± 12 semitones should double/halve
         assert!(approx_eq(midi_to_hz(81.0), 880.0, 0.05));
         assert!(approx_eq(midi_to_hz(57.0), 220.0, 0.05));
+    }
+
+    #[test]
+    fn midi_to_hz_monotonic_and_octave_symmetry() {
+        // Monotonic: increasing MIDI should not decrease Hz
+        for m in 0..126 {
+            let a = midi_to_hz(m as f32);
+            let b = midi_to_hz((m + 1) as f32);
+            assert!(b > a);
+        }
+        // Octave symmetry: +12 doubles within reasonable tolerance across range
+        for m in 12..116 {
+            let a = midi_to_hz(m as f32);
+            let b = midi_to_hz((m + 12) as f32);
+            let ratio = b / a;
+            assert!((ratio - 2.0).abs() < 1e-3, "ratio {ratio} at m={m}");
+        }
     }
 
     #[test]

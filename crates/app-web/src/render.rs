@@ -510,91 +510,18 @@ impl<'a> GpuState<'a> {
 
 impl<'a> GpuState<'a> {
     fn rebuild_post_bind_groups(&mut self) {
-        // bg sampling HDR scene
-        self.bg_hdr = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("bg_hdr"),
-            layout: &self.post.bgl0,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.targets.hdr_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: self.post.uniform_buffer.as_entire_binding(),
-                },
-            ],
-        });
-        // bg sampling bloom_a
-        self.bg_from_bloom_a = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("bg_from_bloom_a"),
-            layout: &self.post.bgl0,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.targets.bloom_a_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: self.post.uniform_buffer.as_entire_binding(),
-                },
-            ],
-        });
-        // bg sampling bloom_b
-        self.bg_from_bloom_b = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("bg_from_bloom_b"),
-            layout: &self.post.bgl0,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.targets.bloom_b_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: self.post.uniform_buffer.as_entire_binding(),
-                },
-            ],
-        });
-        // group1 variants (no uniforms)
-        self.bg_bloom_a_only = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("bg_bloom_a_only"),
-            layout: &self.post.bgl1,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.targets.bloom_a_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
-                },
-            ],
-        });
-        self.bg_bloom_b_only = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("bg_bloom_b_only"),
-            layout: &self.post.bgl1,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.targets.bloom_b_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&self.linear_sampler),
-                },
-            ],
-        });
+        let (bg_hdr, bg_from_a, bg_from_b, bg_a_only, bg_b_only) = post::rebuild_bind_groups(
+            &self.device,
+            &self.post,
+            &self.linear_sampler,
+            &self.targets.hdr_view,
+            &self.targets.bloom_a_view,
+            &self.targets.bloom_b_view,
+        );
+        self.bg_hdr = bg_hdr;
+        self.bg_from_bloom_a = bg_from_a;
+        self.bg_from_bloom_b = bg_from_b;
+        self.bg_bloom_a_only = bg_a_only;
+        self.bg_bloom_b_only = bg_b_only;
     }
 }
