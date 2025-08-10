@@ -6,6 +6,9 @@ use web_sys as web;
 ///
 /// Contains a full-resolution HDR scene color and two half-resolution bloom
 /// ping-pong textures. Views are pre-created for convenience.
+///
+/// - `hdr_*` hold the main scene color in Rgba16Float for post-processing.
+/// - `bloom_*` are half-res buffers used for bright-pass and blur.
 pub struct RenderTargets {
     pub hdr_tex: wgpu::Texture,
     pub hdr_view: wgpu::TextureView,

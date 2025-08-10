@@ -1,4 +1,7 @@
-/// Frame smoothing and interaction tuning constants
+/// Frame smoothing and interaction tuning constants.
+///
+/// These constants express intended behavior (e.g., time constants, clamp
+/// limits) and keep magic numbers out of the code, improving readability.
 
 // Exponential decay rate for internal pulse energy
 pub const PULSE_ENERGY_DECAY_PER_SEC: f32 = 1.6;

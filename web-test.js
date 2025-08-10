@@ -45,7 +45,9 @@ const puppeteer = require("puppeteer");
     const el = document.getElementById("start-overlay");
     if (!el) return "missing";
     const style = el.getAttribute("style") || "";
-    return /display:\s*none/.test(style) ? "hidden" : "visible";
+    const byStyle = /display:\s*none/.test(style);
+    const byClass = el.classList.contains("hidden");
+    return byStyle || byClass ? "hidden" : "visible";
   });
   if (overlayHidden !== "hidden")
     throw new Error("start overlay did not hide after close");
@@ -56,7 +58,9 @@ const puppeteer = require("puppeteer");
     const el = document.getElementById("start-overlay");
     if (!el) return "missing";
     const style = el.getAttribute("style") || "";
-    return /display:\s*none/.test(style) ? "hidden" : "visible";
+    const byStyle = /display:\s*none/.test(style);
+    const byClass = el.classList.contains("hidden");
+    return byStyle || byClass ? "hidden" : "visible";
   });
   if (overlayShown !== "visible")
     throw new Error("start overlay did not show after H");

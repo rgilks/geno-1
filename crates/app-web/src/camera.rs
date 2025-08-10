@@ -2,6 +2,13 @@ use glam::{Mat4, Vec3, Vec4};
 use web_sys as web;
 
 #[inline]
+/// Compute a world-space ray from screen-space canvas coordinates.
+///
+/// - `canvas`: target canvas to derive dimensions/aspect
+/// - `sx`, `sy`: pixel coordinates in the canvas' backing store space
+/// - `camera_z`: camera eye Z used by the fixed look-at used in the app
+///
+/// Returns `(ray_origin, ray_direction)` in world space.
 pub fn screen_to_world_ray(
     canvas: &web::HtmlCanvasElement,
     sx: f32,
