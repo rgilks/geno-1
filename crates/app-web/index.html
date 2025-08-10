@@ -97,7 +97,8 @@
         font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
         font-size: 12px;
       }
-      #start-btn {
+      #overlay-ok,
+      #overlay-close {
         appearance: none;
         border: 1px solid #3a4b66;
         background: linear-gradient(#0b1220, #0a0f1a);
@@ -112,15 +113,17 @@
           Noto Sans,
           Arial,
           sans-serif;
-        padding: 10px 16px;
+        padding: 8px 14px;
         border-radius: 8px;
         cursor: pointer;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
       }
-      #start-btn:hover {
+      #overlay-ok:hover,
+      #overlay-close:hover {
         filter: brightness(1.1);
       }
-      #start-btn:active {
+      #overlay-ok:active,
+      #overlay-close:active {
         transform: translateY(1px);
       }
     </style>
@@ -139,13 +142,34 @@
   <body>
     <div id="start-overlay">
       <div id="start-content">
-        <button id="start-btn">Start</button>
         <div id="start-keys">
+          <div
+            style="
+              display: flex;
+              align-items: center;
+              justify-content: space-between;
+              margin-bottom: 6px;
+            "
+          >
+            <div
+              style="
+                font:
+                  800 20px/1.2 &quot;Inter&quot;,
+                  system-ui;
+                letter-spacing: 0.02em;
+                color: #eaf2ff;
+              "
+            >
+              Geno-1
+            </div>
+            <div>
+              <button id="overlay-close" aria-label="Close">×</button>
+            </div>
+          </div>
           <h3>Welcome</h3>
           <ul>
             <li>
-              Click <span class="kbd">Start</span>, then click the canvas to
-              play a note. Mouse position shapes the sound.
+              Click the canvas to play a note. Mouse position shapes the sound.
             </li>
           </ul>
           <div class="grid">
@@ -179,6 +203,11 @@
                 <li><span class="kbd">7</span>: Locrian</li>
               </ul>
             </div>
+          </div>
+          <div
+            style="display: flex; justify-content: flex-end; margin-top: 8px"
+          >
+            <button id="overlay-ok">OK</button>
           </div>
         </div>
       </div>

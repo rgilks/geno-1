@@ -11,7 +11,11 @@ pub fn toggle_hint_visibility(document: &web::Document) {
         };
         let _ = el.set_attribute("data-visible", if show { "1" } else { "0" });
         if let Some(div) = el.dyn_ref::<web::HtmlElement>() {
-            if show { let _ = el.set_attribute("style", ""); } else { let _ = el.set_attribute("style", "display:none"); }
+            if show {
+                let _ = el.set_attribute("style", "");
+            } else {
+                let _ = el.set_attribute("style", "display:none");
+            }
         }
     }
 }
