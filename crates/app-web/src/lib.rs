@@ -5,7 +5,7 @@ use app_core::{
     ENGINE_DRAG_MAX_RADIUS, IONIAN, LOCRIAN, LYDIAN, MIXOLYDIAN, PHRYGIAN, PICK_SPHERE_RADIUS,
     SCALE_PULSE_MULTIPLIER, SPREAD,
 };
-use glam::{Mat4, Vec2, Vec3, Vec4};
+use glam::{Vec2, Vec3, Vec4};
 use instant::Instant;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -578,7 +578,7 @@ async fn init() -> anyhow::Result<()> {
                             // While dragging, boost swirl strength (used during render)
                         } else {
                             match best {
-                                Some((i, t)) => {
+                                Some((i, _t)) => {
                                     *hover_m.borrow_mut() = Some(i);
                                 }
                                 None => {
@@ -653,22 +653,7 @@ async fn init() -> anyhow::Result<()> {
                                 // If hint visible, refresh its content
                                 if let Some(win) = web::window() {
                                     if let Some(doc) = win.document() {
-                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
-                                            if el.get_attribute("data-visible").as_deref()
-                                                == Some("1")
-                                            {
-                                                let bpm_now = engine_k.borrow().params.bpm;
-                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
-                                                {
-                                                    let content = format!(
-                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
-                                                            bpm_now,
-                                                            if *p { "yes" } else { "no" }
-                                                    );
-                                                    div.set_inner_html(&content);
-                                                }
-                                            }
-                                        }
+                                        ui::refresh_hint_if_visible(&doc, engine_k.borrow().params.bpm, *p);
                                     }
                                 }
                                 ev.prevent_default();
@@ -682,22 +667,7 @@ async fn init() -> anyhow::Result<()> {
                                 // If hint visible, refresh its content
                                 if let Some(win) = web::window() {
                                     if let Some(doc) = win.document() {
-                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
-                                            if el.get_attribute("data-visible").as_deref()
-                                                == Some("1")
-                                            {
-                                                let paused_now = *paused_k.borrow();
-                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
-                                                {
-                                                    let content = format!(
-                                                            "Click Start to begin\nClick canvas: play a note • Mouse affects sound\nR: new sequence • Space: pause/resume • ArrowLeft/Right: tempo\nBPM: {:.0} • Paused: {}",
-                                                            new_bpm,
-                                                            if paused_now { "yes" } else { "no" }
-                                                    );
-                                                    div.set_inner_html(&content);
-                                                }
-                                            }
-                                        }
+                                        ui::refresh_hint_if_visible(&doc, new_bpm, *paused_k.borrow());
                                     }
                                 }
                             }
@@ -710,22 +680,7 @@ async fn init() -> anyhow::Result<()> {
                                 // If hint visible, refresh its content
                                 if let Some(win) = web::window() {
                                     if let Some(doc) = win.document() {
-                                        if let Ok(Some(el)) = doc.query_selector(".hint") {
-                                            if el.get_attribute("data-visible").as_deref()
-                                                == Some("1")
-                                            {
-                                                let paused_now = *paused_k.borrow();
-                                                if let Some(div) = el.dyn_ref::<web::HtmlElement>()
-                                                {
-                                                    let content = format!(
-                                                            "Click Start to begin\nClick canvas: play a note • Mouse affects sound\nR: new sequence • Space: pause/resume • ArrowLeft/Right: tempo\nBPM: {:.0} • Paused: {}",
-                                                            new_bpm,
-                                                            if paused_now { "yes" } else { "no" }
-                                                    );
-                                                    div.set_inner_html(&content);
-                                                }
-                                            }
-                                        }
+                                        ui::refresh_hint_if_visible(&doc, new_bpm, *paused_k.borrow());
                                     }
                                 }
                             }

@@ -75,7 +75,7 @@ Desktop UI support has been removed to simplify the project and focus on the web
 
 ### Planned Refactors (incremental, no behavior changes)
 
-- [ ] app-core: extract helper methods for per-voice scheduling parameters
+- [x] app-core: extract helper methods for per-voice scheduling parameters
   - Rationale: improve readability in `schedule_step` by removing inline match blocks
   - Status: implemented as private helpers (`voice_trigger_probability`, `voice_octave_offset`, `voice_base_duration`) and rustdoc added; no API change
 - [ ] app-core: document public structs and functions
@@ -93,13 +93,12 @@ Desktop UI support has been removed to simplify the project and focus on the web
 - [ ] app-web: factor large `lib.rs` into modules (`audio`, `render`, `input`, `ui`)
   - Rationale: improve maintainability of a >2k LOC file
   - Plan: create `mod` submodules and move code in small PR-sized steps; keep exports stable
-- [ ] app-web: centralize DOM/hint/UI updates behind a tiny view model
-  - Rationale: reduce ad-hoc DOM writes scattered in event handlers
-  - Plan: introduce a `UiState` struct with methods to set BPM/paused/mute text
+ - [x] app-web: centralize DOM/hint/UI updates behind a tiny view model (initial)
+   - Rationale: reduce ad-hoc DOM writes scattered in event handlers
+   - Status: introduced `ui::refresh_hint_if_visible` and `set_hint_visibility` to unify updates; consider a lightweight `UiState` later if more fields accrue
 - [ ] app-web: extract WebGPU pipeline builders
   - Rationale: deduplicate pipeline/buffer setup for waves/post passes
   - Plan: create `pipeline.rs` helpers returning typed bundles; no functional changes
-  
 
 ### Testing Enhancements
 
@@ -112,7 +111,7 @@ Desktop UI support has been removed to simplify the project and focus on the web
 
 - [x] Headless web test validates interactions and hint content
 - [x] Add assertions: BPM change reflected; solo/mute state (logs/state)
-  
+
   - [x] Add unit tests for `app-core` mute/solo edge-cases with reseed & tempo changes
 
 ## Deployment
@@ -138,8 +137,6 @@ Status: In progress — core features completed; polish pending
 
 - Add analyser-driven ambient visuals (spectrum/particles) [optional]
 - Add mild glow/color tuning in WGSL; subtle camera motion
-
- 
 
 ### M4: Performance & QA
 
