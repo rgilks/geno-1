@@ -2,7 +2,7 @@ use crate::constants::*;
 use crate::input;
 use crate::render;
 use app_core::{
-    z_offset_vec3, MusicEngine, NoteEvent, Waveform, BASE_SCALE, SCALE_PULSE_MULTIPLIER, SPREAD,
+    z_offset_vec3, MusicEngine, Waveform, BASE_SCALE, SCALE_PULSE_MULTIPLIER, SPREAD,
 };
 use glam::{Vec3, Vec4};
 use instant::Instant;
@@ -177,7 +177,7 @@ impl<'a> FrameContext<'a> {
                 let w = self.canvas.width();
                 let h = self.canvas.height();
                 g.resize_if_needed(w, h);
-                if let Err(e) = g.render(&positions, &colors, &scales) {
+                if let Err(e) = g.render(dt_sec, &positions, &colors, &scales) {
                     log::error!("render error: {:?}", e);
                 }
             }

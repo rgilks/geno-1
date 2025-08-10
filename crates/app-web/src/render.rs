@@ -588,12 +588,13 @@ impl<'a> GpuState<'a> {
 
     pub fn render(
         &mut self,
+        dt_sec: f32,
         positions: &[Vec3],
         colors: &[Vec4],
         scales: &[f32],
     ) -> Result<(), wgpu::SurfaceError> {
         self.resize_if_needed(self.width, self.height);
-        self.time_accum += 1.0 / 60.0; // approx; real dt not tracked here precisely
+        self.time_accum += dt_sec.max(0.0);
         let frame = self.surface.get_current_texture()?;
         let view = frame
             .texture
@@ -655,8 +656,8 @@ impl<'a> GpuState<'a> {
             time: self.time_accum,
             ambient: self.ambient_energy,
             blur_dir: [0.0, 0.0],
-            bloom_strength: 0.9,
-            threshold: 0.6,
+            bloom_strength: crate::constants::BLOOM_STRENGTH,
+            threshold: crate::constants::BLOOM_THRESHOLD,
         };
         self.queue
             .write_buffer(&self.post_uniform_buffer, 0, bytemuck::bytes_of(&post));

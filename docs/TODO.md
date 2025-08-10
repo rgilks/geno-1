@@ -131,10 +131,10 @@ Desktop UI support has been removed to simplify the project and focus on the web
 - [x] app-web: deduplicate pointer event wiring
   - Rationale: avoid drift by handling `pointermove`/drag/hover in one place (`events::wire_input_handlers`)
   - Impact: removed duplicate handler from `lib.rs`; behavior unchanged
- - [x] app-web: centralize tuning constants in `constants.rs` and use in `frame.rs`
- - [x] app-web: factor color texture creation and post blit/pipelines in `render.rs`
- - [x] app-web: overlay toggles CSS class via `classList` with style fallback
- - [ ] app-web: split `events.rs` into `events/keyboard.rs` and `events/pointer.rs`
+- [x] app-web: centralize tuning constants in `constants.rs` and use in `frame.rs`
+- [x] app-web: factor color texture creation and post blit/pipelines in `render.rs`
+- [x] app-web: overlay toggles CSS class via `classList` with style fallback
+- [ ] app-web: split `events.rs` into `events/keyboard.rs` and `events/pointer.rs`
 
 ### Testing Enhancements
 

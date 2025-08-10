@@ -1,0 +1,11 @@
+#!/bin/sh
+# Fail fast
+set -e
+
+echo "[pre-push] Running full workspace checks (fmt, clippy, unit tests, web build + headless test)..."
+
+# Full check: Rust + Web build + headless test
+npm run check >/dev/null
+
+echo "[pre-push] OK"
+

@@ -66,3 +66,7 @@ pub const HOVER_BRIGHTEN: f32 = 1.4;
 // Camera
 // Z distance used by both picking and audio listener alignment.
 pub const CAMERA_Z: f32 = 6.0;
+
+// Post-processing defaults
+pub const BLOOM_STRENGTH: f32 = 0.9;
+pub const BLOOM_THRESHOLD: f32 = 0.6;
