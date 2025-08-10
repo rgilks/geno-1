@@ -1,9 +1,7 @@
 use crate::constants::*;
 use crate::input;
 use crate::render;
-use app_core::{
-    z_offset_vec3, MusicEngine, Waveform, BASE_SCALE, SCALE_PULSE_MULTIPLIER, SPREAD,
-};
+use app_core::{z_offset_vec3, MusicEngine, Waveform, BASE_SCALE, SCALE_PULSE_MULTIPLIER, SPREAD};
 use glam::{Vec3, Vec4};
 use instant::Instant;
 use std::cell::RefCell;
@@ -50,6 +48,11 @@ pub struct FrameContext<'a> {
     pub swirl_vel: [f32; 2],
     pub swirl_initialized: bool,
     pub pulse_energy: [f32; 3],
+
+    // Reused per-frame instance buffers to avoid allocations
+    pub positions: Vec<Vec3>,
+    pub colors: Vec<Vec4>,
+    pub scales: Vec<f32>,
 }
 
 impl<'a> FrameContext<'a> {
@@ -154,8 +157,11 @@ impl<'a> FrameContext<'a> {
             }
 
             // Build instance buffers for renderer
-            let pulses_ref = self.pulses.borrow();
-            let (positions, colors, scales) = self.build_instances(&pulses_ref);
+            let pulses_snapshot: Vec<f32> = {
+                let pulses_ref = self.pulses.borrow();
+                pulses_ref.clone()
+            };
+            self.build_instances_reuse(&pulses_snapshot);
 
             // Camera + listener
             let cam_eye = Vec3::new(0.0, 0.0, CAMERA_Z);
@@ -177,7 +183,7 @@ impl<'a> FrameContext<'a> {
                 let w = self.canvas.width();
                 let h = self.canvas.height();
                 g.resize_if_needed(w, h);
-                if let Err(e) = g.render(dt_sec, &positions, &colors, &scales) {
+                if let Err(e) = g.render(dt_sec, &self.positions, &self.colors, &self.scales) {
                     log::error!("render error: {:?}", e);
                 }
             }
@@ -246,37 +252,49 @@ impl<'a> FrameContext<'a> {
         self.prev_uv = uv;
     }
 
-    fn build_instances(&self, pulses: &[f32]) -> (Vec<Vec3>, Vec<Vec4>, Vec<f32>) {
+    fn build_instances_reuse(&mut self, pulses: &[f32]) {
         let e_ref = self.engine.borrow();
         let z_offset = z_offset_vec3();
         let spread = SPREAD;
         let ring_count = RING_COUNT;
-        let mut positions: Vec<Vec3> = Vec::with_capacity(3 + ring_count * 3 + 16);
-        positions.push(e_ref.voices[0].position * spread + z_offset);
-        positions.push(e_ref.voices[1].position * spread + z_offset);
-        positions.push(e_ref.voices[2].position * spread + z_offset);
-        let mut colors: Vec<Vec4> = Vec::with_capacity(3 + ring_count * 3 + 16);
-        colors.push(Vec4::from((Vec3::from(e_ref.configs[0].color_rgb), 1.0)));
-        colors.push(Vec4::from((Vec3::from(e_ref.configs[1].color_rgb), 1.0)));
-        colors.push(Vec4::from((Vec3::from(e_ref.configs[2].color_rgb), 1.0)));
+        self.positions.clear();
+        self.colors.clear();
+        self.scales.clear();
+        self.positions.reserve(3 + ring_count * 3 + 16);
+        self.colors.reserve(3 + ring_count * 3 + 16);
+        self.scales.reserve(3 + ring_count * 3 + 16);
+        self.positions
+            .push(e_ref.voices[0].position * spread + z_offset);
+        self.positions
+            .push(e_ref.voices[1].position * spread + z_offset);
+        self.positions
+            .push(e_ref.voices[2].position * spread + z_offset);
+        self.colors
+            .push(Vec4::from((Vec3::from(e_ref.configs[0].color_rgb), 1.0)));
+        self.colors
+            .push(Vec4::from((Vec3::from(e_ref.configs[1].color_rgb), 1.0)));
+        self.colors
+            .push(Vec4::from((Vec3::from(e_ref.configs[2].color_rgb), 1.0)));
         let hovered = *self.hover_index.borrow();
         for i in 0..3 {
             if e_ref.voices[i].muted {
-                colors[i].x *= MUTE_DARKEN;
-                colors[i].y *= MUTE_DARKEN;
-                colors[i].z *= MUTE_DARKEN;
-                colors[i].w = 1.0;
+                self.colors[i].x *= MUTE_DARKEN;
+                self.colors[i].y *= MUTE_DARKEN;
+                self.colors[i].z *= MUTE_DARKEN;
+                self.colors[i].w = 1.0;
             }
             if hovered == Some(i) {
-                colors[i].x = (colors[i].x * HOVER_BRIGHTEN).min(1.0);
-                colors[i].y = (colors[i].y * HOVER_BRIGHTEN).min(1.0);
-                colors[i].z = (colors[i].z * HOVER_BRIGHTEN).min(1.0);
+                self.colors[i].x = (self.colors[i].x * HOVER_BRIGHTEN).min(1.0);
+                self.colors[i].y = (self.colors[i].y * HOVER_BRIGHTEN).min(1.0);
+                self.colors[i].z = (self.colors[i].z * HOVER_BRIGHTEN).min(1.0);
             }
         }
-        let mut scales: Vec<f32> = Vec::with_capacity(3 + ring_count * 3 + 16);
-        scales.push(BASE_SCALE + pulses[0] * SCALE_PULSE_MULTIPLIER);
-        scales.push(BASE_SCALE + pulses[1] * SCALE_PULSE_MULTIPLIER);
-        scales.push(BASE_SCALE + pulses[2] * SCALE_PULSE_MULTIPLIER);
+        self.scales
+            .push(BASE_SCALE + pulses[0] * SCALE_PULSE_MULTIPLIER);
+        self.scales
+            .push(BASE_SCALE + pulses[1] * SCALE_PULSE_MULTIPLIER);
+        self.scales
+            .push(BASE_SCALE + pulses[2] * SCALE_PULSE_MULTIPLIER);
 
         if let Some(a) = &self.analyser {
             let bins = a.frequency_bin_count() as usize;
@@ -295,14 +313,13 @@ impl<'a> FrameContext<'a> {
                     let lin = ((v_db + 100.0) / 100.0).clamp(0.0, 1.0);
                     let x = -2.8 + (i as f32) * (5.6 / (dots as f32 - 1.0));
                     let y = -1.8;
-                    positions.push(Vec3::new(x, y, z));
+                    self.positions.push(Vec3::new(x, y, z));
                     let c = Vec3::new(0.25 + 0.5 * lin, 0.6 + 0.3 * lin, 0.9);
-                    colors.push(Vec4::from((c, 0.95)));
-                    scales.push(0.18 + lin * 0.35);
+                    self.colors.push(Vec4::from((c, 0.95)));
+                    self.scales.push(0.18 + lin * 0.35);
                 }
             }
         }
-        (positions, colors, scales)
     }
 }
 

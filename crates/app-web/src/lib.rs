@@ -292,6 +292,9 @@ async fn init() -> anyhow::Result<()> {
                     swirl_vel: [0.0, 0.0],
                     swirl_initialized: false,
                     pulse_energy: [0.0, 0.0, 0.0],
+                    positions: Vec::with_capacity(128),
+                    colors: Vec::with_capacity(128),
+                    scales: Vec::with_capacity(128),
                 }));
                 // Start RAF loop
                 frame::start_loop(frame_ctx);

@@ -23,7 +23,9 @@ pub fn hide(document: &web::Document) {
 #[inline]
 pub fn is_hidden(document: &web::Document) -> bool {
     if let Some(el) = document.get_element_by_id("start-overlay") {
-        if el.class_list().contains("hidden") { return true; }
+        if el.class_list().contains("hidden") {
+            return true;
+        }
         return el
             .get_attribute("style")
             .map(|s| s.contains("display:none"))
