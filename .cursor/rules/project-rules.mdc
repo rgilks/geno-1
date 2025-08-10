@@ -8,6 +8,8 @@ Improve the tests as you go, make sure the tests are clear and focused. Don't cr
 Improve the docs and diagramsas you go.
 Remove dead and commented out code.
 Use whitespace to make the code more readable.
+Try and keep functions less that 30 lines, the shorter the better.
+Try and keep files less that 300 lines, the smaller the better.
 
 Do not block for approvals; follow `docs/SPEC.md` and `docs/TODO.md` and keep momentum.
 Prefer WebGPU via `wgpu` v24.0 and avoid WebGL2 fallbacks.

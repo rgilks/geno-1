@@ -83,7 +83,449 @@ fn sync_canvas_backing_size(canvas: &web::HtmlCanvasElement) {
     }
 }
 
+// Convert a pointer event's client coordinates to canvas backing pixel coordinates
+fn pointer_canvas_px(ev: &web::PointerEvent, canvas: &web::HtmlCanvasElement) -> Vec2 {
+    let rect = canvas.get_bounding_client_rect();
+    let x_css = ev.client_x() as f32 - rect.left() as f32;
+    let y_css = ev.client_y() as f32 - rect.top() as f32;
+    let sx = (x_css / rect.width() as f32) * canvas.width() as f32;
+    let sy = (y_css / rect.height() as f32) * canvas.height() as f32;
+    Vec2::new(sx, sy)
+}
+
+// Convert a pointer event's client coordinates to normalized canvas UV in [0,1]^2 (top-left origin)
+fn pointer_canvas_uv(ev: &web::PointerEvent, canvas: &web::HtmlCanvasElement) -> [f32; 2] {
+    let rect = canvas.get_bounding_client_rect();
+    let x_css = ev.client_x() as f32 - rect.left() as f32;
+    let y_css = ev.client_y() as f32 - rect.top() as f32;
+    let w = rect.width() as f32;
+    let h = rect.height() as f32;
+    if w > 0.0 && h > 0.0 {
+        let u = (x_css / w).clamp(0.0, 1.0);
+        let v = (y_css / h).clamp(0.0, 1.0);
+        [u, v]
+    } else {
+        [0.5, 0.5]
+    }
+}
+
+// Compute mouse UV from stored mouse state and canvas size (top-left origin)
+fn mouse_uv(canvas: &web::HtmlCanvasElement, mouse: &input::MouseState) -> [f32; 2] {
+    let w = canvas.width().max(1) as f32;
+    let h = canvas.height().max(1) as f32;
+    [(mouse.x / w).clamp(0.0, 1.0), (mouse.y / h).clamp(0.0, 1.0)]
+}
+
+// Critically-damped (slightly underdamped) spring toward target UV
+fn step_inertial_swirl(
+    initialized: &mut bool,
+    swirl_pos: &mut [f32; 2],
+    swirl_vel: &mut [f32; 2],
+    target_uv: [f32; 2],
+    dt_sec: f32,
+) {
+    if !*initialized {
+        *swirl_pos = target_uv;
+        swirl_vel[0] = 0.0;
+        swirl_vel[1] = 0.0;
+        *initialized = true;
+        return;
+    }
+    let omega = 1.1_f32;
+    let k = omega * omega;
+    let c = 2.0 * omega * 0.5;
+    let dx = target_uv[0] - swirl_pos[0];
+    let dy = target_uv[1] - swirl_pos[1];
+    let ax = k * dx - c * swirl_vel[0];
+    let ay = k * dy - c * swirl_vel[1];
+    swirl_vel[0] += ax * dt_sec;
+    swirl_vel[1] += ay * dt_sec;
+    let mut nx = swirl_pos[0] + swirl_vel[0] * dt_sec;
+    let mut ny = swirl_pos[1] + swirl_vel[1] * dt_sec;
+    let sdx = nx - swirl_pos[0];
+    let sdy = ny - swirl_pos[1];
+    let step = (sdx * sdx + sdy * sdy).sqrt();
+    let max_step = 0.50_f32 * dt_sec;
+    if step > max_step {
+        let inv = 1.0 / (step + 1e-6);
+        nx = swirl_pos[0] + sdx * inv * max_step;
+        ny = swirl_pos[1] + sdy * inv * max_step;
+    }
+    swirl_pos[0] = nx.clamp(0.0, 1.0);
+    swirl_pos[1] = ny.clamp(0.0, 1.0);
+}
+
+// Apply global audio FX modulation based on swirl and pointer state
+fn apply_global_fx_swirl(
+    reverb_wet: &web::GainNode,
+    delay_wet: &web::GainNode,
+    delay_feedback: &web::GainNode,
+    sat_pre: &web::GainNode,
+    sat_wet: &web::GainNode,
+    sat_dry: &web::GainNode,
+    swirl_energy: f32,
+    uv: [f32; 2],
+) {
+    let _ = reverb_wet.gain().set_value(0.35 + 0.65 * swirl_energy);
+    let echo = (uv[0] - uv[1]).abs();
+    let delay_wet_val = (0.15 + 0.55 * swirl_energy + 0.30 * echo).clamp(0.0, 1.0);
+    let delay_fb_val = (0.35 + 0.35 * swirl_energy + 0.25 * echo).clamp(0.0, 0.95);
+    let _ = delay_wet.gain().set_value(delay_wet_val);
+    let _ = delay_feedback.gain().set_value(delay_fb_val);
+    let fizz = ((uv[0] + uv[1]) * 0.5).clamp(0.0, 1.0);
+    let drive = (0.6 + 2.4 * fizz).clamp(0.2, 3.0);
+    let _ = sat_pre.gain().set_value(drive);
+    let wet = (0.15 + 0.85 * fizz).clamp(0.0, 1.0);
+    let _ = sat_wet.gain().set_value(wet);
+    let _ = sat_dry.gain().set_value(1.0 - wet);
+}
+
+// Keep the AudioListener aligned to the camera
+fn update_listener_to_camera(listener: &web::AudioListener, cam_eye: Vec3, cam_target: Vec3) {
+    let fwd = (cam_target - cam_eye).normalize();
+    listener.set_position(cam_eye.x as f64, cam_eye.y as f64, cam_eye.z as f64);
+    let _ = listener.set_orientation(fwd.x as f64, fwd.y as f64, fwd.z as f64, 0.0, 1.0, 0.0);
+}
+
 // (waveshaper curve builder moved inside audio module)
+
+// ===================== Frame context =====================
+struct FrameContext<'a> {
+    // Core state
+    engine: Rc<RefCell<MusicEngine>>,
+    paused: Rc<RefCell<bool>>,
+    pulses: Rc<RefCell<Vec<f32>>>,
+    hover_index: Rc<RefCell<Option<usize>>>,
+
+    // Canvas and input
+    canvas: web::HtmlCanvasElement,
+    mouse: Rc<RefCell<input::MouseState>>,
+
+    // Audio routing
+    audio_ctx: web::AudioContext,
+    listener: web::AudioListener,
+    voice_gains: Rc<Vec<web::GainNode>>,
+    delay_sends: Rc<Vec<web::GainNode>>,
+    reverb_sends: Rc<Vec<web::GainNode>>,
+    voice_panners: Vec<web::PannerNode>,
+
+    // Global FX controls
+    reverb_wet: web::GainNode,
+    delay_wet: web::GainNode,
+    delay_feedback: web::GainNode,
+    sat_pre: web::GainNode,
+    sat_wet: web::GainNode,
+    sat_dry: web::GainNode,
+
+    // Optional analyser
+    analyser: Option<web::AnalyserNode>,
+    analyser_buf: Rc<RefCell<Vec<f32>>>,
+
+    // Renderer
+    gpu: Option<render::GpuState<'a>>,
+    queued_ripple_uv: Rc<RefCell<Option<[f32; 2]>>>,
+
+    // Time + visual dynamics
+    last_instant: Instant,
+    prev_uv: [f32; 2],
+    swirl_energy: f32,
+    swirl_pos: [f32; 2],
+    swirl_vel: [f32; 2],
+    swirl_initialized: bool,
+    pulse_energy: [f32; 3],
+}
+
+impl<'a> FrameContext<'a> {
+    fn frame(&mut self) {
+        let now = Instant::now();
+        let dt = now - self.last_instant;
+        self.last_instant = now;
+        let dt_sec = dt.as_secs_f32();
+
+        let audio_time = self.audio_ctx.current_time();
+        let mut note_events = Vec::new();
+        if !*self.paused.borrow() {
+            self.engine
+                .borrow_mut()
+                .tick(dt, audio_time, &mut note_events);
+        }
+
+        {
+            let mut pulses = self.pulses.borrow_mut();
+            let n = pulses.len().min(3);
+            for ev in &note_events {
+                if ev.voice_index < n {
+                    self.pulse_energy[ev.voice_index] =
+                        (self.pulse_energy[ev.voice_index] + ev.velocity as f32).min(1.8);
+                }
+            }
+            let energy_decay = (-dt_sec * 1.6).exp();
+            for i in 0..n {
+                self.pulse_energy[i] *= energy_decay;
+            }
+            let tau_up = 0.10_f32;
+            let tau_down = 0.45_f32;
+            let alpha_up = 1.0 - (-dt_sec / tau_up).exp();
+            let alpha_down = 1.0 - (-dt_sec / tau_down).exp();
+            for i in 0..n {
+                let target = self.pulse_energy[i].clamp(0.0, 1.5);
+                let alpha = if target > pulses[i] {
+                    alpha_up
+                } else {
+                    alpha_down
+                };
+                pulses[i] += (target - pulses[i]) * alpha;
+            }
+
+            // Swirl input
+            let ms = self.mouse.borrow();
+            let uv = mouse_uv(&self.canvas, &ms);
+            step_inertial_swirl(
+                &mut self.swirl_initialized,
+                &mut self.swirl_pos,
+                &mut self.swirl_vel,
+                uv,
+                dt_sec,
+            );
+            let du = uv[0] - self.prev_uv[0];
+            let dv = uv[1] - self.prev_uv[1];
+            let pointer_speed = ((du * du + dv * dv).sqrt() / (dt_sec + 1e-5)).min(10.0);
+            let swirl_speed = (self.swirl_vel[0] * self.swirl_vel[0]
+                + self.swirl_vel[1] * self.swirl_vel[1])
+                .sqrt();
+            let target =
+                ((pointer_speed * 0.2) + (swirl_speed * 0.35) + if ms.down { 0.5 } else { 0.0 })
+                    .clamp(0.0, 1.0);
+            drop(ms);
+            self.swirl_energy = 0.85 * self.swirl_energy + 0.15 * target;
+            self.prev_uv = uv;
+
+            // Global FX modulation
+            apply_global_fx_swirl(
+                &self.reverb_wet,
+                &self.delay_wet,
+                &self.delay_feedback,
+                &self.sat_pre,
+                &self.sat_wet,
+                &self.sat_dry,
+                self.swirl_energy,
+                uv,
+            );
+
+            // Per-voice audio positioning and sends
+            for i in 0..self.voice_panners.len() {
+                let pos = self.engine.borrow().voices[i].position;
+                self.voice_panners[i].position_x().set_value(pos.x as f32);
+                self.voice_panners[i].position_y().set_value(pos.y as f32);
+                self.voice_panners[i].position_z().set_value(pos.z as f32);
+                let dist = (pos.x * pos.x + pos.z * pos.z).sqrt();
+                let mut d_amt = (0.15 + 0.85 * pos.x.abs().min(1.0)).clamp(0.0, 1.0);
+                let mut r_amt = (0.25 + 0.75 * (dist / 2.5).clamp(0.0, 1.0)).clamp(0.0, 1.2);
+                let boost = 1.0 + 0.8 * self.swirl_energy;
+                d_amt = (d_amt * boost).clamp(0.0, 1.2);
+                r_amt = (r_amt * boost).clamp(0.0, 1.5);
+                self.delay_sends[i].gain().set_value(d_amt);
+                self.reverb_sends[i].gain().set_value(r_amt);
+                let lvl = (0.55 + 0.45 * (1.0 - (dist / 2.5).clamp(0.0, 1.0))) as f32;
+                self.voice_gains[i].gain().set_value(lvl);
+            }
+
+            // Optional analyser-driven ambient energy
+            if let Some(a) = &self.analyser {
+                let bins = a.frequency_bin_count() as usize;
+                {
+                    let mut buf = self.analyser_buf.borrow_mut();
+                    if buf.len() != bins {
+                        buf.resize(bins, 0.0);
+                    }
+                    a.get_float_frequency_data(&mut buf);
+                }
+                let mut sum = 0.0f32;
+                let take = (bins.min(16)) as u32;
+                for i in 0..take {
+                    let v = self.analyser_buf.borrow()[i as usize];
+                    let lin = ((v + 100.0) / 100.0).clamp(0.0, 1.0);
+                    sum += lin;
+                }
+                let avg = sum / take as f32;
+                let n = pulses.len().min(3);
+                for i in 0..n {
+                    pulses[i] = (pulses[i] + avg * 0.05).min(1.5);
+                }
+                if let Some(g) = &mut self.gpu {
+                    g.set_ambient_clear(avg * 0.9);
+                }
+            }
+
+            // Build instance buffers for renderer
+            let e_ref = self.engine.borrow();
+            let z_offset = z_offset_vec3();
+            let spread = SPREAD;
+            let ring_count = 48usize;
+            let mut positions: Vec<Vec3> = Vec::with_capacity(3 + ring_count * 3 + 16);
+            positions.push(e_ref.voices[0].position * spread + z_offset);
+            positions.push(e_ref.voices[1].position * spread + z_offset);
+            positions.push(e_ref.voices[2].position * spread + z_offset);
+            let mut colors: Vec<Vec4> = Vec::with_capacity(3 + ring_count * 3 + 16);
+            colors.push(Vec4::from((Vec3::from(e_ref.configs[0].color_rgb), 1.0)));
+            colors.push(Vec4::from((Vec3::from(e_ref.configs[1].color_rgb), 1.0)));
+            colors.push(Vec4::from((Vec3::from(e_ref.configs[2].color_rgb), 1.0)));
+            let hovered = *self.hover_index.borrow();
+            for i in 0..3 {
+                if e_ref.voices[i].muted {
+                    colors[i].x *= 0.35;
+                    colors[i].y *= 0.35;
+                    colors[i].z *= 0.35;
+                    colors[i].w = 1.0;
+                }
+                if hovered == Some(i) {
+                    colors[i].x = (colors[i].x * 1.4).min(1.0);
+                    colors[i].y = (colors[i].y * 1.4).min(1.0);
+                    colors[i].z = (colors[i].z * 1.4).min(1.0);
+                }
+            }
+            let mut scales: Vec<f32> = Vec::with_capacity(3 + ring_count * 3 + 16);
+            scales.push(BASE_SCALE + pulses[0] * SCALE_PULSE_MULTIPLIER);
+            scales.push(BASE_SCALE + pulses[1] * SCALE_PULSE_MULTIPLIER);
+            scales.push(BASE_SCALE + pulses[2] * SCALE_PULSE_MULTIPLIER);
+
+            if let Some(a) = &self.analyser {
+                let bins = a.frequency_bin_count() as usize;
+                let dots = bins.min(16);
+                if dots > 0 {
+                    {
+                        let mut buf = self.analyser_buf.borrow_mut();
+                        if buf.len() != bins {
+                            buf.resize(bins, 0.0);
+                        }
+                        a.get_float_frequency_data(&mut buf);
+                    }
+                    let z = z_offset.z;
+                    for i in 0..dots {
+                        let v_db = self.analyser_buf.borrow()[i];
+                        let lin = ((v_db + 100.0) / 100.0).clamp(0.0, 1.0);
+                        let x = -2.8 + (i as f32) * (5.6 / (dots as f32 - 1.0));
+                        let y = -1.8;
+                        positions.push(Vec3::new(x, y, z));
+                        let c = Vec3::new(0.25 + 0.5 * lin, 0.6 + 0.3 * lin, 0.9);
+                        colors.push(Vec4::from((c, 0.95)));
+                        scales.push(0.18 + lin * 0.35);
+                    }
+                }
+            }
+
+            // Camera + listener
+            let cam_eye = Vec3::new(0.0, 0.0, CAMERA_Z);
+            let cam_target = Vec3::ZERO;
+            update_listener_to_camera(&self.listener, cam_eye, cam_target);
+
+            if let Some(g) = &mut self.gpu {
+                g.set_camera(cam_eye, cam_target);
+                if let Some(uvr) = self.queued_ripple_uv.borrow_mut().take() {
+                    g.set_ripple(uvr, 1.0);
+                }
+                let speed_norm = ((self.swirl_vel[0] * self.swirl_vel[0]
+                    + self.swirl_vel[1] * self.swirl_vel[1])
+                    .sqrt()
+                    / 1.0)
+                    .clamp(0.0, 1.0);
+                let strength = 0.28 + 0.85 * self.swirl_energy + 0.15 * speed_norm;
+                g.set_swirl(self.swirl_pos, strength, true);
+                let w = self.canvas.width();
+                let h = self.canvas.height();
+                g.resize_if_needed(w, h);
+                if let Err(e) = g.render(&positions, &colors, &scales) {
+                    log::error!("render error: {:?}", e);
+                }
+            }
+        }
+
+        if !*self.paused.borrow() {
+            for ev in &note_events {
+                let src = match web::OscillatorNode::new(&self.audio_ctx) {
+                    Ok(s) => s,
+                    Err(_) => continue,
+                };
+                match self.engine.borrow().configs[ev.voice_index].waveform {
+                    Waveform::Sine => src.set_type(web::OscillatorType::Sine),
+                    Waveform::Square => src.set_type(web::OscillatorType::Square),
+                    Waveform::Saw => src.set_type(web::OscillatorType::Sawtooth),
+                    Waveform::Triangle => src.set_type(web::OscillatorType::Triangle),
+                }
+                src.frequency().set_value(ev.frequency_hz);
+                let gain = match web::GainNode::new(&self.audio_ctx) {
+                    Ok(g) => g,
+                    Err(_) => continue,
+                };
+                gain.gain().set_value(0.0);
+                let t0 = audio_time + 0.01;
+                let _ = gain
+                    .gain()
+                    .linear_ramp_to_value_at_time(ev.velocity as f32, t0 + 0.02);
+                let _ = gain
+                    .gain()
+                    .linear_ramp_to_value_at_time(0.0_f32, t0 + ev.duration_sec as f64);
+                let _ = src.connect_with_audio_node(&gain);
+                let _ = gain.connect_with_audio_node(&self.voice_gains[ev.voice_index]);
+                let _ = gain.connect_with_audio_node(&self.delay_sends[ev.voice_index]);
+                let _ = gain.connect_with_audio_node(&self.reverb_sends[ev.voice_index]);
+                let _ = src.start_with_when(t0);
+                let _ = src.stop_with_when(t0 + ev.duration_sec as f64 + 0.02);
+            }
+        }
+    }
+}
+
+// Pick nearest voice by comparing UV x to normalized voice x positions
+fn nearest_index_by_uvx(normalized_voice_xs: &[f32], uvx: f32) -> usize {
+    let mut best_i = 0usize;
+    let mut best_dx = f32::MAX;
+    for (i, vx) in normalized_voice_xs.iter().enumerate() {
+        let dx = (uvx - *vx).abs();
+        if dx < best_dx {
+            best_dx = dx;
+            best_i = i;
+        }
+    }
+    best_i
+}
+
+// Fire a simple one-shot oscillator routed through a voice's gain and sends
+fn trigger_one_shot(
+    audio_ctx: &web::AudioContext,
+    waveform: Waveform,
+    frequency_hz: f32,
+    velocity: f32,
+    duration_sec: f64,
+    voice_gain: &web::GainNode,
+    delay_send: &web::GainNode,
+    reverb_send: &web::GainNode,
+) {
+    if let Ok(src) = web::OscillatorNode::new(audio_ctx) {
+        match waveform {
+            Waveform::Sine => src.set_type(web::OscillatorType::Sine),
+            Waveform::Square => src.set_type(web::OscillatorType::Square),
+            Waveform::Saw => src.set_type(web::OscillatorType::Sawtooth),
+            Waveform::Triangle => src.set_type(web::OscillatorType::Triangle),
+        }
+        src.frequency().set_value(frequency_hz);
+        if let Ok(g) = web::GainNode::new(audio_ctx) {
+            g.gain().set_value(0.0);
+            let now = audio_ctx.current_time();
+            let t0 = now + 0.005;
+            let _ = g.gain().linear_ramp_to_value_at_time(velocity, t0 + 0.02);
+            let _ = g
+                .gain()
+                .linear_ramp_to_value_at_time(0.0, t0 + duration_sec);
+            let _ = src.connect_with_audio_node(&g);
+            let _ = g.connect_with_audio_node(voice_gain);
+            let _ = g.connect_with_audio_node(delay_send);
+            let _ = g.connect_with_audio_node(reverb_send);
+            let _ = src.start_with_when(t0);
+            let _ = src.stop_with_when(t0 + duration_sec + 0.05);
+        }
+    }
+}
 
 // Create analyser and an appropriately sized buffer
 fn create_analyser(
@@ -457,7 +899,7 @@ async fn init() -> anyhow::Result<()> {
 
                 // Initialize WebGPU (leak a canvas clone to satisfy 'static lifetime for surface)
                 let leaked_canvas = Box::leak(Box::new(canvas_for_click_inner.clone()));
-                let mut gpu: Option<render::GpuState> =
+                let gpu: Option<render::GpuState> =
                     match render::GpuState::new(leaked_canvas, CAMERA_Z).await {
                         Ok(g) => Some(g),
                         Err(e) => {
@@ -491,12 +933,7 @@ async fn init() -> anyhow::Result<()> {
                     let canvas_mouse = canvas_for_click_inner.clone();
                     let canvas_connected = canvas_mouse.is_connected();
                     let closure = Closure::wrap(Box::new(move |ev: web::PointerEvent| {
-                        let rect = canvas_mouse.get_bounding_client_rect();
-                        let x_css = ev.client_x() as f32 - rect.left() as f32;
-                        let y_css = ev.client_y() as f32 - rect.top() as f32;
-                        let sx = (x_css / rect.width() as f32) * canvas_mouse.width() as f32;
-                        let sy = (y_css / rect.height() as f32) * canvas_mouse.height() as f32;
-                        let pos = Vec2::new(sx, sy);
+                        let pos = pointer_canvas_px(&ev, &canvas_mouse);
                         // For CI/headless environments without real mouse, synthesize hover over center
                         if !canvas_connected {
                             return;
@@ -657,68 +1094,32 @@ async fn init() -> anyhow::Result<()> {
                             }
                         } else {
                             // Background click: synth one-shot via WebAudio and request a ripple
-                            let rect = canvas_click.get_bounding_client_rect();
-                            let x_css = ev.client_x() as f32 - rect.left() as f32;
-                            let y_css = ev.client_y() as f32 - rect.top() as f32;
-                            let w = rect.width() as f32;
-                            let h = rect.height() as f32;
-                            if w > 0.0 && h > 0.0 {
-                                let uvx = (x_css / w).clamp(0.0, 1.0);
-                                // Use top-left origin for Y to match shader UVs (uv.y = 0 at top)
-                                let uvy = (y_css / h).clamp(0.0, 1.0);
-                                // Map X to [C4..C6]
+                            let [uvx, uvy] = pointer_canvas_uv(&ev, &canvas_click);
+                            if uvx.is_finite() && uvy.is_finite() {
                                 let midi = 60.0 + uvx * 24.0;
                                 let freq = midi_to_hz(midi as f32);
-                                // Velocity from Y
                                 let vel = (0.35 + 0.65 * uvy) as f32;
-                                // Choose nearest voice by x for waveform and spatialization
+                                // Precompute normalized voice x for nearest-voice pick
                                 let eng = engine_m.borrow();
-                                let mut best_i = 0usize;
-                                let mut best_dx = f32::MAX;
-                                for (i, v) in eng.voices.iter().enumerate() {
-                                    let vx = (v.position.x / 3.0).clamp(-1.0, 1.0) * 0.5 + 0.5;
-                                    let dx = (uvx - vx).abs();
-                                    if dx < best_dx {
-                                        best_dx = dx;
-                                        best_i = i;
-                                    }
-                                }
+                                let norm_xs: Vec<f32> = eng
+                                    .voices
+                                    .iter()
+                                    .map(|v| (v.position.x / 3.0).clamp(-1.0, 1.0) * 0.5 + 0.5)
+                                    .collect();
+                                let best_i = nearest_index_by_uvx(&norm_xs, uvx);
+                                let dur = 0.35 + 0.25 * (1.0 - uvy as f64);
+                                let wf = eng.configs[best_i].waveform;
                                 drop(eng);
-                                if let Ok(src) = web::OscillatorNode::new(&audio_ctx_click) {
-                                    match engine_m.borrow().configs[best_i].waveform {
-                                        Waveform::Sine => src.set_type(web::OscillatorType::Sine),
-                                        Waveform::Square => {
-                                            src.set_type(web::OscillatorType::Square)
-                                        }
-                                        Waveform::Saw => {
-                                            src.set_type(web::OscillatorType::Sawtooth)
-                                        }
-                                        Waveform::Triangle => {
-                                            src.set_type(web::OscillatorType::Triangle)
-                                        }
-                                    }
-                                    src.frequency().set_value(freq);
-                                    if let Ok(g) = web::GainNode::new(&audio_ctx_click) {
-                                        g.gain().set_value(0.0);
-                                        let now = audio_ctx_click.current_time();
-                                        let t0 = now + 0.005;
-                                        let dur = 0.35 + 0.25 * (1.0 - uvy as f64);
-                                        let _ =
-                                            g.gain().linear_ramp_to_value_at_time(vel, t0 + 0.02);
-                                        let _ =
-                                            g.gain().linear_ramp_to_value_at_time(0.0, t0 + dur);
-                                        let _ = src.connect_with_audio_node(&g);
-                                        let _ =
-                                            g.connect_with_audio_node(&voice_gains_click[best_i]);
-                                        let _ =
-                                            g.connect_with_audio_node(&delay_sends_click[best_i]);
-                                        let _ =
-                                            g.connect_with_audio_node(&reverb_sends_click[best_i]);
-                                        let _ = src.start_with_when(t0);
-                                        let _ = src.stop_with_when(t0 + dur + 0.05);
-                                    }
-                                }
-                                // Save desired ripple UV for next render tick
+                                trigger_one_shot(
+                                    &audio_ctx_click,
+                                    wf,
+                                    freq,
+                                    vel,
+                                    dur,
+                                    &voice_gains_click[best_i],
+                                    &delay_sends_click[best_i],
+                                    &reverb_sends_click[best_i],
+                                );
                                 *ripple_queue.borrow_mut() = Some([uvx, uvy]);
                             }
                         }
@@ -737,355 +1138,42 @@ async fn init() -> anyhow::Result<()> {
                 }
 
                 // Scheduler + renderer loop driven by requestAnimationFrame
-                let mut last_instant = Instant::now();
-                let mut note_events = Vec::new();
-                let pulses_tick = pulses.clone();
-                let engine_tick = engine.clone();
-                let hover_tick = hover_index.clone();
-                let canvas_for_tick = canvas_for_click_inner.clone();
-                let mouse_tick = mouse_state.clone();
-                let voice_gains_tick = voice_gains.clone();
-                let delay_sends_tick = delay_sends.clone();
-                let reverb_sends_tick = reverb_sends.clone();
-                // Global effect controls accessible during tick
-                let reverb_wet_tick = Rc::new(reverb_wet).clone();
-                let delay_wet_tick = Rc::new(delay_wet).clone();
-                let delay_feedback_tick = Rc::new(delay_feedback).clone();
-                // Master saturation controls (pre-gain acts as drive; wet/dry for mix)
-                let sat_pre_tick = Rc::new(sat_pre).clone();
-                let sat_wet_tick = Rc::new(sat_wet).clone();
-                let sat_dry_tick = Rc::new(sat_dry).clone();
+                let frame_ctx = Rc::new(RefCell::new(FrameContext {
+                    engine: engine.clone(),
+                    paused: paused.clone(),
+                    pulses: pulses.clone(),
+                    hover_index: hover_index.clone(),
+                    canvas: canvas_for_click_inner.clone(),
+                    mouse: mouse_state.clone(),
+                    audio_ctx: audio_ctx.clone(),
+                    listener: listener_for_tick.clone(),
+                    voice_gains: voice_gains.clone(),
+                    delay_sends: delay_sends.clone(),
+                    reverb_sends: reverb_sends.clone(),
+                    voice_panners,
+                    reverb_wet: reverb_wet.clone(),
+                    delay_wet: delay_wet.clone(),
+                    delay_feedback: delay_feedback.clone(),
+                    sat_pre: sat_pre.clone(),
+                    sat_wet: sat_wet.clone(),
+                    sat_dry: sat_dry.clone(),
+                    analyser: analyser.clone(),
+                    analyser_buf: analyser_buf.clone(),
+                    gpu,
+                    queued_ripple_uv: queued_ripple_uv.clone(),
+                    last_instant: Instant::now(),
+                    prev_uv: [0.5, 0.5],
+                    swirl_energy: 0.0,
+                    swirl_pos: [0.5, 0.5],
+                    swirl_vel: [0.0, 0.0],
+                    swirl_initialized: false,
+                    pulse_energy: [0.0, 0.0, 0.0],
+                }));
                 let tick: Rc<RefCell<Option<Closure<dyn FnMut()>>>> = Rc::new(RefCell::new(None));
                 let tick_clone = tick.clone();
-                // State for mouse-driven swirl energy and an inertial swirl center
-                let mut prev_uv: [f32; 2] = [0.5, 0.5];
-                let mut swirl_energy: f32 = 0.0;
-                // Inertial swirl center with momentum (spring-damper model)
-                let mut swirl_pos: [f32; 2] = [0.5, 0.5];
-                let mut swirl_vel: [f32; 2] = [0.0, 0.0];
-                let mut swirl_initialized: bool = false;
-                // Per-voice energy accumulator for organic pulse smoothing
-                // This soaks up instantaneous note events and lets visuals chase it smoothly
-                let mut pulse_energy: [f32; 3] = [0.0, 0.0, 0.0];
+                let frame_ctx_tick = frame_ctx.clone();
                 *tick.borrow_mut() = Some(Closure::wrap(Box::new(move || {
-                    let now = Instant::now();
-                    let dt = now - last_instant;
-                    last_instant = now;
-                    let dt_sec = dt.as_secs_f32();
-
-                    let audio_time = audio_ctx.current_time();
-                    note_events.clear();
-                    if !*paused.borrow() {
-                        engine_tick
-                            .borrow_mut()
-                            .tick(dt, audio_time, &mut note_events);
-                    }
-
-                    {
-                        let mut ps = pulses_tick.borrow_mut();
-                        let n = ps.len().min(3);
-                        // Accumulate note energy per voice (cap to keep visuals tame)
-                        for ev in &note_events {
-                            if ev.voice_index < n {
-                                pulse_energy[ev.voice_index] =
-                                    (pulse_energy[ev.voice_index] + ev.velocity as f32).min(1.8);
-                            }
-                        }
-                        // Energy decays at a fixed rate; independent of output smoothing
-                        let energy_decay = (-dt_sec * 1.6).exp();
-                        for i in 0..n {
-                            pulse_energy[i] *= energy_decay;
-                        }
-                        // Output pulses chase energy with attack/release time constants
-                        let tau_up = 0.10_f32; // faster rise
-                        let tau_down = 0.45_f32; // slower fall for organic tails
-                        let alpha_up = 1.0 - (-dt_sec / tau_up).exp();
-                        let alpha_down = 1.0 - (-dt_sec / tau_down).exp();
-                        for i in 0..n {
-                            let target = pulse_energy[i].clamp(0.0, 1.5);
-                            let alpha = if target > ps[i] { alpha_up } else { alpha_down };
-                            ps[i] += (target - ps[i]) * alpha;
-                        }
-                        // Mouse-driven swirl effect intensity (visual + global audio whoosh)
-                        let w = canvas_for_tick.width().max(1) as f32;
-                        let h = canvas_for_tick.height().max(1) as f32;
-                        let ms = mouse_tick.borrow();
-                        let uv = [
-                            (ms.x / w).clamp(0.0, 1.0),
-                            // Use top-left origin for Y to match shader UVs (uv.y = 0 at top)
-                            (ms.y / h).clamp(0.0, 1.0),
-                        ];
-                        // Inertial swirl: critically-damped spring (slightly underdamped) toward mouse UV
-                        if !swirl_initialized {
-                            swirl_pos = uv;
-                            swirl_vel = [0.0, 0.0];
-                            swirl_initialized = true;
-                        } else {
-                            // Spring parameters (omega controls responsiveness)
-                            // Slower, more obvious inertia
-                            let omega = 1.1_f32; // rad/s (lower = slower follow)
-                            let k = omega * omega;
-                            let c = 2.0 * omega * 0.5; // underdamped for visible overshoot
-                                                       // Spring toward target
-                            let dx = uv[0] - swirl_pos[0];
-                            let dy = uv[1] - swirl_pos[1];
-                            let ax = k * dx - c * swirl_vel[0];
-                            let ay = k * dy - c * swirl_vel[1];
-                            swirl_vel[0] += ax * dt_sec;
-                            swirl_vel[1] += ay * dt_sec;
-                            // Integrate with a cap on per-frame displacement for extra lag
-                            let mut nx = swirl_pos[0] + swirl_vel[0] * dt_sec;
-                            let mut ny = swirl_pos[1] + swirl_vel[1] * dt_sec;
-                            let sdx = nx - swirl_pos[0];
-                            let sdy = ny - swirl_pos[1];
-                            let step = (sdx * sdx + sdy * sdy).sqrt();
-                            let max_step = 0.50_f32 * dt_sec; // UV units per sec
-                            if step > max_step {
-                                let inv = 1.0 / (step + 1e-6);
-                                nx = swirl_pos[0] + sdx * inv * max_step;
-                                ny = swirl_pos[1] + sdy * inv * max_step;
-                            }
-                            swirl_pos[0] = nx;
-                            swirl_pos[1] = ny;
-                            // Keep within UV bounds
-                            swirl_pos[0] = swirl_pos[0].clamp(0.0, 1.0);
-                            swirl_pos[1] = swirl_pos[1].clamp(0.0, 1.0);
-                        }
-                        // Pointer motion contributes energy; velocity of swirl adds momentum feel
-                        let du = uv[0] - prev_uv[0];
-                        let dv = uv[1] - prev_uv[1];
-                        let pointer_speed =
-                            ((du * du + dv * dv).sqrt() / (dt_sec + 1e-5)).min(10.0);
-                        let swirl_speed =
-                            (swirl_vel[0] * swirl_vel[0] + swirl_vel[1] * swirl_vel[1]).sqrt();
-                        let target = ((pointer_speed * 0.2)
-                            + (swirl_speed * 0.35)
-                            + if ms.down { 0.5 } else { 0.0 })
-                        .clamp(0.0, 1.0);
-                        swirl_energy = 0.85 * swirl_energy + 0.15 * target;
-                        prev_uv = uv;
-                        drop(ms);
-
-                        // Apply global FX modulation based on swirl_energy
-                        let _ = reverb_wet_tick.gain().set_value(0.35 + 0.65 * swirl_energy);
-                        // Opposite-corner delay emphasis: top-left (0,1) and bottom-right (1,0)
-                        let echo = (uv[0] - uv[1]).abs();
-                        let delay_wet_val =
-                            (0.15 + 0.55 * swirl_energy + 0.30 * echo).clamp(0.0, 1.0);
-                        let delay_fb_val =
-                            (0.35 + 0.35 * swirl_energy + 0.25 * echo).clamp(0.0, 0.95);
-                        let _ = delay_wet_tick.gain().set_value(delay_wet_val);
-                        let _ = delay_feedback_tick.gain().set_value(delay_fb_val);
-
-                        // Map mouse UV across the canvas to master saturation amount.
-                        // Bottom-left (uv≈[0,0]) = clean; top-right (uv≈[1,1]) = fizzed out.
-                        let fizz = ((uv[0] + uv[1]) * 0.5).clamp(0.0, 1.0);
-                        // Drive via pre-gain before the waveshaper; tune range for taste
-                        let drive = (0.6 + 2.4 * fizz).clamp(0.2, 3.0);
-                        let _ = sat_pre_tick.gain().set_value(drive);
-                        // Wet/dry crossfade keeps perceived loudness steadier
-                        let wet = (0.15 + 0.85 * fizz).clamp(0.0, 1.0);
-                        let _ = sat_wet_tick.gain().set_value(wet);
-                        let _ = sat_dry_tick.gain().set_value(1.0 - wet);
-
-                        for i in 0..voice_panners.len() {
-                            let pos = engine_tick.borrow().voices[i].position;
-                            voice_panners[i].position_x().set_value(pos.x as f32);
-                            voice_panners[i].position_y().set_value(pos.y as f32);
-                            voice_panners[i].position_z().set_value(pos.z as f32);
-                            // Direct sound↔visual link: map position to per-voice mix and fx
-                            let dist = (pos.x * pos.x + pos.z * pos.z).sqrt();
-                            // Delay send increases with |x|, reverb with radial distance
-                            let mut d_amt = (0.15 + 0.85 * pos.x.abs().min(1.0)).clamp(0.0, 1.0);
-                            let mut r_amt =
-                                (0.25 + 0.75 * (dist / 2.5).clamp(0.0, 1.0)).clamp(0.0, 1.2);
-                            // Boost sends with swirl energy for pronounced movement effect
-                            let boost = 1.0 + 0.8 * swirl_energy;
-                            d_amt = (d_amt * boost).clamp(0.0, 1.2);
-                            r_amt = (r_amt * boost).clamp(0.0, 1.5);
-                            delay_sends_tick[i].gain().set_value(d_amt);
-                            reverb_sends_tick[i].gain().set_value(r_amt);
-                            // Subtle level change with proximity to center (prevents clipping)
-                            let lvl = (0.55 + 0.45 * (1.0 - (dist / 2.5).clamp(0.0, 1.0))) as f32;
-                            voice_gains_tick[i].gain().set_value(lvl);
-                        }
-                        // Optional analyser-driven mild ambient pulse
-                        if let Some(a) = &analyser {
-                            let bins = a.frequency_bin_count() as usize;
-                            {
-                                let mut buf = analyser_buf.borrow_mut();
-                                if buf.len() != bins {
-                                    buf.resize(bins, 0.0);
-                                }
-                                a.get_float_frequency_data(&mut buf);
-                            }
-                            // Use low-frequency bin energy to adjust background subtly
-                            let mut sum = 0.0f32;
-                            let take = (bins.min(16)) as u32;
-                            for i in 0..take {
-                                let v = analyser_buf.borrow()[i as usize]; // in dBFS (-inf..0)
-                                                                           // map dB to 0..1 roughly
-                                let lin = ((v + 100.0) / 100.0).clamp(0.0, 1.0);
-                                sum += lin;
-                            }
-                            let avg = sum / take as f32;
-                            // Slightly push base scales with ambient energy
-                            let n = ps.len().min(3);
-                            for i in 0..n {
-                                // This is local shadow; adjust just-written scales via positions/colors path
-                                // We use pulses array instead to avoid mutating scales directly
-                                ps[i] = (ps[i] + avg * 0.05).min(1.5);
-                            }
-                            if let Some(g) = &mut gpu {
-                                g.set_ambient_clear(avg * 0.9);
-                            }
-                        }
-                        let e_ref = engine_tick.borrow();
-                        let z_offset = z_offset_vec3();
-                        let spread = SPREAD;
-                        // Pre-allocate to avoid per-frame reallocations
-                        let ring_count = 48usize;
-                        let mut positions: Vec<Vec3> = Vec::with_capacity(3 + ring_count * 3 + 16);
-                        positions.push(e_ref.voices[0].position * spread + z_offset);
-                        positions.push(e_ref.voices[1].position * spread + z_offset);
-                        positions.push(e_ref.voices[2].position * spread + z_offset);
-                        let mut colors: Vec<Vec4> = Vec::with_capacity(3 + ring_count * 3 + 16);
-                        colors.push(Vec4::from((Vec3::from(e_ref.configs[0].color_rgb), 1.0)));
-                        colors.push(Vec4::from((Vec3::from(e_ref.configs[1].color_rgb), 1.0)));
-                        colors.push(Vec4::from((Vec3::from(e_ref.configs[2].color_rgb), 1.0)));
-                        let hovered = *hover_tick.borrow();
-                        for i in 0..3 {
-                            if e_ref.voices[i].muted {
-                                colors[i].x *= 0.35;
-                                colors[i].y *= 0.35;
-                                colors[i].z *= 0.35;
-                                colors[i].w = 1.0;
-                            }
-                            if hovered == Some(i) {
-                                colors[i].x = (colors[i].x * 1.4).min(1.0);
-                                colors[i].y = (colors[i].y * 1.4).min(1.0);
-                                colors[i].z = (colors[i].z * 1.4).min(1.0);
-                            }
-                        }
-                        let mut scales: Vec<f32> = Vec::with_capacity(3 + ring_count * 3 + 16);
-                        scales.push(BASE_SCALE + ps[0] * SCALE_PULSE_MULTIPLIER);
-                        scales.push(BASE_SCALE + ps[1] * SCALE_PULSE_MULTIPLIER);
-                        scales.push(BASE_SCALE + ps[2] * SCALE_PULSE_MULTIPLIER);
-
-                        // Optional analyser-driven dot spectrum row
-                        if let Some(a) = &analyser {
-                            let bins = a.frequency_bin_count() as usize;
-                            let dots = bins.min(16);
-                            if dots > 0 {
-                                {
-                                    let mut buf = analyser_buf.borrow_mut();
-                                    if buf.len() != bins {
-                                        buf.resize(bins, 0.0);
-                                    }
-                                    a.get_float_frequency_data(&mut buf);
-                                }
-                                let _w = canvas_for_tick.width().max(1) as f32;
-                                let _h = canvas_for_tick.height().max(1) as f32;
-                                // place dots near bottom of view in world space
-                                // map x from -2.8..2.8 and y slightly below origin
-                                let z = z_offset.z;
-                                for i in 0..dots {
-                                    let v_db = analyser_buf.borrow()[i];
-                                    let lin = ((v_db + 100.0) / 100.0).clamp(0.0, 1.0);
-                                    let x = -2.8 + (i as f32) * (5.6 / (dots as f32 - 1.0));
-                                    let y = -1.8;
-                                    positions.push(Vec3::new(x, y, z));
-                                    let c = Vec3::new(0.25 + 0.5 * lin, 0.6 + 0.3 * lin, 0.9);
-                                    colors.push(Vec4::from((c, 0.95)));
-                                    scales.push(0.18 + lin * 0.35);
-                                }
-                            }
-                        }
-
-                        // Compute camera eye
-                        let cam_eye = Vec3::new(0.0, 0.0, CAMERA_Z);
-
-                        let cam_target = Vec3::ZERO;
-                        // Sync AudioListener position + orientation to camera
-                        let fwd = (cam_target - cam_eye).normalize();
-                        listener_for_tick.set_position(
-                            cam_eye.x as f64,
-                            cam_eye.y as f64,
-                            cam_eye.z as f64,
-                        );
-                        let _ = listener_for_tick.set_orientation(
-                            fwd.x as f64,
-                            fwd.y as f64,
-                            fwd.z as f64,
-                            0.0,
-                            1.0,
-                            0.0,
-                        );
-
-                        if let Some(g) = &mut gpu {
-                            g.set_camera(cam_eye, cam_target);
-                            // If a ripple UV was queued by pointerup, apply it now
-                            if let Some(uv) = queued_ripple_uv.borrow_mut().take() {
-                                g.set_ripple(uv, 1.0);
-                            }
-                            // Feed inertial swirl center; boost strength with inertia
-                            let speed_norm = ((swirl_vel[0] * swirl_vel[0]
-                                + swirl_vel[1] * swirl_vel[1])
-                                .sqrt()
-                                / 1.0)
-                                .clamp(0.0, 1.0);
-                            let strength = 0.28 + 0.85 * swirl_energy + 0.15 * speed_norm;
-                            g.set_swirl(swirl_pos, strength, true);
-                            // Keep WebGPU surface sized to canvas backing size
-                            let w = canvas_for_tick.width();
-                            let h = canvas_for_tick.height();
-                            g.resize_if_needed(w, h);
-                            if let Err(e) = g.render(&positions, &colors, &scales) {
-                                log::error!("render error: {:?}", e);
-                            }
-                        }
-                    }
-
-                    if !*paused.borrow() {
-                        for ev in &note_events {
-                            let src = match web::OscillatorNode::new(&audio_ctx) {
-                                Ok(s) => s,
-                                Err(_) => continue,
-                            };
-                            match engine_tick.borrow().configs[ev.voice_index].waveform {
-                                Waveform::Sine => src.set_type(web::OscillatorType::Sine),
-                                Waveform::Square => src.set_type(web::OscillatorType::Square),
-                                Waveform::Saw => src.set_type(web::OscillatorType::Sawtooth),
-                                Waveform::Triangle => src.set_type(web::OscillatorType::Triangle),
-                            }
-                            src.frequency().set_value(ev.frequency_hz);
-
-                            let gain = match web::GainNode::new(&audio_ctx) {
-                                Ok(g) => g,
-                                Err(_) => continue,
-                            };
-                            gain.gain().set_value(0.0);
-                            let t0 = audio_time + 0.01;
-                            let _ = gain
-                                .gain()
-                                .linear_ramp_to_value_at_time(ev.velocity as f32, t0 + 0.02);
-                            let _ = gain
-                                .gain()
-                                .linear_ramp_to_value_at_time(0.0_f32, t0 + ev.duration_sec as f64);
-
-                            let _ = src.connect_with_audio_node(&gain);
-                            let _ = gain.connect_with_audio_node(&voice_gains_tick[ev.voice_index]);
-                            // Effect sends per note
-                            let _ = gain.connect_with_audio_node(&delay_sends_tick[ev.voice_index]);
-                            let _ =
-                                gain.connect_with_audio_node(&reverb_sends_tick[ev.voice_index]);
-
-                            let _ = src.start_with_when(t0);
-                            let _ = src.stop_with_when(t0 + ev.duration_sec as f64 + 0.02);
-                        }
-                    }
-
-                    // Schedule next frame
+                    frame_ctx_tick.borrow_mut().frame();
                     if let Some(w) = web::window() {
                         let _ = w.request_animation_frame(
                             tick_clone
@@ -1109,53 +1197,4 @@ async fn init() -> anyhow::Result<()> {
     Ok(())
 }
 
-// ===================== WebGPU state =====================
-// Moved to render.rs
-struct GpuState<'a> {
-    surface: wgpu::Surface<'a>,
-    device: wgpu::Device,
-    queue: wgpu::Queue,
-    config: wgpu::SurfaceConfiguration,
-    // Waves full-screen layer
-    waves_pipeline: wgpu::RenderPipeline,
-    waves_uniform_buffer: wgpu::Buffer,
-    waves_bind_group: wgpu::BindGroup,
-    // Post-processing resources
-    hdr_tex: wgpu::Texture,
-    hdr_view: wgpu::TextureView,
-    bloom_a: wgpu::Texture,
-    bloom_a_view: wgpu::TextureView,
-    bloom_b: wgpu::Texture,
-    bloom_b_view: wgpu::TextureView,
-    linear_sampler: wgpu::Sampler,
-
-    #[allow(dead_code)]
-    post_bgl0: wgpu::BindGroupLayout, // texture+sampler+uniform
-    post_bgl1: wgpu::BindGroupLayout, // optional second texture+sampler
-    post_uniform_buffer: wgpu::Buffer,
-    // Bind groups for different sources
-    bg_hdr: wgpu::BindGroup,
-    bg_from_bloom_a: wgpu::BindGroup,
-    bg_from_bloom_b: wgpu::BindGroup,
-    bg_bloom_a_only: wgpu::BindGroup, // group1 for composite, sampling bloom A
-    bg_bloom_b_only: wgpu::BindGroup, // group1 for composite, sampling bloom B
-
-    bright_pipeline: wgpu::RenderPipeline,
-    blur_pipeline: wgpu::RenderPipeline,
-    composite_pipeline: wgpu::RenderPipeline,
-
-    width: u32,
-    height: u32,
-    clear_color: wgpu::Color,
-    cam_eye: Vec3,
-    cam_target: Vec3,
-    time_accum: f32,
-    ambient_energy: f32,
-    swirl_uv: [f32; 2],
-    swirl_strength: f32,
-    swirl_active: f32,
-    // Click/tap ripple state
-    ripple_uv: [f32; 2],
-    ripple_t0: f32,
-    ripple_amp: f32,
-}
+// (local GpuState definition removed; use `render::GpuState` exclusively)
