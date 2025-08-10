@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 use wgpu::util::DeviceExt;
+use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::{event::*, event_loop::EventLoop, window::WindowBuilder};
 
 use app_core::{
@@ -416,7 +417,8 @@ fn main() {
     )));
 
     // Start native audio output (synth driven by MusicEngine)
-    let _audio_stream = start_audio_engine(Arc::clone(&shared_state), Arc::clone(&engine));
+    let (_audio_stream, audio_state) =
+        start_audio_engine(Arc::clone(&shared_state), Arc::clone(&engine)).expect("audio engine");
 
     let event_loop = EventLoop::new().expect("event loop");
     let window = WindowBuilder::new()
@@ -447,6 +449,43 @@ fn main() {
                 event: WindowEvent::CloseRequested,
                 ..
             } => elwt.exit(),
+            Event::WindowEvent {
+                event:
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                state: ElementState::Pressed,
+                                repeat: false,
+                                physical_key: PhysicalKey::Code(code),
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            } => {
+                let mut vol_changed = false;
+                {
+                    let mut st = audio_state.lock().unwrap();
+                    let step = 0.05f32;
+                    match code {
+                        KeyCode::ArrowUp | KeyCode::Equal | KeyCode::NumpadAdd => {
+                            st.master_volume = (st.master_volume + step).clamp(0.0, 1.0);
+                            vol_changed = true;
+                        }
+                        KeyCode::ArrowDown | KeyCode::Minus | KeyCode::NumpadSubtract => {
+                            st.master_volume = (st.master_volume - step).clamp(0.0, 1.0);
+                            vol_changed = true;
+                        }
+                        _ => {}
+                    }
+                }
+                if vol_changed {
+                    // Optionally log new volume for visibility
+                    if let Ok(st) = audio_state.lock() {
+                        log::info!("[keys] volume={:.2}", st.master_volume);
+                    }
+                }
+            }
             Event::WindowEvent {
                 event: WindowEvent::CursorMoved { position, .. },
                 ..
@@ -556,6 +595,8 @@ struct ActiveOscillator {
 struct AudioState {
     sample_rate: f32,
     oscillators: Vec<ActiveOscillator>,
+    // Master output volume scalar (0.0..=1.0). Applied after saturation.
+    master_volume: f32,
 }
 
 fn compute_equal_power_gains(pos_x_engine: f32) -> (f32, f32) {
@@ -569,7 +610,7 @@ fn compute_equal_power_gains(pos_x_engine: f32) -> (f32, f32) {
 fn start_audio_engine(
     shared_vis: Arc<Mutex<VisState>>,
     shared_engine: Arc<Mutex<MusicEngine>>,
-) -> Option<cpal::Stream> {
+) -> Option<(cpal::Stream, Arc<Mutex<AudioState>>)> {
     let host = cpal::default_host();
     let device = host.default_output_device()?;
     let config = device.default_output_config().ok()?;
@@ -579,6 +620,7 @@ fn start_audio_engine(
     let state = Arc::new(Mutex::new(AudioState {
         sample_rate,
         oscillators: Vec::new(),
+        master_volume: 0.5, // start at half loudness
     }));
 
     // Scheduler thread producing notes using MusicEngine
@@ -691,7 +733,7 @@ fn start_audio_engine(
     };
 
     stream.play().ok()?;
-    Some(stream)
+    Some((stream, state))
 }
 
 fn render_wave_sample(phase: f32, wave: WaveKind) -> f32 {
@@ -784,11 +826,14 @@ fn build_stream_f32(
         config,
         move |data: &mut [f32], _| {
             let mut guard = state.lock().unwrap();
+            let vol = guard.master_volume.clamp(0.0, 1.0);
             let oscillators = &mut guard.oscillators;
             let mut frame = 0usize;
             while frame < data.len() {
                 let (l_raw, r_raw) = mix_sample_stereo(oscillators);
                 let (l, r) = apply_master_saturation(l_raw, r_raw);
+                let l = l * vol;
+                let r = r * vol;
                 if channels >= 2 {
                     if frame < data.len() {
                         data[frame] = l;
@@ -818,13 +863,14 @@ fn build_stream_i16(
         config,
         move |data: &mut [i16], _| {
             let mut guard = state.lock().unwrap();
+            let vol = guard.master_volume.clamp(0.0, 1.0);
             let oscillators = &mut guard.oscillators;
             let mut frame = 0usize;
             while frame < data.len() {
                 let (l_raw, r_raw) = mix_sample_stereo(oscillators);
                 let (l, r) = apply_master_saturation(l_raw, r_raw);
-                let vl = (l.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
-                let vr = (r.clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                let vl = ((l * vol).clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
+                let vr = ((r * vol).clamp(-1.0, 1.0) * i16::MAX as f32) as i16;
                 if channels >= 2 {
                     if frame < data.len() {
                         data[frame] = vl;
@@ -854,13 +900,14 @@ fn build_stream_u16(
         config,
         move |data: &mut [u16], _| {
             let mut guard = state.lock().unwrap();
+            let vol = guard.master_volume.clamp(0.0, 1.0);
             let oscillators = &mut guard.oscillators;
             let mut frame = 0usize;
             while frame < data.len() {
                 let (l_raw, r_raw) = mix_sample_stereo(oscillators);
                 let (l, r) = apply_master_saturation(l_raw, r_raw);
-                let vl = (((l * 0.5 + 0.5).clamp(0.0, 1.0)) * u16::MAX as f32) as u16;
-                let vr = (((r * 0.5 + 0.5).clamp(0.0, 1.0)) * u16::MAX as f32) as u16;
+                let vl = ((((l * vol) * 0.5 + 0.5).clamp(0.0, 1.0)) * u16::MAX as f32) as u16;
+                let vr = ((((r * vol) * 0.5 + 0.5).clamp(0.0, 1.0)) * u16::MAX as f32) as u16;
                 if channels >= 2 {
                     if frame < data.len() {
                         data[frame] = vl;

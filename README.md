@@ -4,15 +4,15 @@
 
 ### Project status
 
-- Web front-end (WASM) is running with:
+ - Web front-end (WASM) is running with:
   - 3 voices, spatial audio (Web Audio + PannerNode)
   - Lush ambient effects: global Convolver reverb and dark feedback Delay bus with per-voice sends and a master bus
   - Mouse-driven FX: corner-based saturation (clean ↔ fizz) and opposite-corner delay emphasis; visuals have inertial swirl motion and click ripples
   - Note-driven visuals use attack/release smoothing for organic response (no abrupt jumps)
   - Start overlay to initialize audio (Click Start; canvas-click fallback)
   - Drag voices in XZ plane; click to mute, Shift+Click reseed, Alt+Click solo
-- Keyboard: R (reseed all), Space (pause), + / - (tempo)
-  - Starts muted by default; press M to unmute the master bus
+ - Keyboard: R (new sequence), Space (pause/resume), ArrowLeft/Right (tempo), ArrowUp/Down (volume)
+  - Starts at a lower default volume; use ArrowUp to raise or ArrowDown to lower
   - Dynamic hint shows current BPM, paused, and muted state
   - Rich visuals: instanced voice markers with emissive pulses, ambient waves background, post bloom/tonemap/vignette; optional analyser-driven spectrum dots
 - Native front-end renders and plays synthesized audio; parity improving:
@@ -34,7 +34,7 @@
 Notes:
 
 - WebGL fallback is intentionally avoided; WebGPU is required.
-- If audio does not start, click the Start overlay and press M to unmute the master bus.
+ - If audio does not start, click the Start overlay.
 
 ### Run (Web)
 
@@ -45,8 +45,8 @@ Notes:
 
 Quick controls (browser):
 
-- R: reseed all • Space: pause/resume • +/-: tempo • M: master mute
-- Click a voice to mute; Alt+Click to solo; Shift+Click to reseed a voice; drag to move in XZ
+- R: new sequence • Space: pause/resume • ArrowLeft/Right: tempo • ArrowUp/Down: volume
+- Click canvas: play a note; mouse position affects sound
 
 ### Pre-commit Check
 
@@ -66,9 +66,8 @@ This repo is configured to deploy via Cloudflare Workers; headers (COOP/COEP/COR
 Controls in browser:
 
 - Click Start to initialize audio (canvas click also works)
-- Drag a circle to move a voice in XZ plane (updates spatialization)
-- Click a voice: mute; Shift+Click: reseed; Alt+Click: solo
-- Keys: R (reseed all), Space (pause/resume), + / - (tempo), M (master mute)
+- Click canvas: play a note; mouse position affects sound
+- Keys: R (new sequence), Space (pause/resume), ArrowLeft/Right (tempo), ArrowUp/Down (volume)
 - Mouse position maps to master saturation and delay; moving the pointer leaves a “water-like” trailing swirl in visuals
 
 Headless test:

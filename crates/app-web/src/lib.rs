@@ -49,22 +49,7 @@ async fn init() -> anyhow::Result<()> {
         .dyn_into::<web::HtmlCanvasElement>()
         .map_err(|e| anyhow::anyhow!(format!("{:?}", e)))?;
 
-    // Minimal early keyboard handler for hint toggle (works even if WebGPU init fails in CI)
-    {
-        let window = web::window().unwrap();
-        let document = document.clone();
-        let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
-            let key = ev.key();
-            if key == "h" || key == "H" {
-                ui::toggle_hint_visibility(&document);
-                ev.prevent_default();
-            }
-        }) as Box<dyn FnMut(_)>);
-        window
-            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref())
-            .ok();
-        closure.forget();
-    }
+    // Removed 'h' help toggle; key mapping is shown on the Start overlay instead.
 
     // Note: we will query the optional hint element lazily inside event handlers to avoid
     // capturing it here and forcing closures to be FnOnce.
@@ -190,8 +175,8 @@ async fn init() -> anyhow::Result<()> {
                             return;
                         }
                     };
-                    // Start unmuted by default (removed M-key toggle)
-                    master_gain.gain().set_value(0.8);
+                    // Start at lower loudness by default (user can raise with ArrowUp)
+                    master_gain.gain().set_value(0.4);
                     // Subtle master saturation (arctan) with wet/dry mix
                     let sat_pre = match web::GainNode::new(&audio_ctx) {
                         Ok(g) => g,
@@ -498,12 +483,8 @@ async fn init() -> anyhow::Result<()> {
                             ms.y = pos.y;
                             // noisy move debug log removed
                             // Compute hover or drag update
-                            let (ro, rd) = render::screen_to_world_ray(
-                                &canvas_mouse,
-                                pos.x,
-                                pos.y,
-                                CAMERA_Z,
-                            );
+                            let (ro, rd) =
+                                render::screen_to_world_ray(&canvas_mouse, pos.x, pos.y, CAMERA_Z);
                             let mut best = None::<(usize, f32)>;
                             let spread = SPREAD;
                             let z_offset = z_offset_vec3();
@@ -571,11 +552,12 @@ async fn init() -> anyhow::Result<()> {
                         closure.forget();
                     }
 
-                    // Keyboard controls: R reseed all, Space pause, +/- bpm adjust, F/Escape fullscreen
+                    // Keyboard controls: R reseed all, Space pause, +/- bpm adjust, ArrowUp/Down volume, F/Escape fullscreen
                     {
                         let engine_k = engine.clone();
                         let paused_k = paused.clone();
                         let canvas_k = canvas_for_click_inner.clone();
+                        let master_gain_k = master_gain.clone();
                         let window = web::window().unwrap();
                         let closure = Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
                             let key = ev.key();
@@ -618,8 +600,8 @@ async fn init() -> anyhow::Result<()> {
                                     }
                                     ev.prevent_default();
                                 }
-                                // Increase BPM
-                                "+" | "=" => {
+                                // Increase BPM (ArrowRight or +/=)
+                                "ArrowRight" | "+" | "=" => {
                                     let mut eng = engine_k.borrow_mut();
                                     let new_bpm = (eng.params.bpm + 5.0).min(240.0);
                                     eng.set_bpm(new_bpm);
@@ -636,7 +618,7 @@ async fn init() -> anyhow::Result<()> {
                                                         el.dyn_ref::<web::HtmlElement>()
                                                     {
                                                         let content = format!(
-                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
+                                                            "Click Start to begin\nClick canvas: play a note • Mouse affects sound\nR: new sequence • Space: pause/resume • ArrowLeft/Right: tempo\nBPM: {:.0} • Paused: {}",
                                                             new_bpm,
                                                             if paused_now { "yes" } else { "no" }
                                                     );
@@ -647,8 +629,8 @@ async fn init() -> anyhow::Result<()> {
                                         }
                                     }
                                 }
-                                // Decrease BPM
-                                "-" | "_" => {
+                                // Decrease BPM (ArrowLeft or -/_)
+                                "ArrowLeft" | "-" | "_" => {
                                     let mut eng = engine_k.borrow_mut();
                                     let new_bpm = (eng.params.bpm - 5.0).max(40.0);
                                     eng.set_bpm(new_bpm);
@@ -665,7 +647,7 @@ async fn init() -> anyhow::Result<()> {
                                                         el.dyn_ref::<web::HtmlElement>()
                                                     {
                                                         let content = format!(
-                                                            "Click Start to begin • Drag to move a voice\nClick: mute • Shift+Click: reseed • Alt+Click: solo\nR: reseed all • Space: pause/resume • +/-: tempo\nBPM: {:.0} • Paused: {}",
+                                                            "Click Start to begin\nClick canvas: play a note • Mouse affects sound\nR: new sequence • Space: pause/resume • ArrowLeft/Right: tempo\nBPM: {:.0} • Paused: {}",
                                                             new_bpm,
                                                             if paused_now { "yes" } else { "no" }
                                                     );
@@ -697,6 +679,22 @@ async fn init() -> anyhow::Result<()> {
                                             let _ = doc.exit_fullscreen();
                                         }
                                     }
+                                }
+                                _ => {}
+                            }
+                            // Master volume on arrow keys (after other handlers so prevent_default only for arrows)
+                            match key.as_str() {
+                                "ArrowUp" => {
+                                    let v = master_gain_k.gain().value();
+                                    let nv = (v + 0.05).min(1.0);
+                                    let _ = master_gain_k.gain().set_value(nv);
+                                    ev.prevent_default();
+                                }
+                                "ArrowDown" => {
+                                    let v = master_gain_k.gain().value();
+                                    let nv = (v - 0.05).max(0.0);
+                                    let _ = master_gain_k.gain().set_value(nv);
+                                    ev.prevent_default();
                                 }
                                 _ => {}
                             }

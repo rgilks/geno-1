@@ -35,6 +35,23 @@
         backdrop-filter: blur(2px);
         z-index: 10;
       }
+      #start-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        text-align: center;
+        color: #cfe7ff;
+      }
+      #start-keys {
+        color: #9bb;
+        font: 12px/1.4 monospace;
+        max-width: 560px;
+        background: rgba(20, 20, 30, 0.55);
+        padding: 10px 12px;
+        border: 1px solid rgba(80, 110, 150, 0.35);
+        border-radius: 8px;
+      }
       #start-btn {
         appearance: none;
         border: 1px solid #3a4b66;
@@ -76,13 +93,22 @@
   </head>
   <body>
     <div id="start-overlay">
-      <button id="start-btn">Start</button>
+      <div id="start-content">
+        <button id="start-btn">Start</button>
+        <div id="start-keys">
+          Click Start to begin<br />
+          Click canvas: play a note • Mouse position affects sound<br />
+          Keys: R (new sequence) • Space (pause/resume) • ArrowLeft/Right
+          (tempo) • ArrowUp/Down (volume) • F (fullscreen) • Esc (exit)
+        </div>
+      </div>
     </div>
     <canvas id="app-canvas" width="1280" height="720"></canvas>
     <div class="hint" data-visible="0" style="display: none">
-      Click Start to begin • Drag to move a voice<br />
-      Click: mute • Shift+Click: reseed • Alt+Click: solo<br />
-      R: reseed all • Space: pause/resume • +/-: tempo • F: fullscreen<br />
+      Click Start to begin<br />
+      Click canvas: play a note • Mouse position affects sound<br />
+      R: new sequence • Space: pause/resume • ArrowLeft/Right: tempo • F:
+      fullscreen<br />
       BPM: 110 • Paused: no
     </div>
     <div
