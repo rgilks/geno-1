@@ -24,6 +24,13 @@ mod render;
 // Rendering/picking shared constants to keep math consistent
 const CAMERA_Z: f32 = 6.0;
 
+// Helper to hide the start overlay consistently
+fn hide_overlay(document: &web::Document) {
+    if let Some(overlay) = document.get_element_by_id("start-overlay") {
+        let _ = overlay.set_attribute("style", "display:none");
+    }
+}
+
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
     console_error_panic_hook::set_once();
@@ -155,8 +162,6 @@ async fn init() -> anyhow::Result<()> {
 
                 // Pause state (stops scheduling new notes but keeps rendering). Start paused until overlay OK/Close.
                 let paused = Rc::new(RefCell::new(true));
-                // Overlay element reference (style toggled on 'H')
-                let overlay_el = document.get_element_by_id("start-overlay");
 
                 // Wire OK / Close to hide overlay and start scheduling (unpause) + resume AudioContext
                 if let Some(doc2) = web::window().and_then(|w| w.document()) {
@@ -168,9 +173,7 @@ async fn init() -> anyhow::Result<()> {
                             let _ = audio_ctx_for_ok.resume();
                             if let Some(w2) = web::window() {
                                 if let Some(d2) = w2.document() {
-                                    if let Some(overlay) = d2.get_element_by_id("start-overlay") {
-                                        let _ = overlay.set_attribute("style", "display:none");
-                                    }
+                                    hide_overlay(&d2);
                                 }
                             }
                         }) as Box<dyn FnMut()>);
@@ -188,9 +191,7 @@ async fn init() -> anyhow::Result<()> {
                             let _ = audio_ctx_for_ok2.resume();
                             if let Some(w2) = web::window() {
                                 if let Some(d2) = w2.document() {
-                                    if let Some(overlay) = d2.get_element_by_id("start-overlay") {
-                                        let _ = overlay.set_attribute("style", "display:none");
-                                    }
+                                    hide_overlay(&d2);
                                 }
                             }
                         }) as Box<dyn FnMut()>);
@@ -525,16 +526,11 @@ async fn init() -> anyhow::Result<()> {
                             return;
                         }
                         {
+                            // Store pointer position; render() converts to uv for swirl uniforms
                             let mut ms = mouse_state_m.borrow_mut();
                             ms.x = pos.x;
                             ms.y = pos.y;
                         }
-                        let _is_active = drag_m.borrow().active;
-                        // Store pointer position; render() converts to uv for swirl uniforms
-                        let mut ms = mouse_state_m.borrow_mut();
-                        ms.x = pos.x;
-                        ms.y = pos.y;
-                        // noisy move debug log removed
                         // Compute hover or drag update
                         let (ro, rd) =
                             render::screen_to_world_ray(&canvas_mouse, pos.x, pos.y, CAMERA_Z);
@@ -2016,7 +2012,7 @@ impl<'a> GpuState<'a> {
                     positions[i].y,
                     positions[i].z,
                     // derive pulse amount directly from scale vs base scale
-                    ((scales[i] - 1.6).max(0.0) / 0.4).clamp(0.0, 1.5),
+                    ((scales[i] - BASE_SCALE).max(0.0) / SCALE_PULSE_MULTIPLIER).clamp(0.0, 1.5),
                 ],
                 color: colors[i].to_array(),
             };

@@ -96,6 +96,9 @@ Desktop UI support has been removed to simplify the project and focus on the web
 - [x] app-web: centralize DOM/hint/UI updates behind a tiny view model (initial)
   - Rationale: reduce ad-hoc DOM writes scattered in event handlers
   - Status: introduced `ui::refresh_hint_if_visible` and `set_hint_visibility` to unify updates; consider a lightweight `UiState` later if more fields accrue
+- [x] app-web: small readability refactors in `lib.rs` (no behavior changes)
+  - Rationale: reduce duplication and magic numbers
+  - Status: added `hide_overlay()` helper, deduplicated pointer position set, and replaced magic numbers with `BASE_SCALE`/`SCALE_PULSE_MULTIPLIER`
 - [ ] app-web: extract WebGPU pipeline builders
   - Rationale: deduplicate pipeline/buffer setup for waves/post passes
   - Plan: create `pipeline.rs` helpers returning typed bundles; no functional changes
