@@ -4,7 +4,7 @@
 
 This project is an **interactive generative music visualizer** built with Rust, WebAssembly (Wasm), and WebGPU. It produces evolving musical sequences (melodies and harmonies generated algorithmically) and visualizes them in a 3D scene in real-time. The system supports **polyphonic** audio (multiple simultaneous sound voices) and arranges these sound sources in a virtual 3D space so that users experience spatial audio. The 3D visuals react dynamically to the music, providing an immersive audio-visual experience.
 
-Users can **influence and interact** with the generative music without manually composing it. The interface is subtle and minimalistic – a hint overlay shows status and keys; primary controls are embedded in-scene and via keyboard. The primary target platform is **desktop web browsers** supporting WebGPU (no WebGL fallback by design), with a desktop-native version using the same Rust/WGPU codebase. Mobile is not a focus.
+Users can **influence and interact** with the generative music without manually composing it. The interface is subtle and minimalistic – a hint overlay shows status and keys; primary controls are embedded in-scene and via keyboard. The primary target platform is **desktop web browsers** supporting WebGPU (no WebGL fallback by design). Mobile is not a focus.
 
 ### Current Capabilities (v1 prototype)
 
@@ -12,7 +12,7 @@ Users can **influence and interact** with the generative music without manually 
 - Web Audio graph with per-voice `PannerNode` and master reverb/delay buses; starts muted with Start overlay; gesture unlock required by browsers
 - Visuals: instanced voice markers, ambient waves background with pointer swirl and click ripples, post-processing (bright pass, blur, ACES tonemap, vignette, grain)
 - Interactions: drag voices in XZ, click= mute, Shift+Click= reseed, Alt+Click= solo; keys: R, Space, +/- (tempo), M (mute)
-- Native app: `winit` + `wgpu` render, `cpal` audio with equal-power panning and master saturation; hover highlight parity
+<!-- Native app details removed -->
 
 ## Goals and Use Cases
 
@@ -34,7 +34,7 @@ Users can **influence and interact** with the generative music without manually 
   - No text labels on controls (using tooltips or intuitive symbols if needed). The design should encourage exploration – e.g., an icon might hint its function via shape (🔄 for regenerate, ⏯ for play/pause, etc.) or by subtle animation.
   - The overall aesthetic is clean and not cluttered; UI elements do not distract from the visualizer but complement it.
 
-- **Cross-Platform Consistency:** Prioritize the web browser implementation, but design the core in Rust so that the same logic and rendering can run natively on desktop with minimal changes. This means the system should abstract platform specifics (like windowing and audio backend) so we can easily deliver a native desktop app using the same codebase.
+- **Platform Focus:** Prioritize the web browser implementation.
 
 ## Technical Stack and Platform Constraints
 
@@ -42,15 +42,9 @@ Users can **influence and interact** with the generative music without manually 
 
 - **WebGPU (via WGPU crate):** All rendering will use the modern WebGPU API for GPU-accelerated graphics. We will use Rust’s [`wgpu`](https://github.com/gfx-rs/wgpu) library as an abstraction over WebGPU. This allows writing the graphics code once and running it on WebGPU in the browser and on Vulkan/Metal/DirectX backends natively. WebGPU provides the performance needed for complex 3D visuals in a browser environment, albeit with still limited browser/device support (hence focusing on desktop).
 
-- **Audio:** Audio generation and output relies on:
+- **Audio:** Audio generation and output relies on the Web Audio API in the browser. The Web Audio graph uses per-voice `OscillatorNode` → `GainNode` envelope → `PannerNode` for spatialization, with a master `ConvolverNode` reverb and a dark feedback `DelayNode` bus (with tone shaping) fed by per-voice sends.
 
-  - **Web Audio API (Browser):** The Web Audio graph uses per-voice `OscillatorNode` → `GainNode` envelope → `PannerNode` for spatialization, with a master `ConvolverNode` reverb and a dark feedback `DelayNode` bus (with tone shaping) fed by per-voice sends.
-  - **Native Audio (Desktop):** Native uses `cpal` with per-note oscillators (sine/square/saw/triangle), short attack/release envelopes, equal-power stereo panning from voice X position, and gentle master saturation (arctan curve).
-
-- **Cross-platform Windowing:**
-
-  - In the browser, the "window" is an HTML `<canvas>` with WebGPU context (likely an `<canvas>` element with `context = "gpupresent"` for WebGPU).
-  - For desktop, use a crate like `winit` to create a window and manage input events. `winit` integrates with `wgpu` smoothly and also has experimental WASM support (for handling events on web). This could allow unified event handling code if used carefully.
+- **Windowing:** In the browser, the "window" is an HTML `<canvas>` with WebGPU context.
 
 - **No External Engine:** We will not use heavy game engines or frameworks (like Unity, Unreal, or even a full engine like Bevy) because we want tight control over using Rust/WASM/WebGPU directly. The implementation will be mostly from scratch or with lightweight libraries:
 
@@ -60,7 +54,7 @@ Users can **influence and interact** with the generative music without manually 
 
 - **Browser Compatibility:** The application targets browsers with WebGPU enabled; WebGL fallback is intentionally avoided. A Start overlay handles user gesture unlock for audio.
 
-- **Desktop App:** The same Rust code should compile as a native app (using cargo with conditional compilation for native vs WASM). The desktop app would use WGPU (with Vulkan/Metal/DirectX via `wgpu`) and native audio. This provides an "easy path" to run outside the browser without rewriting the core logic – essentially the web version and desktop version share the code for generating music and visuals.
+<!-- Native desktop app notes removed -->
 
 ## System Architecture
 
@@ -241,26 +235,11 @@ We identify the key interactions the user needs and map them to in-scene control
 
 ### Cross-Platform Development Strategy
 
-While the **browser (WebAssembly + WebGPU)** is the primary deployment, we aim to keep the codebase flexible for a native desktop app build with minimal changes:
+<!-- Native flexibility and conditional compilation notes removed -->
 
-- **Shared Core Library:** Organize the Rust code so that core logic (audio generation algorithm, visual scene update logic, etc.) is in a library that is platform-agnostic. Then have two front-ends:
+<!-- Graphics differences for native removed -->
 
-  - **WASM Front-end:** compiles the library to WebAssembly and includes bindings (via `wasm_bindgen`) to interact with browser APIs (WebGPU, Web Audio, DOM events).
-  - **Native Front-end:** a `main.rs` for desktop that uses `winit` to create a window, same `wgpu` code to initialize GPU on native, and uses an audio crate to output sound.
-
-- **Conditional Compilation:** Use Rust’s conditional compilation (`#[cfg(target_arch = "wasm32")]` and `#[cfg(not(target_arch = "wasm32"))]` or similar) to switch out platform-specific sections:
-
-  - For example, audio initialization: on wasm32 target, use `web_sys::AudioContext`; on native, use `cpal` or other.
-  - Event handling: on wasm, set up DOM event listeners for mouse; on native, use winit’s event loop.
-  - The rest of the code (the logic that responds to events, the generation of patterns, the update of scene, etc.) can remain the same.
-
-- **Graphics differences:** The `wgpu` usage is largely the same. The only difference is acquiring the surface:
-
-  - On web, get it from a canvas element (via `wgpu::Instance::create_surface_from_canvas` or similar method).
-  - On native, use `Instance::create_surface` with the winit window handle.
-  - We should ensure the swapchain format and other settings are compatible in both.
-
-- **Testing both:** Use `npm run check` to format, lint, test Rust, build native, and build/serve the web bundle, then run the headless browser test (Puppeteer). CI skips engine-coupled assertions when WebGPU is unavailable in headless.
+- **Testing:** Use `npm run check` to format, lint, test Rust, and build/serve the web bundle, then run the headless browser test (Puppeteer). CI skips engine-coupled assertions when WebGPU is unavailable in headless.
 - **Platform Specific Limitations:**
 
   - Web Audio gives us spatialization and easy music scheduling. On native, implementing these features might be a bit more manual (e.g., we might lack a direct equivalent of PannerNode; if needed we could integrate OpenAL or use an audio engine crate that supports 3D sound). However, as an easy path, simple stereo panning math can suffice for an initial version.
@@ -308,12 +287,7 @@ To ensure a "fantastic result", the development should proceed in stages, verify
    - Test on a variety of desktop hardware (including integrated GPUs, etc.) to ensure it runs at least at 60fps on typical systems.
    - Memory: ensure to drop or reuse WebAudio nodes to not leak memory (WebAudio can hold onto nodes if not properly disconnected).
 
-9. **Desktop Version:** Once the web version is solid, compile a native version:
-
-   - Implement the `cpal` audio output callback to generate audio. Possibly reuse the same note scheduling but in a callback that outputs samples (e.g., generate a sine wave for given frequency in real-time). Alternatively, use `rodio` to play short generated samples or use a synthesizer library. This part can be complex; if it’s too much, one might choose to not have identical sound quality as web but at least something. (However, it might be easier to limit initial native support to stereo output without full spatialization for now.)
-   - Use `winit` for window and event handling (which should be similar to web events we already handle).
-   - Run and compare – adjust as needed since the environment timing might differ (no AudioContext to schedule ahead, so we might rely on high-thread-priority audio callbacks).
-   - Desktop can possibly allow more threads – if needed, run audio generation on its own thread to avoid dropouts.
+<!-- Desktop version plan removed -->
 
 10. **Refinement and UX:** Test the user experience thoroughly:
 

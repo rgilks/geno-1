@@ -4,7 +4,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 ## Setup & Tooling
 
-- [x] Workspace crates (`app-core`, `app-web`, `app-native`)
+- [x] Workspace crates (`app-core`, `app-web`)
 - [x] WebGPU initialization on web via `wgpu` v24 (no WebGL2 fallback)
 - [x] Node dev server with proper COOP/COEP headers (`server.js`)
 - [x] Headless web test (Puppeteer) scripted interactions
@@ -54,12 +54,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 ## Cross-Platform / Native
 
-- [x] Native window via `winit` and rendering via `wgpu`
-- [x] Basic native audio via `cpal` with envelopes
-- [x] Map native audio to per-voice waveforms (sine/square/saw/triangle)
-- [x] Stereo panning by X based on voice position (equal-power)
-- [x] Native input parity (hover, drag, click)
-  - [x] Subtle master saturation in native output
+Native UI support has been removed to simplify the project and focus on the web build.
 
 ## Error Handling & UX
 
@@ -104,9 +99,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [ ] app-web: extract WebGPU pipeline builders
   - Rationale: deduplicate pipeline/buffer setup for waves/post passes
   - Plan: create `pipeline.rs` helpers returning typed bundles; no functional changes
-- [ ] app-native: mirror `app-web` structure where practical
-  - Rationale: parity and easier cross-referencing
-  - Plan: extract `gpu.rs`, `audio.rs`, `input.rs` modules gradually
+<!-- Native refactor tasks removed -->
 
 ### Testing Enhancements
 
@@ -119,7 +112,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 - [x] Headless web test validates interactions and hint content
 - [x] Add assertions: BPM change reflected; solo/mute state (logs/state)
-- [x] Optional native smoke test (launch, render few frames, exit)
+<!-- Native smoke test removed -->
   - [x] Add unit tests for `app-core` mute/solo edge-cases with reseed & tempo changes
 
 ## Deployment
