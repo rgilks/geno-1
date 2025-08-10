@@ -113,6 +113,40 @@ pub struct GpuState<'a> {
 }
 
 impl<'a> GpuState<'a> {
+    fn make_post_pipeline(
+        device: &wgpu::Device,
+        layout: &wgpu::PipelineLayout,
+        shader: &wgpu::ShaderModule,
+        frag_entry: &str,
+        color_format: wgpu::TextureFormat,
+        blend: Option<wgpu::BlendState>,
+    ) -> wgpu::RenderPipeline {
+        device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            label: Some("post_pipeline"),
+            layout: Some(layout),
+            vertex: wgpu::VertexState {
+                module: shader,
+                entry_point: Some("vs_fullscreen"),
+                buffers: &[],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            },
+            primitive: wgpu::PrimitiveState::default(),
+            depth_stencil: None,
+            multisample: wgpu::MultisampleState::default(),
+            fragment: Some(wgpu::FragmentState {
+                module: shader,
+                entry_point: Some(frag_entry),
+                targets: &[Some(wgpu::ColorTargetState {
+                    format: color_format,
+                    blend,
+                    write_mask: wgpu::ColorWrites::ALL,
+                })],
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+            }),
+            cache: None,
+            multiview: None,
+        })
+    }
     fn create_color_texture(
         &self,
         label: &str,
@@ -468,81 +502,30 @@ impl<'a> GpuState<'a> {
             bind_group_layouts: &[&post_bgl0, &post_bgl1],
             push_constant_ranges: &[],
         });
-        let bright_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("bright_pipeline"),
-            layout: Some(&post_pl_bright_blur),
-            vertex: wgpu::VertexState {
-                module: &post_shader,
-                entry_point: Some("vs_fullscreen"),
-                buffers: &[],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &post_shader,
-                entry_point: Some("fs_bright"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: bloom_format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            cache: None,
-            multiview: None,
-        });
-        let blur_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("blur_pipeline"),
-            layout: Some(&post_pl_bright_blur),
-            vertex: wgpu::VertexState {
-                module: &post_shader,
-                entry_point: Some("vs_fullscreen"),
-                buffers: &[],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &post_shader,
-                entry_point: Some("fs_blur"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format: bloom_format,
-                    blend: None,
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            cache: None,
-            multiview: None,
-        });
-        let composite_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("composite_pipeline"),
-            layout: Some(&post_pl_composite),
-            vertex: wgpu::VertexState {
-                module: &post_shader,
-                entry_point: Some("vs_fullscreen"),
-                buffers: &[],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            },
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            fragment: Some(wgpu::FragmentState {
-                module: &post_shader,
-                entry_point: Some("fs_composite"),
-                targets: &[Some(wgpu::ColorTargetState {
-                    format,
-                    blend: Some(wgpu::BlendState::REPLACE),
-                    write_mask: wgpu::ColorWrites::ALL,
-                })],
-                compilation_options: wgpu::PipelineCompilationOptions::default(),
-            }),
-            cache: None,
-            multiview: None,
-        });
+        let bright_pipeline = Self::make_post_pipeline(
+            &device,
+            &post_pl_bright_blur,
+            &post_shader,
+            "fs_bright",
+            bloom_format,
+            None,
+        );
+        let blur_pipeline = Self::make_post_pipeline(
+            &device,
+            &post_pl_bright_blur,
+            &post_shader,
+            "fs_blur",
+            bloom_format,
+            None,
+        );
+        let composite_pipeline = Self::make_post_pipeline(
+            &device,
+            &post_pl_composite,
+            &post_shader,
+            "fs_composite",
+            format,
+            Some(wgpu::BlendState::REPLACE),
+        );
 
         Ok(Self {
             surface,
