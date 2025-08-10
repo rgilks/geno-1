@@ -2,6 +2,10 @@ use app_core::{BASE_SCALE, SCALE_PULSE_MULTIPLIER};
 use glam::{Vec3, Vec4};
 use web_sys as web;
 
+/// Offscreen color targets for the render pipeline.
+///
+/// Contains a full-resolution HDR scene color and two half-resolution bloom
+/// ping-pong textures. Views are pre-created for convenience.
 pub struct RenderTargets {
     pub hdr_tex: wgpu::Texture,
     pub hdr_view: wgpu::TextureView,

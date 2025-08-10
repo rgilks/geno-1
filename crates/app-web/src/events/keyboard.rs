@@ -1,0 +1,162 @@
+use app_core::MusicEngine;
+use app_core::{
+    midi_to_hz, z_offset_vec3, AEOLIAN, DORIAN, ENGINE_DRAG_MAX_RADIUS, IONIAN, LOCRIAN, LYDIAN,
+    MIXOLYDIAN, PHRYGIAN, PICK_SPHERE_RADIUS, SPREAD,
+};
+use std::cell::RefCell;
+use std::rc::Rc;
+use web_sys as web;
+
+#[inline]
+pub fn root_midi_for_key(key: &str) -> Option<i32> {
+    match key {
+        "a" | "A" => Some(69),
+        "b" | "B" => Some(71),
+        "c" | "C" => Some(60),
+        "d" | "D" => Some(62),
+        "e" | "E" => Some(64),
+        "f" | "F" => Some(65),
+        _ => None,
+    }
+}
+
+#[inline]
+pub fn mode_scale_for_digit(key: &str) -> Option<&'static [i32]> {
+    match key {
+        "1" => Some(IONIAN),
+        "2" => Some(DORIAN),
+        "3" => Some(PHRYGIAN),
+        "4" => Some(LYDIAN),
+        "5" => Some(MIXOLYDIAN),
+        "6" => Some(AEOLIAN),
+        "7" => Some(LOCRIAN),
+        _ => None,
+    }
+}
+
+pub fn handle_global_keydown(
+    ev: &web::KeyboardEvent,
+    engine: &Rc<RefCell<MusicEngine>>,
+    paused: &Rc<RefCell<bool>>,
+    master_gain: &web::GainNode,
+    canvas: &web::HtmlCanvasElement,
+) {
+    let key = ev.key();
+    if let Some(midi) = root_midi_for_key(&key) {
+        engine.borrow_mut().params.root_midi = midi;
+        return;
+    }
+    if let Some(scale) = mode_scale_for_digit(&key) {
+        engine.borrow_mut().params.scale = scale;
+        return;
+    }
+    match key.as_str() {
+        "r" | "R" => {
+            let voice_len = engine.borrow().voices.len();
+            let mut eng = engine.borrow_mut();
+            for i in 0..voice_len {
+                eng.reseed_voice(i, None);
+            }
+        }
+        "t" | "T" => {
+            let roots: [i32; 7] = [60, 62, 64, 65, 67, 69, 71];
+            let modes: [&'static [i32]; 7] = [
+                IONIAN, DORIAN, PHRYGIAN, LYDIAN, MIXOLYDIAN, AEOLIAN, LOCRIAN,
+            ];
+            let ri = (js_sys::Math::random() * roots.len() as f64).floor() as usize;
+            let mi = (js_sys::Math::random() * modes.len() as f64).floor() as usize;
+            let mut eng = engine.borrow_mut();
+            eng.params.root_midi = roots[ri];
+            eng.params.scale = modes[mi];
+        }
+        " " => {
+            let mut p = paused.borrow_mut();
+            *p = !*p;
+            ev.prevent_default();
+        }
+        "ArrowRight" | "+" | "=" => {
+            let mut eng = engine.borrow_mut();
+            let new_bpm = (eng.params.bpm + 5.0).min(240.0);
+            eng.set_bpm(new_bpm);
+        }
+        "ArrowLeft" | "-" | "_" => {
+            let mut eng = engine.borrow_mut();
+            let new_bpm = (eng.params.bpm - 5.0).max(40.0);
+            eng.set_bpm(new_bpm);
+        }
+        "Enter" => {
+            if let Some(win) = web::window() {
+                if let Some(doc) = win.document() {
+                    if doc.fullscreen_element().is_some() {
+                        let _ = doc.exit_fullscreen();
+                    } else {
+                        let _ = canvas.request_fullscreen();
+                    }
+                }
+            }
+            ev.prevent_default();
+        }
+        "Escape" => {
+            if let Some(win) = web::window() {
+                if let Some(doc) = win.document() {
+                    let _ = doc.exit_fullscreen();
+                }
+            }
+        }
+        _ => {}
+    }
+    match key.as_str() {
+        "ArrowUp" => {
+            let v = master_gain.gain().value();
+            let nv = (v + 0.05).min(1.0);
+            let _ = master_gain.gain().set_value(nv);
+            ev.prevent_default();
+        }
+        "ArrowDown" => {
+            let v = master_gain.gain().value();
+            let nv = (v - 0.05).max(0.0);
+            let _ = master_gain.gain().set_value(nv);
+            ev.prevent_default();
+        }
+        _ => {}
+    }
+}
+
+// Wire an 'H' key handler to toggle the overlay without affecting pause state
+pub fn wire_overlay_toggle_h(document: &web::Document) {
+    if let Some(window) = web::window() {
+        let doc = document.clone();
+        let closure =
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
+                let key = ev.key();
+                if key == "h" || key == "H" {
+                    crate::overlay::toggle(&doc);
+                    ev.prevent_default();
+                }
+            }) as Box<dyn FnMut(_)>);
+        let _ =
+            window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+        closure.forget();
+    }
+}
+
+pub fn wire_global_keydown(
+    engine: Rc<RefCell<MusicEngine>>,
+    paused: Rc<RefCell<bool>>,
+    master_gain: web::GainNode,
+    canvas: web::HtmlCanvasElement,
+) {
+    if let Some(window) = web::window() {
+        let closure =
+            wasm_bindgen::closure::Closure::wrap(Box::new(move |ev: web::KeyboardEvent| {
+                super::keyboard::handle_global_keydown(
+                    &ev, &engine, &paused, &master_gain, &canvas,
+                );
+            }) as Box<dyn FnMut(_)>);
+        let _ = window
+            .add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+        closure.forget();
+    }
+}
+
+
