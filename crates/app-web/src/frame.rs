@@ -118,14 +118,18 @@ impl<'a> FrameContext<'a> {
                 self.voice_panners[i].position_y().set_value(pos.y as f32);
                 self.voice_panners[i].position_z().set_value(pos.z as f32);
                 let dist = (pos.x * pos.x + pos.z * pos.z).sqrt();
-                let mut d_amt = (0.15 + 0.85 * pos.x.abs().min(1.0)).clamp(0.0, 1.0);
-                let mut r_amt = (0.25 + 0.75 * (dist / 2.5).clamp(0.0, 1.0)).clamp(0.0, 1.2);
-                let boost = 1.0 + 0.8 * self.swirl_energy;
-                d_amt = (d_amt * boost).clamp(0.0, 1.2);
-                r_amt = (r_amt * boost).clamp(0.0, 1.5);
+                let mut d_amt = (D_SEND_BASE + D_SEND_SPAN * pos.x.abs().min(1.0)).clamp(0.0, 1.0);
+                let mut r_amt = (R_SEND_BASE
+                    + R_SEND_SPAN * (dist / DIST_NORM_DIVISOR).clamp(0.0, 1.0))
+                    .clamp(0.0, R_SEND_CLAMP_MAX);
+                let boost = 1.0 + SEND_BOOST_COEFF * self.swirl_energy;
+                d_amt = (d_amt * boost).clamp(0.0, D_SEND_CLAMP_MAX);
+                r_amt = (r_amt * boost).clamp(0.0, R_SEND_CLAMP_MAX);
                 self.delay_sends[i].gain().set_value(d_amt);
                 self.reverb_sends[i].gain().set_value(r_amt);
-                let lvl = (0.55 + 0.45 * (1.0 - (dist / 2.5).clamp(0.0, 1.0))) as f32;
+                let lvl = (LEVEL_BASE
+                    + LEVEL_SPAN * (1.0 - (dist / DIST_NORM_DIVISOR).clamp(0.0, 1.0)))
+                    as f32;
                 self.voice_gains[i].gain().set_value(lvl);
             }
 
@@ -160,7 +164,7 @@ impl<'a> FrameContext<'a> {
             let e_ref = self.engine.borrow();
             let z_offset = z_offset_vec3();
             let spread = SPREAD;
-            let ring_count = 48usize;
+            let ring_count = RING_COUNT;
             let mut positions: Vec<Vec3> = Vec::with_capacity(3 + ring_count * 3 + 16);
             positions.push(e_ref.voices[0].position * spread + z_offset);
             positions.push(e_ref.voices[1].position * spread + z_offset);
@@ -172,15 +176,15 @@ impl<'a> FrameContext<'a> {
             let hovered = *self.hover_index.borrow();
             for i in 0..3 {
                 if e_ref.voices[i].muted {
-                    colors[i].x *= 0.35;
-                    colors[i].y *= 0.35;
-                    colors[i].z *= 0.35;
+                    colors[i].x *= MUTE_DARKEN;
+                    colors[i].y *= MUTE_DARKEN;
+                    colors[i].z *= MUTE_DARKEN;
                     colors[i].w = 1.0;
                 }
                 if hovered == Some(i) {
-                    colors[i].x = (colors[i].x * 1.4).min(1.0);
-                    colors[i].y = (colors[i].y * 1.4).min(1.0);
-                    colors[i].z = (colors[i].z * 1.4).min(1.0);
+                    colors[i].x = (colors[i].x * HOVER_BRIGHTEN).min(1.0);
+                    colors[i].y = (colors[i].y * HOVER_BRIGHTEN).min(1.0);
+                    colors[i].z = (colors[i].z * HOVER_BRIGHTEN).min(1.0);
                 }
             }
             let mut scales: Vec<f32> = Vec::with_capacity(3 + ring_count * 3 + 16);
@@ -190,7 +194,7 @@ impl<'a> FrameContext<'a> {
 
             if let Some(a) = &self.analyser {
                 let bins = a.frequency_bin_count() as usize;
-                let dots = bins.min(16);
+                let dots = bins.min(ANALYSER_DOTS_MAX);
                 if dots > 0 {
                     {
                         let mut buf = self.analyser_buf.borrow_mut();

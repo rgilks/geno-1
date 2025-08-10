@@ -1,4 +1,4 @@
-// Frame smoothing and interaction tuning constants
+/// Frame smoothing and interaction tuning constants
 
 // Exponential decay rate for internal pulse energy
 pub const PULSE_ENERGY_DECAY_PER_SEC: f32 = 1.6;
@@ -14,6 +14,12 @@ pub const POINTER_SPEED_MAX: f32 = 10.0;
 pub const SWIRL_OMEGA: f32 = 1.1; // natural frequency
 pub const SWIRL_DAMPING_RATIO: f32 = 0.5; // 0..1 critical at 1
 pub const SWIRL_MAX_STEP_PER_SEC: f32 = 0.50; // cap motion per second (in uv units)
+
+// Swirl energy blend weights
+pub const SWIRL_TARGET_WEIGHT_POINTER: f32 = 0.2;
+pub const SWIRL_TARGET_WEIGHT_VELOCITY: f32 = 0.35;
+pub const SWIRL_TARGET_CLICK_BONUS: f32 = 0.5;
+pub const SWIRL_ENERGY_BLEND_ALPHA: f32 = 0.15; // new = (1-α)*old + α*target
 
 // Global FX mapping weights
 pub const FX_REVERB_BASE: f32 = 0.35;
@@ -32,4 +38,24 @@ pub const FX_SAT_DRIVE_MAX: f32 = 3.0;
 pub const FX_SAT_WET_BASE: f32 = 0.15;
 pub const FX_SAT_WET_SPAN: f32 = 0.85;
 
+// Visual build parameters
+pub const RING_COUNT: usize = 48;
+pub const ANALYSER_DOTS_MAX: usize = 16;
 
+// Per-voice spatial sends mapping
+pub const DIST_NORM_DIVISOR: f32 = 2.5;
+pub const D_SEND_BASE: f32 = 0.15;
+pub const D_SEND_SPAN: f32 = 0.85;
+pub const R_SEND_BASE: f32 = 0.25;
+pub const R_SEND_SPAN: f32 = 0.75;
+pub const SEND_BOOST_COEFF: f32 = 0.8;
+pub const D_SEND_CLAMP_MAX: f32 = 1.2;
+pub const R_SEND_CLAMP_MAX: f32 = 1.5;
+
+// Voice level mapping
+pub const LEVEL_BASE: f32 = 0.55;
+pub const LEVEL_SPAN: f32 = 0.45;
+
+// Color adjustments
+pub const MUTE_DARKEN: f32 = 0.35;
+pub const HOVER_BRIGHTEN: f32 = 1.4;

@@ -113,6 +113,31 @@ pub struct GpuState<'a> {
 }
 
 impl<'a> GpuState<'a> {
+    fn create_color_texture_device(
+        device: &wgpu::Device,
+        label: &str,
+        width: u32,
+        height: u32,
+        format: wgpu::TextureFormat,
+        usage: wgpu::TextureUsages,
+    ) -> (wgpu::Texture, wgpu::TextureView) {
+        let tex = device.create_texture(&wgpu::TextureDescriptor {
+            label: Some(label),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format,
+            usage,
+            view_formats: &[],
+        });
+        let view = tex.create_view(&wgpu::TextureViewDescriptor::default());
+        (tex, view)
+    }
     fn make_post_pipeline(
         device: &wgpu::Device,
         layout: &wgpu::PipelineLayout,
@@ -157,7 +182,11 @@ impl<'a> GpuState<'a> {
     ) -> (wgpu::Texture, wgpu::TextureView) {
         let tex = self.device.create_texture(&wgpu::TextureDescriptor {
             label: Some(label),
-            size: wgpu::Extent3d { width, height, depth_or_array_layers: 1 },
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
             mip_level_count: 1,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
@@ -221,54 +250,33 @@ impl<'a> GpuState<'a> {
 
         // Offscreen HDR targets (scene and bloom) at full and half resolution
         let hdr_format = wgpu::TextureFormat::Rgba16Float;
-        let hdr_tex = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("hdr_tex"),
-            size: wgpu::Extent3d {
-                width,
-                height,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: hdr_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-        let hdr_view = hdr_tex.create_view(&wgpu::TextureViewDescriptor::default());
+        let (hdr_tex, hdr_view) = Self::create_color_texture_device(
+            &device,
+            "hdr_tex",
+            width,
+            height,
+            hdr_format,
+            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        );
         let bloom_w = (width.max(1) / 2).max(1);
         let bloom_h = (height.max(1) / 2).max(1);
         let bloom_format = wgpu::TextureFormat::Rgba16Float;
-        let bloom_a = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("bloom_a"),
-            size: wgpu::Extent3d {
-                width: bloom_w,
-                height: bloom_h,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: bloom_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-        let bloom_b = device.create_texture(&wgpu::TextureDescriptor {
-            label: Some("bloom_b"),
-            size: wgpu::Extent3d {
-                width: bloom_w,
-                height: bloom_h,
-                depth_or_array_layers: 1,
-            },
-            mip_level_count: 1,
-            sample_count: 1,
-            dimension: wgpu::TextureDimension::D2,
-            format: bloom_format,
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-            view_formats: &[],
-        });
-        let bloom_a_view = bloom_a.create_view(&wgpu::TextureViewDescriptor::default());
-        let bloom_b_view = bloom_b.create_view(&wgpu::TextureViewDescriptor::default());
+        let (bloom_a, bloom_a_view) = Self::create_color_texture_device(
+            &device,
+            "bloom_a",
+            bloom_w,
+            bloom_h,
+            bloom_format,
+            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        );
+        let (bloom_b, bloom_b_view) = Self::create_color_texture_device(
+            &device,
+            "bloom_b",
+            bloom_w,
+            bloom_h,
+            bloom_format,
+            wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
+        );
 
         // Waves fullscreen pass (drawn into HDR before bloom)
         let waves_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
