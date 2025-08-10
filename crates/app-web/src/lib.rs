@@ -15,12 +15,12 @@ use web_sys as web;
 // (DeviceExt no longer needed; legacy vertex buffers removed)
 
 mod audio;
+mod camera;
 mod dom;
 mod events;
 mod frame;
 mod input;
 mod overlay;
-mod camera;
 mod render;
 // ui module removed; overlay is controlled directly from here
 

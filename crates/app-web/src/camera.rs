@@ -24,5 +24,3 @@ pub fn screen_to_world_ray(
     let rd = (p1 - ro).normalize();
     (ro, rd)
 }
-
-
