@@ -16,7 +16,8 @@
     "build:all": "npm run build:web",
     "clean": "cargo clean && rm -rf pkg",
     "check:rust": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --all-targets",
-    "check": "npm run check:rust && npm run ci:web"
+    "check": "npm run check:rust && npm run ci:web",
+    "setup:hooks": "git config core.hooksPath .githooks && chmod +x .githooks/*"
   },
   "repository": {
     "type": "git",

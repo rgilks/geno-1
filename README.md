@@ -1,20 +1,23 @@
-## Pre-commit safety checks
+## Git hooks (local safety checks)
 
-To catch build breakages early, this repo includes a Husky pre-commit hook that runs the full `npm run check`:
-
-```
-npm run check
-```
-
-That script enforces Rust fmt/clippy, runs core unit tests, builds the web bundle, serves it, and executes the headless Puppeteer test. If any step fails, the commit is aborted.
-
-If you prefer Git native hooks, enable the lightweight `.githooks/pre-commit` by pointing Git to that directory:
+This repo uses native Git hooks in `.githooks` (no Husky dependency). Enable them once per clone:
 
 ```
 git config core.hooksPath .githooks
 ```
 
-The `.githooks` variant runs `npm run check:rust` (fast Rust-only checks) and can be combined with Husky as needed.
+Or run the convenience script (also ensures hooks are executable):
+
+```
+npm run setup:hooks
+```
+
+Hooks provided:
+
+- `pre-commit`: runs fast Rust checks (`npm run check:rust`) to keep commits quick
+- `pre-push`: runs the full project check (`npm run check`) before code leaves your machine
+
+The full check enforces Rust fmt/clippy, runs unit tests, builds the web bundle, serves it, and executes the headless Puppeteer test. If any step fails, Git aborts the commit/push.
 
 ## Generative 3D Music Visualizer (Rust + WebGPU + WebAudio)
 
@@ -99,7 +102,7 @@ Headless test:
   - Builds the web bundle and executes the headless browser test
   - On push to `main`, deploys to Cloudflare Workers via Wrangler
   - Requires repo secrets: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
-  - Workflow file: `.github/workflows/web-ci.yml`
+  - Workflow file: `.github/workflows/ci.yml`
   - CI tolerates missing WebGPU in headless by skipping engine-coupled assertions
 
 <!-- Desktop run instructions removed -->
