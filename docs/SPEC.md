@@ -139,6 +139,20 @@ Rust (wasm) code will use `web_sys::AudioContext` to set up an audio graph. It w
 4. Respond to user input by adjusting nodes (e.g., change Panner position when user drags source; change GainNode.gain for volume sliders; when regenerating, pick new random notes for upcoming bars).
 5. Use `AnalyserNode` (optional) by inserting it in the chain (e.g., at the master output) to get audio data for visualizations. Or maintain state of recent notes.
 
+#### References
+
+- [Web Audio API overview (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/Web_Audio_API)
+- [AudioContext (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/AudioContext)
+- [AudioParam automation (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/AudioParam)
+- [OscillatorNode (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/OscillatorNode)
+- [GainNode (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/GainNode)
+- [PannerNode (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/PannerNode) and [AudioListener (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/AudioListener)
+- [ConvolverNode (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/ConvolverNode)
+- [DelayNode (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/DelayNode)
+- [BiquadFilterNode (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/BiquadFilterNode)
+- [WaveShaperNode (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/WaveShaperNode)
+- [AnalyserNode (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/AnalyserNode)
+
 ### 2. Visual Engine (3D Graphics)
 
 **Overview:**
@@ -186,6 +200,12 @@ What the user sees:
   - We should target 60 FPS for smooth visuals. If the scene grows in complexity, we can tune down effects or object count to maintain performance (especially because any stutter could also affect audio if on same thread).
 
 - **Integration with UI:** Some visual objects might _be_ the UI controls. See next section on UI for specifics, but essentially, the visual scene will include not just purely decorative things but also interactive objects (like a button that is drawn as part of the 3D world). The visual engine will need to, for example, highlight an object when it’s hovered (if we can detect that) or animate it when clicked (to give feedback).
+
+#### References
+
+- [WebGPU API overview (MDN)](https://developer.mozilla.org/en-US/docs/Web/API/WebGPU_API)
+- [wgpu crate docs](https://docs.rs/wgpu)
+- [WGSL language spec](https://www.w3.org/TR/WGSL/)
 
 ### 3. User Interface & Interaction
 

@@ -107,19 +107,13 @@ Headless test:
 
 <!-- Desktop run instructions removed -->
 
-### Media
+### Live Demo
 
-- Screenshots/GIFs live in `docs/media/`.
-- Place files like:
-  - `docs/media/screenshot-1.png` – main scene
-  - `docs/media/screenshot-2.png` – hint overlay
-  - `docs/media/loop-1.gif` – waves background with ripples and pulses
+- Use the hosted app: [`https://geno-1.tre.systems/`](https://geno-1.tre.systems/)
 
-Links:
+Notes:
 
-- [Screenshot 1](docs/media/screenshot-1.png)
-- [Screenshot 2](docs/media/screenshot-2.png)
-- [Loop GIF](docs/media/loop-1.gif)
+- Keeping screenshots/GIFs up to date is intentionally avoided; refer to the live app instead.
 
 ### Workspace crates
 
