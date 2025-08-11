@@ -22,3 +22,6 @@ crates/**/dist
 
 # Logs
 *.log
+
+# Cloudflare Wrangler local state
+.wrangler/
