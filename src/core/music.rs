@@ -14,12 +14,10 @@ pub enum Waveform {
 /// Static configuration for a voice used at engine construction time.
 ///
 /// Fields:
-/// - `color_rgb`: base RGB color used by the visualizer for this voice
 /// - `waveform`: oscillator type to synthesize this voice in the web frontend
 /// - `base_position`: initial engine-space position (XZ plane; Y is typically 0)
 #[derive(Clone, Debug)]
 pub struct VoiceConfig {
-    pub color_rgb: [f32; 3],
     pub waveform: Waveform,
     pub base_position: Vec3,
 }

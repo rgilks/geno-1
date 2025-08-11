@@ -1,5 +1,5 @@
 use crate::core::{BASE_SCALE, SCALE_PULSE_MULTIPLIER};
-use glam::{Vec3, Vec4};
+use glam::Vec3;
 use web_sys as web;
 
 mod helpers;
@@ -350,7 +350,6 @@ impl<'a> GpuState<'a> {
         &mut self,
         dt_sec: f32,
         positions: &[Vec3],
-        colors: &[Vec4],
         scales: &[f32],
     ) -> Result<(), wgpu::SurfaceError> {
         self.resize_if_needed(self.width, self.height);
@@ -386,7 +385,6 @@ impl<'a> GpuState<'a> {
                     positions[i].z,
                     ((scales[i] - BASE_SCALE).max(0.0) / SCALE_PULSE_MULTIPLIER).clamp(0.0, 1.5),
                 ],
-                color: colors[i].to_array(),
             };
             let w = WavesUniforms {
                 resolution: [self.width as f32, self.height as f32],

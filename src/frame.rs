@@ -183,7 +183,7 @@ impl<'a> FrameContext<'a> {
                 let w = self.canvas.width();
                 let h = self.canvas.height();
                 g.resize_if_needed(w, h);
-                if let Err(e) = g.render(dt_sec, &self.positions, &self.colors, &self.scales) {
+                if let Err(e) = g.render(dt_sec, &self.positions, &self.scales) {
                     log::error!("render error: {:?}", e);
                 }
             }
@@ -269,12 +269,10 @@ impl<'a> FrameContext<'a> {
             .push(e_ref.voices[1].position * spread + z_offset);
         self.positions
             .push(e_ref.voices[2].position * spread + z_offset);
-        self.colors
-            .push(Vec4::from((Vec3::from(e_ref.configs[0].color_rgb), 1.0)));
-        self.colors
-            .push(Vec4::from((Vec3::from(e_ref.configs[1].color_rgb), 1.0)));
-        self.colors
-            .push(Vec4::from((Vec3::from(e_ref.configs[2].color_rgb), 1.0)));
+        // Static neutral color; shader color accents are procedural now
+        self.colors.push(Vec4::new(0.25, 0.65, 1.0, 1.0));
+        self.colors.push(Vec4::new(0.25, 0.65, 1.0, 1.0));
+        self.colors.push(Vec4::new(0.25, 0.65, 1.0, 1.0));
         let hovered = *self.hover_index.borrow();
         for i in 0..3 {
             if e_ref.voices[i].muted {

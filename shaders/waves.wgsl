@@ -11,8 +11,6 @@ struct VsOut {
 struct Voice {
     // xyz position (x,z used), w = pulse (0..1.5)
     pos_pulse: vec4<f32>,
-    // rgb base, a unused
-    color: vec4<f32>,
 };
 
 struct WaveUniforms {
@@ -204,9 +202,11 @@ fn fs_waves(inp: VsOut) -> @location(0) vec4<f32> {
         let crest = smoothstep(0.84, 0.98, k);
         lay += gold * crest * (0.75 + 1.4 * u.ambient);
         for (var i = 0; i < 3; i = i + 1) {
-            let p = vec2<f32>(u.voices[i].pos_pulse.x, u.voices[i].pos_pulse.z) * 0.33;
+            let v = u.voices[i];
+            let p = vec2<f32>(v.pos_pulse.x, v.pos_pulse.z) * 0.33;
             let dd = distance(cuv, p);
-            lay += gold * exp(-40.0 * dd * dd) * 0.45;
+            let pulse = clamp(v.pos_pulse.w, 0.0, 1.5);
+            lay += gold * exp(-40.0 * dd * dd) * (0.30 + 0.35 * pulse);
         }
 
         let ring = smoothstep(0.010, 0.002, abs(rr - (0.20 * age + 0.02)));

@@ -4,7 +4,6 @@ use wgpu;
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub(crate) struct VoicePacked {
     pub(crate) pos_pulse: [f32; 4],
-    pub(crate) color: [f32; 4],
 }
 
 #[repr(C)]

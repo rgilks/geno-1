@@ -1,7 +1,6 @@
 #![cfg(target_arch = "wasm32")]
 use crate::core::{
-    EngineParams, MusicEngine, VoiceConfig, Waveform, C_MAJOR_PENTATONIC, DEFAULT_VOICE_COLORS,
-    DEFAULT_VOICE_POSITIONS,
+    EngineParams, MusicEngine, VoiceConfig, Waveform, C_MAJOR_PENTATONIC, DEFAULT_VOICE_POSITIONS,
 };
 use glam::Vec3;
 use instant::Instant;
@@ -55,17 +54,14 @@ async fn build_audio_and_engine(_document: web::Document) -> anyhow::Result<Init
 
     let voice_configs = vec![
         VoiceConfig {
-            color_rgb: DEFAULT_VOICE_COLORS[0],
             waveform: Waveform::Sine,
             base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[0]),
         },
         VoiceConfig {
-            color_rgb: DEFAULT_VOICE_COLORS[1],
             waveform: Waveform::Saw,
             base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[1]),
         },
         VoiceConfig {
-            color_rgb: DEFAULT_VOICE_COLORS[2],
             waveform: Waveform::Triangle,
             base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[2]),
         },
