@@ -13,5 +13,3 @@ pub const SCALE_PULSE_MULTIPLIER: f32 = 0.4; // how much a full pulse enlarges a
 // Interaction
 pub const PICK_SPHERE_RADIUS: f32 = 0.8; // ray-sphere radius for picking
 pub const ENGINE_DRAG_MAX_RADIUS: f32 = 3.0; // max engine-space radius when dragging
-
-// (removed) default positions are now inlined at initialization
