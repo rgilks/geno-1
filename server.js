@@ -7,8 +7,8 @@ const url = require("url");
 const PORT = process.env.PORT || 8080;
 const HOST = process.env.HOST || "localhost";
 
-const ROOT = path.join(__dirname, "crates", "app-web");
-const PKG = path.join(ROOT, "pkg");
+const ROOT = __dirname;
+const PKG = path.join(__dirname, "pkg");
 
 const MIME_TYPES = {
   ".html": "text/html",

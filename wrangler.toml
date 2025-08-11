@@ -4,7 +4,7 @@ compatibility_flags = ["nodejs_compat"]
 main = "worker.js"
 
 [assets]
-directory = "./crates/app-web"
+directory = "./"
 binding = "ASSETS"
 html_handling = "auto-trailing-slash"
 not_found_handling = "single-page-application"
