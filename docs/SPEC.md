@@ -61,7 +61,7 @@ The system is composed of three main subsystems:
 2. **Visual Engine** – 3D rendering using WebGPU, including ambient waves background and a post-processing stack (bright pass, separable blur, ACES tonemap, vignette, grain). The renderer is structured with small modules: `render/targets.rs` (offscreen targets), `render/waves.rs` (fullscreen waves pass), and `render/post.rs` (post pipelines, uniforms, blits, bind groups).
 3. **Interaction & UI Module** – user input (mouse, keyboard) with a minimalist hint overlay; interactive controls embedded in the 3D scene.
 
-These components will run simultaneously and communicate in real-time. The application will likely run a **main loop** (or use requestAnimationFrame in the browser) to update both audio and visuals continuously:
+These components will run simultaneously and communicate in real-time. The application runs as a single crate (`app-web`) with an internal `src/core` module (formerly the `app-core` crate). The app uses requestAnimationFrame in the browser to update both audio and visuals continuously:
 
 - On each update tick (e.g. \~60 times per second for visuals, and audio scheduling in smaller increments), it will compute any state changes (notes to play, visual changes) and render a new frame.
 - The audio engine might run on its own timing separate from the graphics frame rate (since audio needs steady timing). We will utilize timing facilities of Web Audio (e.g. scheduling notes with precise timing in the AudioContext) to ensure audio does not stutter even if graphics frame rate fluctuates.

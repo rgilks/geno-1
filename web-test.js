@@ -13,8 +13,10 @@ const puppeteer = require("puppeteer");
       "--enable-unsafe-webgpu",
     ],
   });
+
   const page = await browser.newPage();
   const logs = [];
+
   page.on("console", (m) => {
     const t = m.text();
     logs.push(t);
@@ -27,6 +29,7 @@ const puppeteer = require("puppeteer");
   });
 
   await page.waitForSelector("#app-canvas", { timeout: 10000 });
+
   const box = await page.$eval("#app-canvas", (el) => {
     const r = el.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -38,9 +41,11 @@ const puppeteer = require("puppeteer");
   // Overlay should be present initially; close it, then bring it back with 'H'
   const overlayInitially = await page.$("#start-overlay");
   if (!overlayInitially) throw new Error("start overlay not found");
+
   // Click close to hide
   await page.click("#overlay-close");
   await new Promise((r) => setTimeout(r, 200));
+
   const overlayHidden = await page.evaluate(() => {
     const el = document.getElementById("start-overlay");
     if (!el) return "missing";
@@ -49,11 +54,14 @@ const puppeteer = require("puppeteer");
     const byClass = el.classList.contains("hidden");
     return byStyle || byClass ? "hidden" : "visible";
   });
+
   if (overlayHidden !== "hidden")
     throw new Error("start overlay did not hide after close");
+
   // Press H to show again
   await page.keyboard.press("KeyH");
   await new Promise((r) => setTimeout(r, 200));
+
   const overlayShown = await page.evaluate(() => {
     const el = document.getElementById("start-overlay");
     if (!el) return "missing";
@@ -62,6 +70,7 @@ const puppeteer = require("puppeteer");
     const byClass = el.classList.contains("hidden");
     return byStyle || byClass ? "hidden" : "visible";
   });
+
   if (overlayShown !== "visible")
     throw new Error("start overlay did not show after H");
 
@@ -69,6 +78,7 @@ const puppeteer = require("puppeteer");
   const engineStarted =
     logs.some((l) => l.includes("[gesture] starting systems after click")) &&
     !logs.some((l) => l.includes("WebGPU init error"));
+
   if (engineStarted) {
     // Reseed all
     await page.keyboard.press("KeyR");
@@ -81,6 +91,7 @@ const puppeteer = require("puppeteer");
     await new Promise((r) => setTimeout(r, 120));
     await page.keyboard.press("Space");
     await new Promise((r) => setTimeout(r, 120));
+
     const sawPause =
       logs.some((l) => l.includes("[keys] paused=true")) &&
       logs.some((l) => l.includes("[keys] paused=false"));
@@ -97,17 +108,17 @@ const puppeteer = require("puppeteer");
     // Master mute toggle (logs only)
     await page.keyboard.press("KeyM");
     await new Promise((r) => setTimeout(r, 120));
+
     if (!logs.some((l) => /\[keys\] master muted=true/.test(l)))
       throw new Error("missing master mute= true log");
     // Muted state no longer shown in hint; rely on logs only
 
     await page.keyboard.press("KeyM");
     await new Promise((r) => setTimeout(r, 120));
+
     if (!logs.some((l) => /\[keys\] master muted=false/.test(l)))
       throw new Error("missing master mute= false log");
     // Muted state no longer shown in hint; rely on logs only
-
-    // Orbit feature removed; no O-key assertions
 
     // Click center to toggle mute on the hovered voice (expects a hit)
     await page.mouse.move(box.x, box.y);
@@ -121,6 +132,7 @@ const puppeteer = require("puppeteer");
     await page.mouse.click(box.x, box.y);
     await page.keyboard.up("Alt");
     await new Promise((r) => setTimeout(r, 120));
+
     if (!logs.some((l) => /\[click\] solo voice \d+/.test(l)))
       throw new Error("missing solo click log");
   } else {
@@ -134,6 +146,7 @@ const puppeteer = require("puppeteer");
   console.log("WEBGPU", hasWebGPU);
 
   await browser.close();
+
   process.exit(0);
 })().catch((err) => {
   console.error("TEST_ERROR", err);

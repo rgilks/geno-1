@@ -7,8 +7,8 @@ const url = require("url");
 const PORT = process.env.PORT || 8080;
 const HOST = process.env.HOST || "localhost";
 
-const ROOT = path.join(__dirname, "crates", "app-web");
-const PKG = path.join(ROOT, "pkg");
+const ROOT = __dirname;
+const PKG = path.join(__dirname, "pkg");
 
 const MIME_TYPES = {
   ".html": "text/html",
@@ -30,7 +30,10 @@ const SECURITY_HEADERS = {
 };
 
 function getContentType(filePath) {
-  return MIME_TYPES[path.extname(filePath).toLowerCase()] || "application/octet-stream";
+  return (
+    MIME_TYPES[path.extname(filePath).toLowerCase()] ||
+    "application/octet-stream"
+  );
 }
 
 function serveFile(filePath, res) {
@@ -40,7 +43,10 @@ function serveFile(filePath, res) {
       res.end("404 Not Found");
       return;
     }
-    res.writeHead(200, { "Content-Type": getContentType(filePath), ...SECURITY_HEADERS });
+    res.writeHead(200, {
+      "Content-Type": getContentType(filePath),
+      ...SECURITY_HEADERS,
+    });
     res.end(data);
   });
 }
@@ -51,8 +57,11 @@ function handleRequest(req, res) {
 
   if (pathname === "/") pathname = "/index.html";
   if (pathname === "/favicon.ico") {
-    res.writeHead(200, { "Content-Type": "image/svg+xml", ...SECURITY_HEADERS });
-    res.end("<svg xmlns=\"http://www.w3.org/2000/svg\"/>");
+    res.writeHead(200, {
+      "Content-Type": "image/svg+xml",
+      ...SECURITY_HEADERS,
+    });
+    res.end('<svg xmlns="http://www.w3.org/2000/svg"/>');
     return;
   }
 
@@ -64,7 +73,10 @@ function handleRequest(req, res) {
       filePath = path.join(ROOT, pathname);
       fs.access(filePath, fs.constants.F_OK, (err2) => {
         if (err2) {
-          res.writeHead(404, { "Content-Type": "text/html", ...SECURITY_HEADERS });
+          res.writeHead(404, {
+            "Content-Type": "text/html",
+            ...SECURITY_HEADERS,
+          });
           res.end(`<h1>404</h1><p>Missing: ${pathname}</p>`);
           return;
         }

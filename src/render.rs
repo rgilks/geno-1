@@ -1,4 +1,4 @@
-use app_core::{BASE_SCALE, SCALE_PULSE_MULTIPLIER};
+use crate::core::{BASE_SCALE, SCALE_PULSE_MULTIPLIER};
 use glam::{Vec3, Vec4};
 use web_sys as web;
 
@@ -152,7 +152,7 @@ impl<'a> GpuState<'a> {
         // Post shader + pipelines
         let post_shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("post_shader"),
-            source: wgpu::ShaderSource::Wgsl(app_core::POST_WGSL.into()),
+            source: wgpu::ShaderSource::Wgsl(crate::core::POST_WGSL.into()),
         });
         let linear_sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("linear_sampler"),

@@ -14,6 +14,8 @@ Try and keep files less that 200 lines, the smaller the better.
 Prefer WebGPU via `wgpu` v24.0 and avoid WebGL2 fallbacks.
 Prefer Node for servers/tooling; avoid Python for this project.
 
+Make sure the logging is sufficient for the `web-test.js` Puppeteer tests to verify the code is working as expected.
+
 Testing guidelines:
 
 - Rust unit tests live alongside code. Use `cargo test`.

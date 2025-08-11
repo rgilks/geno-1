@@ -1,3 +1,5 @@
+// Copy exists under app-web for bundling via core module include_str!
+// (Content pulled from former app-core/shaders/scene.wgsl)
 struct VsOut {
     @builtin(position) pos: vec4<f32>,
     @location(0) color: vec4<f32>,

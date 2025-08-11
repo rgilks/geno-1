@@ -4,7 +4,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 
 ## Setup & Tooling
 
-- [x] Workspace crates (`app-core`, `app-web`)
+- [x] Single workspace crate (`app-web`) with internal `src/core` module (merged former `app-core`)
 - [x] WebGPU initialization on web via `wgpu` v24 (no WebGL2 fallback)
 - [x] Node dev server with proper COOP/COEP headers (`server.js`)
 - [x] Headless web test (Puppeteer) scripted interactions
@@ -97,19 +97,19 @@ Desktop UI support has been removed to simplify the project and focus on the web
 
 ### Planned Refactors (incremental, no behavior changes)
 
-- [x] app-core: extract helper methods for per-voice scheduling parameters
+- [x] core: extract helper methods for per-voice scheduling parameters
   - Rationale: improve readability in `schedule_step` by removing inline match blocks
   - Status: implemented as private helpers (`voice_trigger_probability`, `voice_octave_offset`, `voice_base_duration`) and rustdoc added; no API change
-- [ ] app-core: document public structs and functions
+- [ ] core: document public structs and functions
   - Rationale: clarify responsibilities of `MusicEngine`, `EngineParams`, `VoiceConfig`, etc.
   - Status: partially done (added rustdoc to types and methods); continue across `constants.rs`/`state.rs`
-- [ ] app-core: introduce small newtype for `MidiNote` and typed Hz wrapper
+- [ ] core: introduce small newtype for `MidiNote` and typed Hz wrapper
   - Rationale: make units explicit and reduce accidental misuse
   - Plan: add newtypes with From/Into impls; keep existing APIs to avoid breakage initially
-- [ ] app-core: make `MusicEngine` scheduling grid configurable
+- [ ] core: make `MusicEngine` scheduling grid configurable
   - Rationale: today hard-coded to eighth-note; allow division enum without changing defaults
   - Plan: add `grid_division: Division` to `EngineParams` with `Eighth` default; use in `tick`
-- [ ] app-core: separate RNG/seeding from state to allow deterministic replay sessions
+- [ ] core: separate RNG/seeding from state to allow deterministic replay sessions
   - Rationale: enable capture/replay of seeds per voice for tests/demos
   - Plan: introduce `EngineRandom` struct; keep current methods as thin wrappers
 - [ ] app-web: factor large `lib.rs` into modules (`audio`, `render`, `input`, `ui`)
@@ -140,7 +140,7 @@ Desktop UI support has been removed to simplify the project and focus on the web
 
 ### Testing Enhancements
 
-- [x] app-core: add unit tests for midi conversion, mute/solo, tempo effects, reseed determinism
+- [x] core: add unit tests for midi conversion, mute/solo, tempo effects, reseed determinism
 - [ ] app-core: add property-based tests for `midi_to_hz` monotonicity and octave symmetry
 - [ ] app-web: extend headless test to simulate tempo change and check hint reflects BPM
 - [ ] app-web: add a check that clicking voices toggles mute text/icon state in the hint

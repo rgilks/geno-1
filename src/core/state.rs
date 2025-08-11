@@ -31,7 +31,7 @@ impl Camera {
 
 /// Small value container used by the renderer to represent a note-driven pulse.
 ///
-/// The `amount` should typically be in the \[0, 1\] range where 0 is idle and
+/// The `amount` should typically be in the [0, 1] range where 0 is idle and
 /// 1 is a full pulse. The renderer can map this to scale/emissive intensity.
 #[derive(Clone, Debug, Default)]
 pub struct VisualNotePulse {

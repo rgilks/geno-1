@@ -1,3 +1,6 @@
+// Copy exists under app-web for bundling via core module include_str!
+// The authoritative shader content is maintained here after merge.
+// (Content pulled from former app-core/shaders/post.wgsl)
 // Fullscreen post-processing: HDR bright pass, separable blur, composite with
 // filmic tonemapping, vignette, gentle chroma shift and film grain.
 

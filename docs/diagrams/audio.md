@@ -1,6 +1,6 @@
 ## Audio Pipeline (Web)
 
-The diagram below summarizes how musical events are generated and rendered to audio on the web build. It reflects the current implementation described in `docs/SPEC.md` and the code in `crates/app-core` and `crates/app-web`.
+The diagram below summarizes how musical events are generated and rendered to audio on the web build. It reflects the current implementation described in `docs/SPEC.md` and the code in `crates/app-web` (with former `app-core` now under `src/core`).
 
 ```mermaid
 graph TD
