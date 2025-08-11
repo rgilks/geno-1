@@ -6,7 +6,7 @@ use std::time::Duration;
 #[derive(Clone, Copy, Debug)]
 pub enum Waveform {
     Sine,
-    Square,
+    //Square,
     Saw,
     Triangle,
 }
@@ -35,7 +35,6 @@ pub struct NoteEvent {
     pub voice_index: usize,
     pub frequency_hz: f32,
     pub velocity: f32,
-    pub start_time_sec: f64,
     pub duration_sec: f32,
 }
 
@@ -142,13 +141,6 @@ impl MusicEngine {
         }
     }
 
-    /// Explicitly set mute flag for a voice.
-    pub fn set_voice_muted(&mut self, voice_index: usize, muted: bool) {
-        if let Some(v) = self.voices.get_mut(voice_index) {
-            v.muted = muted;
-        }
-    }
-
     /// Update the engine-space position of a voice.
     pub fn set_voice_position(&mut self, voice_index: usize, pos: Vec3) {
         if let Some(v) = self.voices.get_mut(voice_index) {
@@ -184,18 +176,18 @@ impl MusicEngine {
     }
 
     /// Advance the scheduler by `dt`, pushing any newly scheduled `NoteEvent`s into `out_events`.
-    pub fn tick(&mut self, dt: Duration, now_sec: f64, out_events: &mut Vec<NoteEvent>) {
+    pub fn tick(&mut self, dt: Duration, out_events: &mut Vec<NoteEvent>) {
         let seconds_per_beat = 60.0 / self.params.bpm as f64;
         self.beat_accum += dt.as_secs_f64();
         while self.beat_accum >= seconds_per_beat / 2.0 {
             // eighth notes grid
             self.beat_accum -= seconds_per_beat / 2.0;
-            self.schedule_step(now_sec, out_events);
+            self.schedule_step(out_events);
         }
     }
 
     /// Schedule a single grid step for all voices.
-    fn schedule_step(&mut self, now_sec: f64, out_events: &mut Vec<NoteEvent>) {
+    fn schedule_step(&mut self, out_events: &mut Vec<NoteEvent>) {
         for (i, voice) in self.voices.iter().enumerate() {
             if voice.muted {
                 continue;
@@ -213,7 +205,6 @@ impl MusicEngine {
                     voice_index: i,
                     frequency_hz: freq,
                     velocity: vel,
-                    start_time_sec: now_sec + 0.02,
                     duration_sec: dur,
                 });
             }

@@ -171,7 +171,7 @@ pub fn trigger_one_shot(
     if let Ok(src) = web::OscillatorNode::new(audio_ctx) {
         match waveform {
             Waveform::Sine => src.set_type(web::OscillatorType::Sine),
-            Waveform::Square => src.set_type(web::OscillatorType::Square),
+            // Waveform::Square => src.set_type(web::OscillatorType::Square),
             Waveform::Saw => src.set_type(web::OscillatorType::Sawtooth),
             Waveform::Triangle => src.set_type(web::OscillatorType::Triangle),
         }

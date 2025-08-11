@@ -65,9 +65,7 @@ impl<'a> FrameContext<'a> {
         let audio_time = self.audio_ctx.current_time();
         let mut note_events = Vec::new();
         if !*self.paused.borrow() {
-            self.engine
-                .borrow_mut()
-                .tick(dt, audio_time, &mut note_events);
+            self.engine.borrow_mut().tick(dt, &mut note_events);
         }
 
         {
@@ -197,7 +195,7 @@ impl<'a> FrameContext<'a> {
                 };
                 match self.engine.borrow().configs[ev.voice_index].waveform {
                     Waveform::Sine => src.set_type(web::OscillatorType::Sine),
-                    Waveform::Square => src.set_type(web::OscillatorType::Square),
+                    // Waveform::Square => src.set_type(web::OscillatorType::Square),
                     Waveform::Saw => src.set_type(web::OscillatorType::Sawtooth),
                     Waveform::Triangle => src.set_type(web::OscillatorType::Triangle),
                 }
