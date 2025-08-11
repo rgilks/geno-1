@@ -1,7 +1,5 @@
 #![cfg(target_arch = "wasm32")]
-use crate::core::{
-    EngineParams, MusicEngine, VoiceConfig, Waveform, C_MAJOR_PENTATONIC, DEFAULT_VOICE_POSITIONS,
-};
+use crate::core::{EngineParams, MusicEngine, VoiceConfig, Waveform, C_MAJOR_PENTATONIC};
 use glam::Vec3;
 use instant::Instant;
 use std::cell::RefCell;
@@ -55,15 +53,15 @@ async fn build_audio_and_engine(_document: web::Document) -> anyhow::Result<Init
     let voice_configs = vec![
         VoiceConfig {
             waveform: Waveform::Sine,
-            base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[0]),
+            base_position: Vec3::new(-1.0, 0.0, 0.0),
         },
         VoiceConfig {
             waveform: Waveform::Saw,
-            base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[1]),
+            base_position: Vec3::new(1.0, 0.0, 0.0),
         },
         VoiceConfig {
             waveform: Waveform::Triangle,
-            base_position: Vec3::from(DEFAULT_VOICE_POSITIONS[2]),
+            base_position: Vec3::new(0.0, 0.0, -1.0),
         },
     ];
     let engine = Rc::new(RefCell::new(MusicEngine::new(
