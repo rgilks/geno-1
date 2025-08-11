@@ -34,7 +34,7 @@ pub(crate) fn create_waves_resources(
 ) -> WavesResources {
     let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
         label: Some("waves_shader"),
-        source: wgpu::ShaderSource::Wgsl(app_core::WAVES_WGSL.into()),
+        source: wgpu::ShaderSource::Wgsl(crate::core::WAVES_WGSL.into()),
     });
     let bgl = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
         label: Some("waves_bgl"),

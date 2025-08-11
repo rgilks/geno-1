@@ -1,4 +1,4 @@
-use app_core::Waveform;
+use crate::core::Waveform;
 use glam::Vec3;
 use std::cell::RefCell;
 use std::rc::Rc;

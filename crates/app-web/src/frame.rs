@@ -1,7 +1,9 @@
 use crate::constants::*;
+use crate::core::{
+    z_offset_vec3, MusicEngine, Waveform, BASE_SCALE, SCALE_PULSE_MULTIPLIER, SPREAD,
+};
 use crate::input;
 use crate::render;
-use app_core::{z_offset_vec3, MusicEngine, Waveform, BASE_SCALE, SCALE_PULSE_MULTIPLIER, SPREAD};
 use glam::{Vec3, Vec4};
 use instant::Instant;
 use std::cell::RefCell;

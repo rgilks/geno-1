@@ -1,5 +1,5 @@
-use app_core::MusicEngine;
-use app_core::{AEOLIAN, DORIAN, IONIAN, LOCRIAN, LYDIAN, MIXOLYDIAN, PHRYGIAN};
+use crate::core::MusicEngine;
+use crate::core::{AEOLIAN, DORIAN, IONIAN, LOCRIAN, LYDIAN, MIXOLYDIAN, PHRYGIAN};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::JsCast;

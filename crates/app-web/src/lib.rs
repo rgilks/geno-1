@@ -1,5 +1,5 @@
 #![cfg(target_arch = "wasm32")]
-use app_core::{
+use crate::core::{
     EngineParams, MusicEngine, VoiceConfig, Waveform, C_MAJOR_PENTATONIC, DEFAULT_VOICE_COLORS,
     DEFAULT_VOICE_POSITIONS,
 };
@@ -17,6 +17,7 @@ use web_sys as web;
 mod audio;
 mod camera;
 mod constants;
+mod core;
 mod dom;
 mod events;
 mod frame;

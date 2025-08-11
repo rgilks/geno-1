@@ -21,7 +21,6 @@ web-sys = { workspace = true }
 wgpu = { workspace = true }
 glam = { workspace = true }
 bytemuck = { workspace = true }
-app-core = { path = "../app-core" }
 getrandom = { version = "0.2", features = ["js"] }
 instant = { version = "0.1" }
 

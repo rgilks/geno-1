@@ -1,9 +1,10 @@
 use crate::audio;
 use crate::constants::CAMERA_Z;
+use crate::core::{
+    midi_to_hz, z_offset_vec3, MusicEngine, ENGINE_DRAG_MAX_RADIUS, PICK_SPHERE_RADIUS, SPREAD,
+};
 use crate::input;
 use crate::render;
-use app_core::MusicEngine;
-use app_core::{midi_to_hz, z_offset_vec3, ENGINE_DRAG_MAX_RADIUS, PICK_SPHERE_RADIUS, SPREAD};
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::JsCast;

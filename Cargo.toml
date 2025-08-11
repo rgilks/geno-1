@@ -1,8 +1,6 @@
 [workspace]
-members = ["crates/app-core", "crates/app-web"]
+members = ["crates/app-web"]
 resolver = "2"
-# Build core by default so `cargo build` works without wasm toolchain
-default-members = ["crates/app-core"]
 
 [workspace.package]
 authors = ["Robert Gilks"]
