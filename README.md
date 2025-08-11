@@ -128,5 +128,3 @@ Notes:
 
 - Project Spec: `docs/SPEC.md`
 - Project TODO: `docs/TODO.md`
-- Audio Pipelines: `docs/diagrams/audio.md`
-- Visual Pipelines: `docs/diagrams/visual.md`

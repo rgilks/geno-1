@@ -1,7 +1,5 @@
 use crate::constants::*;
-use crate::core::{
-    z_offset_vec3, MusicEngine, Waveform, BASE_SCALE, SCALE_PULSE_MULTIPLIER, SPREAD,
-};
+use crate::core::{MusicEngine, Waveform, BASE_SCALE, SCALE_PULSE_MULTIPLIER, SPREAD, Z_OFFSET};
 use crate::input;
 use crate::render;
 use glam::{Vec3, Vec4};
@@ -256,7 +254,7 @@ impl<'a> FrameContext<'a> {
 
     fn build_instances_reuse(&mut self, pulses: &[f32]) {
         let e_ref = self.engine.borrow();
-        let z_offset = z_offset_vec3();
+        let z_offset = Z_OFFSET;
         let spread = SPREAD;
         let ring_count = RING_COUNT;
         self.positions.clear();

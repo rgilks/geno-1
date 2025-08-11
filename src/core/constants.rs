@@ -4,7 +4,7 @@ use glam::Vec3;
 
 // Scene layout
 pub const SPREAD: f32 = 1.8; // scales engine-space positions to world-space
-pub const Z_OFFSET: [f32; 3] = [0.0, 0.0, -4.0]; // world-space offset applied to all markers
+pub const Z_OFFSET: Vec3 = Vec3::new(0.0, 0.0, -4.0); // world-space offset applied to all markers
 
 // Visual sizing
 pub const BASE_SCALE: f32 = 1.6; // idle marker size
@@ -23,8 +23,3 @@ pub const DEFAULT_VOICE_COLORS: [[f32; 3]; 3] = [
 
 pub const DEFAULT_VOICE_POSITIONS: [[f32; 3]; 3] =
     [[-1.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, -1.0]];
-
-#[inline]
-pub fn z_offset_vec3() -> Vec3 {
-    Vec3::new(Z_OFFSET[0], Z_OFFSET[1], Z_OFFSET[2])
-}

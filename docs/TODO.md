@@ -13,7 +13,7 @@ This checklist tracks progress against the high-level plan in `docs/SPEC.md` and
 - [x] Add LICENSE file matching workspace `license = "MIT"`
 - [x] Fill optional `description`/`repository` fields in crate manifests
 - [x] Add README workflow badge (done) and keep CI green
-- [x] Architecture diagrams for audio and visual pipelines (see `docs/diagrams/`)
+- [x] Architecture diagrams for audio and visual pipelines (now inlined in `docs/SPEC.md`)
 
 ## Audio Engine (Web)
 

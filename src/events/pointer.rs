@@ -1,7 +1,7 @@
 use crate::audio;
 use crate::constants::CAMERA_Z;
 use crate::core::{
-    midi_to_hz, z_offset_vec3, MusicEngine, ENGINE_DRAG_MAX_RADIUS, PICK_SPHERE_RADIUS, SPREAD,
+    midi_to_hz, MusicEngine, ENGINE_DRAG_MAX_RADIUS, PICK_SPHERE_RADIUS, SPREAD, Z_OFFSET,
 };
 use crate::input;
 use crate::render;
@@ -44,7 +44,7 @@ pub fn wire_input_handlers(w: InputWiring) {
             }
             let (ro, rd) = render::screen_to_world_ray(&canvas_mouse, pos.x, pos.y, CAMERA_Z);
             let mut best = None::<(usize, f32)>;
-            let z_offset = z_offset_vec3();
+            let z_offset = Z_OFFSET;
             for (i, v) in engine_m.borrow().voices.iter().enumerate() {
                 let center_world = v.position * SPREAD + z_offset;
                 if let Some(t) = input::ray_sphere(ro, rd, center_world, PICK_SPHERE_RADIUS) {
@@ -62,7 +62,7 @@ pub fn wire_input_handlers(w: InputWiring) {
                     let t = (plane_z - ro.z) / rd.z;
                     if t >= 0.0 {
                         let hit_world = ro + rd * t;
-                        let mut eng_pos = (hit_world - z_offset_vec3()) / SPREAD;
+                        let mut eng_pos = (hit_world - Z_OFFSET) / SPREAD;
                         let max_r = ENGINE_DRAG_MAX_RADIUS;
                         let len = (eng_pos.x * eng_pos.x + eng_pos.z * eng_pos.z).sqrt();
                         if len > max_r {
@@ -105,8 +105,7 @@ pub fn wire_input_handlers(w: InputWiring) {
                 let mut ds = drag_m.borrow_mut();
                 ds.active = true;
                 ds.voice = i;
-                ds.plane_z_world =
-                    engine_m.borrow().voices[i].position.z * SPREAD + z_offset_vec3().z;
+                ds.plane_z_world = engine_m.borrow().voices[i].position.z * SPREAD + Z_OFFSET.z;
                 log::info!("[mouse] begin drag on voice {}", i);
             }
             mouse_m.borrow_mut().down = true;
