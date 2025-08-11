@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "npm run test:web",
-    "build:web": "wasm-pack build --target web --out-dir pkg --out-name app_web --release && cp env.js pkg/env.js",
+    "build:web": "wasm-pack build --target web --out-dir pkg --out-name app_web --release && cp env.js pkg/env.js && rm -rf dist && mkdir -p dist/pkg && cp pkg/app_web.js dist/pkg/ && cp pkg/app_web_bg.wasm dist/pkg/ && cp env.js dist/pkg/env.js && cp index.html dist/index.html",
     "build:web:dev": "wasm-pack build --target web --out-dir pkg --out-name app_web && cp env.js pkg/env.js",
     "serve:web": "http-server -p 8080 -c-1 .",
     "dev:web": "npm run build:web && npm run serve:web",

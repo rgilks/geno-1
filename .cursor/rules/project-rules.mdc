@@ -2,35 +2,40 @@
 alwaysApply: true
 ---
 
-Proceed in small iterative steps and test each change.
-Refactor the code to make it more elegant, concise and simple. It should be clear and easy to maintain.
-Improve the tests as you go, make sure the tests are clear and focused. Don't create lots of trivial tests.
-Improve the docs and diagrams as you go.
-Remove dead and commented out code.
-Use whitespace to make the code more readable.
-Try and keep functions less that 20 lines, the shorter the better.
-Try and keep files less that 200 lines, the smaller the better.
+## Principles
 
-Prefer WebGPU via `wgpu` v24.0 and avoid WebGL2 fallbacks.
-Prefer Node for servers/tooling; avoid Python for this project.
+- Keep changes small and test each step.
+- Refactor for clarity: simple, elegant, maintainable.
+- Improve tests, docs, and diagrams continuously.
+- Remove dead or commented-out code.
+- Use whitespace for readability.
+- Keep functions < 20 lines; files < 200 lines.
 
-Make sure the logging is sufficient for the `web-test.js` Puppeteer tests to verify the code is working as expected.
+## Technology preferences
 
-Testing guidelines:
+- Prefer WebGPU via `wgpu` v24.0; avoid WebGL2 fallbacks.
+- Prefer Node for servers/tooling; avoid Python.
 
-- Rust unit tests live alongside code. Use `cargo test`.
-- Headless web test is executed via `npm run ci:web` which builds the WASM, serves it, and runs Puppeteer (`web-test.js`).
-- The `npm run check` command runs:
-  - `cargo fmt --check` and `cargo clippy -D warnings` for formatting/lint
+## Logging
+
+- Ensure logs are sufficient for `web-test.js` (Puppeteer) to verify behavior.
+
+## Testing
+
+- Rust unit tests live alongside code: run `cargo test`.
+- Headless web test: `npm run ci:web` (builds WASM, serves, runs Puppeteer `web-test.js`).
+- Full check: `npm run check` runs:
+  - `cargo fmt --check` and `cargo clippy -D warnings`
   - `cargo test` (workspace, excluding `app-web`)
   - Web CI build + headless test
 
-Pre-commit and push procedure:
+## Pre-commit and push
 
-- Update `README.md`, `docs/TODO.md` and `docs/SPEC.md`
-- Run `npm run check` to format, lint, build, and execute headless tests.
-- Ensure the check is green (no warnings promoted to errors, builds succeed, tests pass).
-- Also try and fix warnings.
+- Update `README.md`, `docs/TODO.md`, and `docs/SPEC.md`.
+- Run `npm run check` and ensure it is green.
+- Fix warnings where possible.
 - Commit and push only after the above succeed.
 
-Do not block for approvals; follow `docs/SPEC.md` and `docs/TODO.md` and keep momentum.
+## Workflow
+
+- Do not block for approvals; follow `docs/SPEC.md` and `docs/TODO.md` and keep momentum.

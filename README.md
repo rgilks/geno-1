@@ -78,8 +78,9 @@ This repo is configured to deploy via Cloudflare Workers; headers (COOP/COEP/COR
 
 - Build: `npm run build:web`
 - Deploy: `npx --yes wrangler deploy`
-  - Config: `wrangler.toml` (assets at `crates/app-web`)
-  - Worker adds the required headers and sensible cache-control for `.wasm`/`.js`/HTML
+  - Config: `wrangler.toml` (assets directory is `dist/`)
+  - Build populates `dist/` with only production runtime files: `index.html` and `pkg/{app_web.js, app_web_bg.wasm, env.js}`
+  - Worker sets COOP/COEP/CORP and cache-control headers for `.wasm`/`.js`/HTML
 
 Controls in browser:
 

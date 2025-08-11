@@ -157,7 +157,8 @@ Desktop UI support has been removed to simplify the project and focus on the web
 - [x] Add hosting instructions (Cloudflare Workers)
 
 - [x] Optional: production server/worker if needed
-- [ ] Document `wrangler` env and cache headers expectations for `.wasm`/`.js`
+- [x] Document `wrangler` env and cache headers expectations for `.wasm`/`.js`
+  - Notes added to README; assets served from `dist/` to avoid bundling build artifacts
 
 ---
 
