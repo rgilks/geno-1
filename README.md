@@ -1,6 +1,13 @@
 # Geno-1 : Generative Music Visualizer (Rust + WebGPU + WebAudio)
 
-[![Web build and headless test](https://github.com/rgilks/geno-1/actions/workflows/web-ci.yml/badge.svg)](https://github.com/rgilks/geno-1/actions/workflows/web-ci.yml)
+[![CI](https://github.com/rgilks/geno-1/actions/workflows/ci.yml/badge.svg)](https://github.com/rgilks/geno-1/actions/workflows/ci.yml)
+
+<div align="center">
+ <img src="/docs/screenshot.png" alt="rgou Screenshot" width="626" />
+  <br />
+  <a href='https://ko-fi.com/N4N31DPNUS' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi2.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+  <hr />
+</div>
 
 ### Project status
 
@@ -37,6 +44,13 @@ Notes:
 
 - `npm run dev` (builds, serves at http://localhost:8787, and opens the browser)
 
+Additional scripts:
+
+- `npm run clean` (removes build artifacts)
+- `npm run nuke` (full reset: removes node_modules, reinstalls, and runs dev)
+- `npm run deps` (check for dependency updates)
+- `npm run deps:update` (update dependencies and run nuke)
+
 Quick controls (browser):
 
 - A..F: root • 1..7: mode • R: new seq • T: random key+mode • Space: pause/resume • ArrowLeft/Right: tempo • ArrowUp/Down: volume • Enter: fullscreen
@@ -48,17 +62,17 @@ Quick controls (browser):
   - Rust: `cargo fmt --check`, `cargo clippy` (deny warnings), `cargo test` (workspace)
   - Web: build, serve, and execute the headless browser test
 
-## Git hooks (local safety checks)
+### Git hooks (local safety checks)
 
 This repo uses native Git hooks in `.githooks` (no Husky dependency). Enable them once per clone:
 
-```
+```bash
 git config core.hooksPath .githooks
 ```
 
 Or run the convenience script (also ensures hooks are executable):
 
-```
+```bash
 npm run setup
 ```
 
@@ -96,7 +110,7 @@ Headless test:
 
 ### Continuous Integration
 
-- GitHub Actions workflow runs on push/PR to main:
+- GitHub Actions workflow runs on push/PR:
   - Builds the web bundle and executes the headless browser test
   - On push to `main`, deploys to Cloudflare Workers via Wrangler
   - Requires repo secrets: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
@@ -113,10 +127,10 @@ Notes:
 
 - Keeping screenshots/GIFs up to date is intentionally avoided; refer to the live app instead.
 
-### Workspace crates
+### Project structure
 
-- `app-core`: shared music generation and state
-- `app-web`: web WASM front-end with WebGPU + WebAudio
+- `app-web`: single WASM crate with WebGPU + WebAudio
+  - `src/core/`: music generation and shared state (formerly `app-core` crate)
   - `src/render/targets.rs`: HDR/bloom textures create/recreate
   - `src/render/post.rs`: post pipelines, uniforms, blit, bind-group rebuild
   - `src/render/waves.rs`: waves pass uniforms and pipeline bundle
