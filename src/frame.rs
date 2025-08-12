@@ -171,7 +171,17 @@ impl<'a> FrameContext<'a> {
                 let w = self.canvas.width();
                 let h = self.canvas.height();
                 g.resize_if_needed(w, h);
-                if let Err(e) = g.render(dt_sec) {
+                // Get current voice positions and pulse energy for rendering
+                let voice_positions: Vec<Vec3> = {
+                    let engine_ref = self.engine.borrow();
+                    engine_ref.voices.iter().map(|v| v.position).collect()
+                };
+                let pulse_energy_snapshot: Vec<f32> = {
+                    let pulses_ref = self.pulses.borrow();
+                    pulses_ref.clone()
+                };
+
+                if let Err(e) = g.render(dt_sec, &voice_positions, &pulse_energy_snapshot) {
                     log::error!("render error: {:?}", e);
                 }
             }

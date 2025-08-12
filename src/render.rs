@@ -343,7 +343,12 @@ impl<'a> GpuState<'a> {
         }
     }
 
-    pub fn render(&mut self, dt_sec: f32) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(
+        &mut self,
+        dt_sec: f32,
+        voice_positions: &[Vec3],
+        pulse_energy: &[f32],
+    ) -> Result<(), wgpu::SurfaceError> {
         self.resize_if_needed(self.width, self.height);
         self.time_accum += dt_sec.max(0.0);
         let frame = self.surface.get_current_texture()?;
@@ -376,14 +381,29 @@ impl<'a> GpuState<'a> {
                 ambient: self.ambient_energy,
                 voices: [
                     VoicePacked {
-                        pos_pulse: [0.0, 0.0, -4.0, 0.0],
-                    }, // Voice 1 at center
+                        pos_pulse: [
+                            voice_positions[0].x,
+                            voice_positions[0].y,
+                            voice_positions[0].z,
+                            pulse_energy[0],
+                        ],
+                    },
                     VoicePacked {
-                        pos_pulse: [-1.8, 0.0, -4.0, 0.0],
-                    }, // Voice 2 left
+                        pos_pulse: [
+                            voice_positions[1].x,
+                            voice_positions[1].y,
+                            voice_positions[1].z,
+                            pulse_energy[1],
+                        ],
+                    },
                     VoicePacked {
-                        pos_pulse: [1.8, 0.0, -4.0, 0.0],
-                    }, // Voice 3 right
+                        pos_pulse: [
+                            voice_positions[2].x,
+                            voice_positions[2].y,
+                            voice_positions[2].z,
+                            pulse_energy[2],
+                        ],
+                    },
                 ],
                 swirl_uv: [
                     self.swirl_uv[0].clamp(0.0, 1.0),
