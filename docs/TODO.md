@@ -30,14 +30,14 @@ This document outlines the path from the current **A-** grade to **S-tier** stat
 
 #### 1.2 Alternative Tuning Systems
 
-- [ ] **Microtonal scales infrastructure**
-  - [ ] Convert scale representation from `&'static [i32]` to `&'static [f32]` (semitones as floats)
-  - [ ] Maintain backward compatibility: convert existing IONIAN…LOCRIAN constants
-  - [ ] Add validation: ensure scales are monotonically increasing
-- [ ] **Alternative tuning systems**
-  - [ ] 19-TET (19-tone equal temperament): `&[0.0, 0.63, 1.26, 1.89, ...]`
-  - [ ] 24-TET (quarter-tone system): `&[0.0, 0.5, 1.0, 1.5, 2.0, ...]`
-  - [ ] 31-TET (extended equal temperament): `&[0.0, 0.39, 0.77, ...]`
+- [x] **Microtonal scales infrastructure**
+  - [x] Convert scale representation from `&'static [i32]` to `&'static [f32]` (semitones as floats)
+  - [x] Maintain backward compatibility: convert existing IONIAN…LOCRIAN constants
+  - [x] Add validation: ensure scales are monotonically increasing (tests)
+- [x] **Alternative tuning systems**
+  - [x] 19-TET (19-tone equal temperament): pentatonic preset
+  - [x] 24-TET (quarter-tone system): pentatonic preset
+  - [x] 31-TET (extended equal temperament): pentatonic preset
   - [ ] Just Intonation pentatonic: `&[0.0, 2.04, 3.86, 7.02, 9.69, 12.0]` (ratios converted to cents)
 
 #### 1.3 User Interface
@@ -47,12 +47,12 @@ This document outlines the path from the current **A-** grade to **S-tier** stat
   - [x] `.` key: increase global detune by 50¢ (Shift+`.` for 10¢ fine adjustment)
   - [x] `/` key: reset detune to 0¢
   - [x] Update hint overlay: shows "Detune: ±N¢" and BPM/Scale
-- [ ] **Scale selection shortcuts**
-  - [ ] `8` key → 19-TET pentatonic
-  - [ ] `9` key → 24-TET pentatonic
-  - [ ] `0` key → 31-TET pentatonic
+- [x] **Scale selection shortcuts**
+  - [x] `8` key → 19-TET pentatonic
+  - [x] `9` key → 24-TET pentatonic
+  - [x] `0` key → 31-TET pentatonic
   - [ ] Repeat key press cycles through variants if multiple available
-  - [ ] Visual feedback in hint overlay showing active tuning system
+  - [x] Visual feedback in hint overlay showing active tuning system
 
 ---
 

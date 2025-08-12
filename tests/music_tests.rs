@@ -280,7 +280,7 @@ fn engine_schedule_with_detune() {
         base_duration: 0.25,
     }];
     let params = EngineParams {
-        scale: &[0],
+        scale: &[0.0],
         root_midi: 60,
         ..EngineParams::default()
     };

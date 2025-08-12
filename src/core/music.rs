@@ -61,7 +61,7 @@ pub struct VoiceState {
 #[derive(Clone, Debug)]
 pub struct EngineParams {
     pub bpm: f32,
-    pub scale: &'static [i32],
+    pub scale: &'static [f32],
     pub root_midi: i32,
     pub detune_cents: f32,
 }
@@ -78,16 +78,21 @@ impl Default for EngineParams {
 }
 
 /// Default five-note scale centered around middle C.
-pub const C_MAJOR_PENTATONIC: &[i32] = &[0, 2, 4, 7, 9, 12];
+pub const C_MAJOR_PENTATONIC: &[f32] = &[0.0, 2.0, 4.0, 7.0, 9.0, 12.0];
 
 /// Diatonic modes (relative semitone degrees)
-pub const IONIAN: &[i32] = &[0, 2, 4, 5, 7, 9, 11, 12]; // major
-pub const DORIAN: &[i32] = &[0, 2, 3, 5, 7, 9, 10, 12];
-pub const PHRYGIAN: &[i32] = &[0, 1, 3, 5, 7, 8, 10, 12];
-pub const LYDIAN: &[i32] = &[0, 2, 4, 6, 7, 9, 11, 12];
-pub const MIXOLYDIAN: &[i32] = &[0, 2, 4, 5, 7, 9, 10, 12];
-pub const AEOLIAN: &[i32] = &[0, 2, 3, 5, 7, 8, 10, 12]; // natural minor
-pub const LOCRIAN: &[i32] = &[0, 1, 3, 5, 6, 8, 10, 12];
+pub const IONIAN: &[f32] = &[0.0, 2.0, 4.0, 5.0, 7.0, 9.0, 11.0, 12.0]; // major
+pub const DORIAN: &[f32] = &[0.0, 2.0, 3.0, 5.0, 7.0, 9.0, 10.0, 12.0];
+pub const PHRYGIAN: &[f32] = &[0.0, 1.0, 3.0, 5.0, 7.0, 8.0, 10.0, 12.0];
+pub const LYDIAN: &[f32] = &[0.0, 2.0, 4.0, 6.0, 7.0, 9.0, 11.0, 12.0];
+pub const MIXOLYDIAN: &[f32] = &[0.0, 2.0, 4.0, 5.0, 7.0, 9.0, 10.0, 12.0];
+pub const AEOLIAN: &[f32] = &[0.0, 2.0, 3.0, 5.0, 7.0, 8.0, 10.0, 12.0]; // natural minor
+pub const LOCRIAN: &[f32] = &[0.0, 1.0, 3.0, 5.0, 6.0, 8.0, 10.0, 12.0];
+
+/// Alternative tuning systems (pentatonic variants)
+pub const TET19_PENTATONIC: &[f32] = &[0.0, 2.4, 4.8, 7.2, 9.6, 12.0];
+pub const TET24_PENTATONIC: &[f32] = &[0.0, 2.5, 5.0, 7.5, 10.0, 12.0];
+pub const TET31_PENTATONIC: &[f32] = &[0.0, 2.4, 4.8, 7.2, 9.6, 12.0];
 
 /// Random generative scheduler producing `NoteEvent`s on an eighth-note grid.
 ///
@@ -223,10 +228,10 @@ impl MusicEngine {
             let prob = self.configs[i].trigger_probability;
             let rng = &mut self.rngs[i];
             if rng.gen::<f32>() < prob {
-                let degree = *self.params.scale.choose(rng).unwrap_or(&0);
+                let degree = *self.params.scale.choose(rng).unwrap_or(&0.0);
                 let octave = self.configs[i].octave_offset;
-                let midi = self.params.root_midi + degree + octave * 12;
-                let freq = midi_to_hz_with_detune(midi as f32, self.params.detune_cents);
+                let midi = self.params.root_midi as f32 + degree + (octave * 12) as f32;
+                let freq = midi_to_hz_with_detune(midi, self.params.detune_cents);
                 let vel = 0.4 + rng.gen::<f32>() * 0.6;
                 let dur = self.configs[i].base_duration + rng.gen::<f32>() * 0.2;
                 out_events.push(NoteEvent {

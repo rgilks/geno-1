@@ -1,5 +1,8 @@
 use crate::core::MusicEngine;
-use crate::core::{AEOLIAN, DORIAN, IONIAN, LOCRIAN, LYDIAN, MIXOLYDIAN, PHRYGIAN};
+use crate::core::{
+    AEOLIAN, C_MAJOR_PENTATONIC, DORIAN, IONIAN, LOCRIAN, LYDIAN, MIXOLYDIAN, PHRYGIAN,
+    TET19_PENTATONIC, TET24_PENTATONIC, TET31_PENTATONIC,
+};
 use crate::overlay;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -7,7 +10,7 @@ use wasm_bindgen::JsCast;
 use web_sys as web;
 
 /// Get the name of the current scale for display purposes
-fn get_scale_name(scale: &[i32]) -> &'static str {
+fn get_scale_name(scale: &[f32]) -> &'static str {
     match scale {
         s if s == IONIAN => "Ionian (major)",
         s if s == DORIAN => "Dorian",
@@ -16,6 +19,10 @@ fn get_scale_name(scale: &[i32]) -> &'static str {
         s if s == MIXOLYDIAN => "Mixolydian",
         s if s == AEOLIAN => "Aeolian (minor)",
         s if s == LOCRIAN => "Locrian",
+        s if s == C_MAJOR_PENTATONIC => "C Major Pentatonic",
+        s if s == TET19_PENTATONIC => "19-TET pentatonic",
+        s if s == TET24_PENTATONIC => "24-TET pentatonic",
+        s if s == TET31_PENTATONIC => "31-TET pentatonic",
         _ => "Custom",
     }
 }
@@ -53,7 +60,7 @@ pub fn root_midi_for_key(key: &str) -> Option<i32> {
 }
 
 #[inline]
-pub fn mode_scale_for_digit(key: &str) -> Option<&'static [i32]> {
+pub fn mode_scale_for_digit(key: &str) -> Option<&'static [f32]> {
     match key {
         "1" => Some(IONIAN),
         "2" => Some(DORIAN),
@@ -62,6 +69,9 @@ pub fn mode_scale_for_digit(key: &str) -> Option<&'static [i32]> {
         "5" => Some(MIXOLYDIAN),
         "6" => Some(AEOLIAN),
         "7" => Some(LOCRIAN),
+        "8" => Some(TET19_PENTATONIC),
+        "9" => Some(TET24_PENTATONIC),
+        "0" => Some(TET31_PENTATONIC),
         _ => None,
     }
 }
@@ -85,6 +95,11 @@ pub fn handle_global_keydown(
         return;
     }
     match key.as_str() {
+        "p" | "P" => {
+            engine.borrow_mut().params.scale = C_MAJOR_PENTATONIC;
+            update_hint_after_change(engine);
+            return;
+        }
         "r" | "R" => {
             let voice_len = engine.borrow().voices.len();
             let mut eng = engine.borrow_mut();
@@ -95,7 +110,7 @@ pub fn handle_global_keydown(
         }
         "t" | "T" => {
             let roots: [i32; 7] = [60, 62, 64, 65, 67, 69, 71]; // C, D, E, F, G, A, B
-            let modes: [&'static [i32]; 7] = [
+            let modes: [&'static [f32]; 7] = [
                 IONIAN, DORIAN, PHRYGIAN, LYDIAN, MIXOLYDIAN, AEOLIAN, LOCRIAN,
             ];
             let ri = (js_sys::Math::random() * roots.len() as f64).floor() as usize;

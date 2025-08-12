@@ -5,13 +5,13 @@
 
 // We need to include the core constants for the scale tests
 mod core {
-    pub const IONIAN: &[i32] = &[0, 2, 4, 5, 7, 9, 11, 12];
-    pub const DORIAN: &[i32] = &[0, 2, 3, 5, 7, 9, 10, 12];
-    pub const PHRYGIAN: &[i32] = &[0, 1, 3, 5, 7, 8, 10, 12];
-    pub const LYDIAN: &[i32] = &[0, 2, 4, 6, 7, 9, 11, 12];
-    pub const MIXOLYDIAN: &[i32] = &[0, 2, 4, 5, 7, 9, 10, 12];
-    pub const AEOLIAN: &[i32] = &[0, 2, 3, 5, 7, 8, 10, 12];
-    pub const LOCRIAN: &[i32] = &[0, 1, 3, 5, 6, 8, 10, 12];
+    pub const IONIAN: &[f32] = &[0.0, 2.0, 4.0, 5.0, 7.0, 9.0, 11.0, 12.0];
+    pub const DORIAN: &[f32] = &[0.0, 2.0, 3.0, 5.0, 7.0, 9.0, 10.0, 12.0];
+    pub const PHRYGIAN: &[f32] = &[0.0, 1.0, 3.0, 5.0, 7.0, 8.0, 10.0, 12.0];
+    pub const LYDIAN: &[f32] = &[0.0, 2.0, 4.0, 6.0, 7.0, 9.0, 11.0, 12.0];
+    pub const MIXOLYDIAN: &[f32] = &[0.0, 2.0, 4.0, 5.0, 7.0, 9.0, 10.0, 12.0];
+    pub const AEOLIAN: &[f32] = &[0.0, 2.0, 3.0, 5.0, 7.0, 8.0, 10.0, 12.0];
+    pub const LOCRIAN: &[f32] = &[0.0, 1.0, 3.0, 5.0, 6.0, 8.0, 10.0, 12.0];
 }
 
 // Re-implement the pure functions for testing
@@ -30,7 +30,7 @@ fn root_midi_for_key(key: &str) -> Option<i32> {
 }
 
 #[inline]
-fn mode_scale_for_digit(key: &str) -> Option<&'static [i32]> {
+fn mode_scale_for_digit(key: &str) -> Option<&'static [f32]> {
     match key {
         "1" => Some(core::IONIAN),
         "2" => Some(core::DORIAN),
@@ -159,8 +159,14 @@ fn mode_scales_have_correct_lengths() {
 
     for (name, scale) in modes {
         assert_eq!(scale.len(), 8, "Mode {name} should have 8 notes");
-        assert_eq!(scale[0], 0, "Mode {name} should start at 0");
-        assert_eq!(scale[7], 12, "Mode {name} should end at octave (12)");
+        assert!(
+            (scale[0] - 0.0).abs() < 1e-6,
+            "Mode {name} should start at 0"
+        );
+        assert!(
+            (scale[7] - 12.0).abs() < 1e-6,
+            "Mode {name} should end at octave (12)"
+        );
     }
 }
 

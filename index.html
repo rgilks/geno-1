@@ -155,7 +155,6 @@
               <button id="overlay-close" aria-label="Close">×</button>
             </div>
           </div>
-          <h3>Welcome</h3>
           <ul>
             <li>
               Click the canvas to play a note. Mouse position shapes the sound.
@@ -166,11 +165,18 @@
               <h3>Keys</h3>
               <ul>
                 <li><span class="kbd">A..G</span>: set root note</li>
-                <li><span class="kbd">1..7</span>: set mode (see right)</li>
+                <li><span class="kbd">1..7</span>: set mode</li>
+                <li>
+                  <span class="kbd">8,9,0</span>: set tuning (19/24/31‑TET) •
+                  <span class="kbd">P</span>: C Major Pentatonic
+                </li>
                 <li><span class="kbd">R</span>: new sequence</li>
                 <li><span class="kbd">T</span>: random root + mode</li>
                 <li><span class="kbd">Space</span>: pause/resume</li>
-                <li><span class="kbd">,</span>/<span class="kbd">.</span>: detune ±50¢ (Shift for ±10¢)</li>
+                <li>
+                  <span class="kbd">,</span>/<span class="kbd">.</span>: detune
+                  ±50¢ (Shift for ±10¢)
+                </li>
                 <li><span class="kbd">/</span>: reset detune to 0¢</li>
                 <li>
                   <span class="kbd">Enter</span>/<span class="kbd">Esc</span>:
@@ -192,6 +198,15 @@
                 <li><span class="kbd">5</span>: Mixolydian</li>
                 <li><span class="kbd">6</span>: Aeolian (natural minor)</li>
                 <li><span class="kbd">7</span>: Locrian</li>
+              </ul>
+              <h3 style="margin-top: 10px">Tunings (8,9,0)</h3>
+              <ul>
+                <li><span class="kbd">8</span>: 19‑TET pentatonic</li>
+                <li><span class="kbd">9</span>: 24‑TET pentatonic</li>
+                <li><span class="kbd">0</span>: 31‑TET pentatonic</li>
+                <li>
+                  <span class="kbd">P</span>: C Major Pentatonic (default)
+                </li>
               </ul>
             </div>
           </div>
@@ -219,13 +234,7 @@
     <canvas id="app-canvas" width="1280" height="720"></canvas>
     <div
       id="hint-overlay"
-      style="
-        position: fixed;
-        left: 12px;
-        top: 12px;
-        z-index: 5;
-        display: none;
-      "
+      style="position: fixed; left: 12px; top: 12px; z-index: 5; display: none"
     ></div>
     <div
       id="audio-error"
