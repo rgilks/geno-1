@@ -86,9 +86,9 @@ pub fn handle_global_keydown(
             if let Some(win) = web::window() {
                 if let Some(doc) = win.document() {
                     if doc.fullscreen_element().is_some() {
-                        let _ = doc.exit_fullscreen();
+                        _ = doc.exit_fullscreen();
                     } else {
-                        let _ = canvas.request_fullscreen();
+                        _ = canvas.request_fullscreen();
                     }
                 }
             }
@@ -97,7 +97,7 @@ pub fn handle_global_keydown(
         "Escape" => {
             if let Some(win) = web::window() {
                 if let Some(doc) = win.document() {
-                    let _ = doc.exit_fullscreen();
+                    _ = doc.exit_fullscreen();
                 }
             }
         }
@@ -107,13 +107,13 @@ pub fn handle_global_keydown(
         "ArrowUp" => {
             let v = master_gain.gain().value();
             let nv = (v + 0.05).min(1.0);
-            let _ = master_gain.gain().set_value(nv);
+            _ = master_gain.gain().set_value(nv);
             ev.prevent_default();
         }
         "ArrowDown" => {
             let v = master_gain.gain().value();
             let nv = (v - 0.05).max(0.0);
-            let _ = master_gain.gain().set_value(nv);
+            _ = master_gain.gain().set_value(nv);
             ev.prevent_default();
         }
         _ => {}
@@ -132,8 +132,7 @@ pub fn wire_overlay_toggle_h(document: &web::Document) {
                     ev.prevent_default();
                 }
             }) as Box<dyn FnMut(_)>);
-        let _ =
-            window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+        _ = window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
         closure.forget();
     }
 }
@@ -155,8 +154,7 @@ pub fn wire_global_keydown(
                     &canvas,
                 );
             }) as Box<dyn FnMut(_)>);
-        let _ =
-            window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
+        _ = window.add_event_listener_with_callback("keydown", closure.as_ref().unchecked_ref());
         closure.forget();
     }
 }

@@ -4,9 +4,9 @@ use web_sys as web;
 pub fn show(document: &web::Document) {
     if let Some(el) = document.get_element_by_id("start-overlay") {
         let cl = el.class_list();
-        let _ = cl.remove_1("hidden");
+        _ = cl.remove_1("hidden");
         // fallback for environments without CSS class
-        let _ = el.set_attribute("style", "");
+        _ = el.set_attribute("style", "");
     }
 }
 
@@ -14,9 +14,9 @@ pub fn show(document: &web::Document) {
 pub fn hide(document: &web::Document) {
     if let Some(el) = document.get_element_by_id("start-overlay") {
         let cl = el.class_list();
-        let _ = cl.add_1("hidden");
+        _ = cl.add_1("hidden");
         // fallback
-        let _ = el.set_attribute("style", "display:none");
+        _ = el.set_attribute("style", "display:none");
     }
 }
 

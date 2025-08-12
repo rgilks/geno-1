@@ -87,7 +87,7 @@ pub fn wire_input_handlers(w: InputWiring) {
             }
         }) as Box<dyn FnMut(_)>);
         if let Some(wnd) = web::window() {
-            let _ = wnd
+            _ = wnd
                 .add_event_listener_with_callback("pointermove", closure.as_ref().unchecked_ref());
         }
         closure.forget();
@@ -109,10 +109,10 @@ pub fn wire_input_handlers(w: InputWiring) {
                 log::info!("[mouse] begin drag on voice {}", i);
             }
             mouse_m.borrow_mut().down = true;
-            let _ = canvas_target.set_pointer_capture(ev.pointer_id());
+            _ = canvas_target.set_pointer_capture(ev.pointer_id());
             ev.prevent_default();
         }) as Box<dyn FnMut(_)>);
-        let _ = w
+        _ = w
             .canvas
             .add_event_listener_with_callback("pointerdown", closure.as_ref().unchecked_ref());
         closure.forget();
@@ -177,8 +177,7 @@ pub fn wire_input_handlers(w: InputWiring) {
             ev.prevent_default();
         }) as Box<dyn FnMut(_)>);
         if let Some(wnd) = web::window() {
-            let _ =
-                wnd.add_event_listener_with_callback("pointerup", closure.as_ref().unchecked_ref());
+            _ = wnd.add_event_listener_with_callback("pointerup", closure.as_ref().unchecked_ref());
         }
         closure.forget();
     }

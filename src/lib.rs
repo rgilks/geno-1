@@ -31,7 +31,7 @@ fn wire_canvas_resize(canvas: &web::HtmlCanvasElement) {
         dom::sync_canvas_backing_size(&canvas_resize);
     }) as Box<dyn FnMut()>);
     if let Some(window) = web::window() {
-        let _ = window
+        _ = window
             .add_event_listener_with_callback("resize", resize_closure.as_ref().unchecked_ref());
     }
     resize_closure.forget();
@@ -46,7 +46,7 @@ struct InitParts {
 
 async fn build_audio_and_engine(_document: web::Document) -> anyhow::Result<InitParts> {
     let audio_ctx = web::AudioContext::new().map_err(|e| anyhow::anyhow!("{:?}", e))?;
-    let _ = audio_ctx.resume();
+    _ = audio_ctx.resume();
     let listener = audio_ctx.listener();
     listener.set_position(0.0, 0.0, 1.5);
 
@@ -98,7 +98,7 @@ fn wire_overlay_buttons(audio_ctx: &web::AudioContext, paused: &Rc<RefCell<bool>
         let audio_ok = audio_ctx.clone();
         dom::add_click_listener(&doc2, "overlay-ok", move || {
             *paused_ok.borrow_mut() = false;
-            let _ = audio_ok.resume();
+            _ = audio_ok.resume();
             if let Some(w2) = web::window() {
                 if let Some(d2) = w2.document() {
                     overlay::hide(&d2);
@@ -110,7 +110,7 @@ fn wire_overlay_buttons(audio_ctx: &web::AudioContext, paused: &Rc<RefCell<bool>
         let audio_close = audio_ctx.clone();
         dom::add_click_listener(&doc2, "overlay-close", move || {
             *paused_close.borrow_mut() = false;
-            let _ = audio_close.resume();
+            _ = audio_close.resume();
             if let Some(w2) = web::window() {
                 if let Some(d2) = w2.document() {
                     overlay::hide(&d2);

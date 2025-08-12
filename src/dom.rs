@@ -15,7 +15,7 @@ pub fn add_click_listener(
     if let Some(el) = document.get_element_by_id(element_id) {
         let closure =
             wasm_bindgen::closure::Closure::wrap(Box::new(move || handler()) as Box<dyn FnMut()>);
-        let _ = el.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
+        _ = el.add_event_listener_with_callback("click", closure.as_ref().unchecked_ref());
         closure.forget();
     }
 }

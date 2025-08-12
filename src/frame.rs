@@ -206,18 +206,18 @@ impl<'a> FrameContext<'a> {
                 };
                 gain.gain().set_value(0.0);
                 let t0 = audio_time + 0.01;
-                let _ = gain
+                _ = gain
                     .gain()
                     .linear_ramp_to_value_at_time(ev.velocity as f32, t0 + 0.02);
-                let _ = gain
+                _ = gain
                     .gain()
                     .linear_ramp_to_value_at_time(0.0_f32, t0 + ev.duration_sec as f64);
-                let _ = src.connect_with_audio_node(&gain);
-                let _ = gain.connect_with_audio_node(&self.voice_gains[ev.voice_index]);
-                let _ = gain.connect_with_audio_node(&self.delay_sends[ev.voice_index]);
-                let _ = gain.connect_with_audio_node(&self.reverb_sends[ev.voice_index]);
-                let _ = src.start_with_when(t0);
-                let _ = src.stop_with_when(t0 + ev.duration_sec as f64 + 0.02);
+                _ = src.connect_with_audio_node(&gain);
+                _ = gain.connect_with_audio_node(&self.voice_gains[ev.voice_index]);
+                _ = gain.connect_with_audio_node(&self.delay_sends[ev.voice_index]);
+                _ = gain.connect_with_audio_node(&self.reverb_sends[ev.voice_index]);
+                _ = src.start_with_when(t0);
+                _ = src.stop_with_when(t0 + ev.duration_sec as f64 + 0.02);
             }
         }
     }
@@ -360,7 +360,7 @@ pub fn start_loop(frame_ctx: Rc<RefCell<FrameContext<'static>>>) {
     *tick.borrow_mut() = Some(Closure::wrap(Box::new(move || {
         frame_ctx_tick.borrow_mut().frame();
         if let Some(w) = web::window() {
-            let _ = w.request_animation_frame(
+            _ = w.request_animation_frame(
                 tick_clone
                     .borrow()
                     .as_ref()
@@ -371,7 +371,7 @@ pub fn start_loop(frame_ctx: Rc<RefCell<FrameContext<'static>>>) {
         }
     }) as Box<dyn FnMut()>));
     if let Some(w) = web::window() {
-        let _ = w.request_animation_frame(tick.borrow().as_ref().unwrap().as_ref().unchecked_ref());
+        _ = w.request_animation_frame(tick.borrow().as_ref().unwrap().as_ref().unchecked_ref());
     }
 }
 
@@ -424,7 +424,7 @@ fn apply_global_fx_swirl(
     swirl_energy: f32,
     uv: [f32; 2],
 ) {
-    let _ = reverb_wet
+    _ = reverb_wet
         .gain()
         .set_value(FX_REVERB_BASE + FX_REVERB_SPAN * swirl_energy);
     let echo = (uv[0] - uv[1]).abs();
@@ -434,20 +434,20 @@ fn apply_global_fx_swirl(
     let delay_fb_val =
         (FX_DELAY_FB_BASE + FX_DELAY_FB_SWIRL * swirl_energy + FX_DELAY_FB_ECHO * echo)
             .clamp(0.0, 0.95);
-    let _ = delay_wet.gain().set_value(delay_wet_val);
-    let _ = delay_feedback.gain().set_value(delay_fb_val);
+    _ = delay_wet.gain().set_value(delay_wet_val);
+    _ = delay_feedback.gain().set_value(delay_fb_val);
     let fizz = ((uv[0] + uv[1]) * 0.5).clamp(0.0, 1.0);
     let drive = (FX_SAT_DRIVE_MIN
         + (FX_SAT_DRIVE_MAX - FX_SAT_DRIVE_MIN) * ((fizz - 0.25).clamp(0.0, 1.0)))
     .clamp(FX_SAT_DRIVE_MIN, FX_SAT_DRIVE_MAX);
-    let _ = sat_pre.gain().set_value(drive);
+    _ = sat_pre.gain().set_value(drive);
     let wet = (FX_SAT_WET_BASE + FX_SAT_WET_SPAN * fizz).clamp(0.0, 1.0);
-    let _ = sat_wet.gain().set_value(wet);
-    let _ = sat_dry.gain().set_value(1.0 - wet);
+    _ = sat_wet.gain().set_value(wet);
+    _ = sat_dry.gain().set_value(1.0 - wet);
 }
 
 fn update_listener_to_camera(listener: &web::AudioListener, cam_eye: Vec3, cam_target: Vec3) {
     let fwd = (cam_target - cam_eye).normalize();
     listener.set_position(cam_eye.x as f64, cam_eye.y as f64, cam_eye.z as f64);
-    let _ = listener.set_orientation(fwd.x as f64, fwd.y as f64, fwd.z as f64, 0.0, 1.0, 0.0);
+    _ = listener.set_orientation(fwd.x as f64, fwd.y as f64, fwd.z as f64, 0.0, 1.0, 0.0);
 }

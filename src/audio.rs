@@ -66,12 +66,12 @@ pub fn build_fx_buses(audio_ctx: &web::AudioContext) -> Result<FxBuses, ()> {
     let sat_dry = create_gain(audio_ctx, 0.65, "sat dry")?;
 
     // Route master -> [dry,dst] and master -> pre -> shaper -> wet -> dst
-    let _ = master_gain.connect_with_audio_node(&sat_pre);
-    let _ = sat_pre.connect_with_audio_node(&saturator);
-    let _ = saturator.connect_with_audio_node(&sat_wet);
-    let _ = sat_wet.connect_with_audio_node(&audio_ctx.destination());
-    let _ = master_gain.connect_with_audio_node(&sat_dry);
-    let _ = sat_dry.connect_with_audio_node(&audio_ctx.destination());
+    _ = master_gain.connect_with_audio_node(&sat_pre);
+    _ = sat_pre.connect_with_audio_node(&saturator);
+    _ = saturator.connect_with_audio_node(&sat_wet);
+    _ = sat_wet.connect_with_audio_node(&audio_ctx.destination());
+    _ = master_gain.connect_with_audio_node(&sat_dry);
+    _ = sat_dry.connect_with_audio_node(&audio_ctx.destination());
 
     // Reverb bus
     let reverb_in = create_gain(audio_ctx, 1.0, "Reverb in")?;
@@ -109,15 +109,15 @@ pub fn build_fx_buses(audio_ctx: &web::AudioContext) -> Result<FxBuses, ()> {
                     buf[i] = v;
                     t += dt;
                 }
-                let _ = ir.copy_to_channel(&mut buf, ch as i32);
+                _ = ir.copy_to_channel(&mut buf, ch as i32);
             }
             reverb.set_buffer(Some(&ir));
         }
     }
     let reverb_wet = create_gain(audio_ctx, 0.6, "Reverb wet")?;
-    let _ = reverb_in.connect_with_audio_node(&reverb);
-    let _ = reverb.connect_with_audio_node(&reverb_wet);
-    let _ = reverb_wet.connect_with_audio_node(&master_gain);
+    _ = reverb_in.connect_with_audio_node(&reverb);
+    _ = reverb.connect_with_audio_node(&reverb_wet);
+    _ = reverb_wet.connect_with_audio_node(&master_gain);
 
     // Delay bus with feedback loop and lowpass tone for darkness
     let delay_in = create_gain(audio_ctx, 1.0, "Delay in")?;
@@ -137,12 +137,12 @@ pub fn build_fx_buses(audio_ctx: &web::AudioContext) -> Result<FxBuses, ()> {
     delay_tone.frequency().set_value(1400.0);
     let delay_feedback = create_gain(audio_ctx, 0.6, "Delay feedback")?;
     let delay_wet = create_gain(audio_ctx, 0.5, "Delay wet")?;
-    let _ = delay_in.connect_with_audio_node(&delay);
-    let _ = delay.connect_with_audio_node(&delay_tone);
-    let _ = delay_tone.connect_with_audio_node(&delay_feedback);
-    let _ = delay_feedback.connect_with_audio_node(&delay);
-    let _ = delay_tone.connect_with_audio_node(&delay_wet);
-    let _ = delay_wet.connect_with_audio_node(&master_gain);
+    _ = delay_in.connect_with_audio_node(&delay);
+    _ = delay.connect_with_audio_node(&delay_tone);
+    _ = delay_tone.connect_with_audio_node(&delay_feedback);
+    _ = delay_feedback.connect_with_audio_node(&delay);
+    _ = delay_tone.connect_with_audio_node(&delay_wet);
+    _ = delay_wet.connect_with_audio_node(&master_gain);
 
     Ok(FxBuses {
         master_gain,
@@ -180,16 +180,16 @@ pub fn trigger_one_shot(
             g.gain().set_value(0.0);
             let now = audio_ctx.current_time();
             let t0 = now + 0.005;
-            let _ = g.gain().linear_ramp_to_value_at_time(velocity, t0 + 0.02);
-            let _ = g
+            _ = g.gain().linear_ramp_to_value_at_time(velocity, t0 + 0.02);
+            _ = g
                 .gain()
                 .linear_ramp_to_value_at_time(0.0, t0 + duration_sec);
-            let _ = src.connect_with_audio_node(&g);
-            let _ = g.connect_with_audio_node(voice_gain);
-            let _ = g.connect_with_audio_node(delay_send);
-            let _ = g.connect_with_audio_node(reverb_send);
-            let _ = src.start_with_when(t0);
-            let _ = src.stop_with_when(t0 + duration_sec + 0.05);
+            _ = src.connect_with_audio_node(&g);
+            _ = g.connect_with_audio_node(voice_gain);
+            _ = g.connect_with_audio_node(delay_send);
+            _ = g.connect_with_audio_node(reverb_send);
+            _ = src.start_with_when(t0);
+            _ = src.stop_with_when(t0 + duration_sec + 0.05);
         }
     }
 }
@@ -238,15 +238,15 @@ pub fn wire_voices(
         panner.position_z().set_value(pos.z as f32);
 
         let gain = create_gain(audio_ctx, 0.0, "Voice gain").map_err(|_| ())?;
-        let _ = gain.connect_with_audio_node(&panner);
-        let _ = panner.connect_with_audio_node(master_gain);
+        _ = gain.connect_with_audio_node(&panner);
+        _ = panner.connect_with_audio_node(master_gain);
 
         let d_send = create_gain(audio_ctx, 0.4, "Delay send").map_err(|_| ())?;
-        let _ = d_send.connect_with_audio_node(delay_in);
+        _ = d_send.connect_with_audio_node(delay_in);
         delay_sends_vec.push(d_send);
 
         let r_send = create_gain(audio_ctx, 0.65, "Reverb send").map_err(|_| ())?;
-        let _ = r_send.connect_with_audio_node(reverb_in);
+        _ = r_send.connect_with_audio_node(reverb_in);
         reverb_sends_vec.push(r_send);
 
         voice_gains.push(gain);
