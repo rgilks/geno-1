@@ -98,8 +98,12 @@ impl<'a> FrameContext<'a> {
             );
 
             // Per-voice audio positioning and sends
+            let voice_positions_snapshot: Vec<Vec3> = {
+                let eng = self.engine.borrow();
+                eng.voices.iter().map(|v| v.position).collect()
+            };
             for i in 0..self.voice_panners.len() {
-                let pos = self.engine.borrow().voices[i].position;
+                let pos = voice_positions_snapshot[i];
                 self.voice_panners[i].position_x().set_value(pos.x as f32);
                 self.voice_panners[i].position_y().set_value(pos.y as f32);
                 self.voice_panners[i].position_z().set_value(pos.z as f32);

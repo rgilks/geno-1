@@ -76,6 +76,7 @@ async fn build_audio_and_engine(_document: web::Document) -> anyhow::Result<Init
             bpm: 110.0,
             scale: C_MAJOR_PENTATONIC,
             root_midi: 60,
+            detune_cents: 0.0,
         },
         42,
     )));

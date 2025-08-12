@@ -57,11 +57,13 @@ pub struct VoiceState {
 /// - `bpm` controls the tempo of the scheduler (beats per minute)
 /// - `scale` is the allowed pitch degree set, expressed as semitone offsets
 /// - `root_midi` is the MIDI note number of the tonal center (e.g., 60 for C4)
+/// - `detune_cents` is the global detune offset in cents (-200 to +200)
 #[derive(Clone, Debug)]
 pub struct EngineParams {
     pub bpm: f32,
     pub scale: &'static [i32],
     pub root_midi: i32,
+    pub detune_cents: f32,
 }
 
 impl Default for EngineParams {
@@ -70,6 +72,7 @@ impl Default for EngineParams {
             bpm: 110.0,
             scale: C_MAJOR_PENTATONIC,
             root_midi: 60, // Middle C
+            detune_cents: 0.0,
         }
     }
 }
@@ -141,6 +144,24 @@ impl MusicEngine {
         self.params.bpm = bpm;
     }
 
+    /// Set the global detune offset in cents.
+    /// Range: -200 to +200 cents (±2 semitones)
+    pub fn set_detune_cents(&mut self, detune_cents: f32) {
+        self.params.detune_cents = detune_cents.clamp(-200.0, 200.0);
+    }
+
+    /// Adjust the global detune offset by the specified amount in cents.
+    /// The result is clamped to the valid range of -200 to +200 cents.
+    pub fn adjust_detune_cents(&mut self, delta_cents: f32) {
+        let new_detune = self.params.detune_cents + delta_cents;
+        self.set_detune_cents(new_detune);
+    }
+
+    /// Reset the global detune offset to 0 cents (no detune).
+    pub fn reset_detune(&mut self) {
+        self.params.detune_cents = 0.0;
+    }
+
     /// Toggle mute flag for a voice.
     pub fn toggle_mute(&mut self, voice_index: usize) {
         if let Some(v) = self.voices.get_mut(voice_index) {
@@ -205,7 +226,7 @@ impl MusicEngine {
                 let degree = *self.params.scale.choose(rng).unwrap_or(&0);
                 let octave = self.configs[i].octave_offset;
                 let midi = self.params.root_midi + degree + octave * 12;
-                let freq = midi_to_hz(midi as f32);
+                let freq = midi_to_hz_with_detune(midi as f32, self.params.detune_cents);
                 let vel = 0.4 + rng.gen::<f32>() * 0.6;
                 let dur = self.configs[i].base_duration + rng.gen::<f32>() * 0.2;
                 out_events.push(NoteEvent {
@@ -222,6 +243,20 @@ impl MusicEngine {
 /// Convert a MIDI note number to Hertz (A4=440 Hz).
 ///
 /// Monotonic and exhibits octave symmetry: +12 semitones doubles the frequency.
+/// Supports fractional MIDI values for microtonal precision.
 pub fn midi_to_hz(midi: f32) -> f32 {
     440.0 * (2.0_f32).powf((midi - 69.0) / 12.0)
+}
+
+/// Convert a MIDI note number to Hertz with detune offset in cents.
+///
+/// The detune_cents parameter allows for microtonal adjustments:
+/// - Positive values raise the pitch (e.g., +50¢ = quarter tone sharp)
+/// - Negative values lower the pitch (e.g., -50¢ = quarter tone flat)
+/// - Range: -200 to +200 cents (±2 semitones)
+pub fn midi_to_hz_with_detune(midi: f32, detune_cents: f32) -> f32 {
+    let clamped_detune = detune_cents.clamp(-200.0, 200.0);
+    let detune_semitones = clamped_detune / 100.0;
+    let adjusted_midi = midi + detune_semitones;
+    midi_to_hz(adjusted_midi)
 }

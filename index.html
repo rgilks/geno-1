@@ -170,6 +170,8 @@
                 <li><span class="kbd">R</span>: new sequence</li>
                 <li><span class="kbd">T</span>: random root + mode</li>
                 <li><span class="kbd">Space</span>: pause/resume</li>
+                <li><span class="kbd">,</span>/<span class="kbd">.</span>: detune ±50¢ (Shift for ±10¢)</li>
+                <li><span class="kbd">/</span>: reset detune to 0¢</li>
                 <li>
                   <span class="kbd">Enter</span>/<span class="kbd">Esc</span>:
                   full/exit screen
@@ -215,6 +217,16 @@
       </div>
     </div>
     <canvas id="app-canvas" width="1280" height="720"></canvas>
+    <div
+      id="hint-overlay"
+      style="
+        position: fixed;
+        left: 12px;
+        top: 12px;
+        z-index: 5;
+        display: none;
+      "
+    ></div>
     <div
       id="audio-error"
       style="

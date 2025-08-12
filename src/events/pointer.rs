@@ -49,7 +49,8 @@ fn wire_pointermove(w: &InputWiring) {
         let mut best = None::<(usize, f32)>;
         let z_offset = Z_OFFSET;
 
-        for (i, v) in w.engine.borrow().voices.iter().enumerate() {
+        let engine_snapshot = w.engine.borrow();
+        for (i, v) in engine_snapshot.voices.iter().enumerate() {
             let center_world = v.position * SPREAD + z_offset;
 
             if let Some(t) = input::ray_sphere(ro, rd, center_world, PICK_SPHERE_RADIUS) {
@@ -79,8 +80,8 @@ fn wire_pointermove(w: &InputWiring) {
                         eng_pos.z *= scale;
                     }
 
-                    let mut eng = w.engine.borrow_mut();
                     let vi = w.drag_state.borrow().voice;
+                    let mut eng = w.engine.borrow_mut();
                     eng.set_voice_position(vi, glam::Vec3::new(eng_pos.x, 0.0, eng_pos.z));
                 }
             }
@@ -137,10 +138,13 @@ fn wire_pointerup(w: &InputWiring) {
             let alt = ev.alt_key();
             if alt {
                 w.engine.borrow_mut().toggle_solo(i);
+                log::info!("[click] solo voice {}", i);
             } else if shift {
                 w.engine.borrow_mut().reseed_voice(i, None);
+                log::info!("[click] reseed voice {}", i);
             } else {
                 w.engine.borrow_mut().toggle_mute(i);
+                log::info!("[click] toggle mute voice {}", i);
             }
         } else {
             let [uvx, uvy] = input::pointer_canvas_uv(&ev, &w.canvas);

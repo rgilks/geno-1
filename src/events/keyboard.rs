@@ -1,9 +1,42 @@
 use crate::core::MusicEngine;
 use crate::core::{AEOLIAN, DORIAN, IONIAN, LOCRIAN, LYDIAN, MIXOLYDIAN, PHRYGIAN};
+use crate::overlay;
 use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::JsCast;
 use web_sys as web;
+
+/// Get the name of the current scale for display purposes
+fn get_scale_name(scale: &[i32]) -> &'static str {
+    match scale {
+        s if s == IONIAN => "Ionian (major)",
+        s if s == DORIAN => "Dorian",
+        s if s == PHRYGIAN => "Phrygian",
+        s if s == LYDIAN => "Lydian",
+        s if s == MIXOLYDIAN => "Mixolydian",
+        s if s == AEOLIAN => "Aeolian (minor)",
+        s if s == LOCRIAN => "Locrian",
+        _ => "Custom",
+    }
+}
+
+/// Update the hint overlay after engine parameter changes
+fn update_hint_after_change(engine: &Rc<RefCell<MusicEngine>>) {
+    if let Some(window) = web::window() {
+        if let Some(document) = window.document() {
+            let (detune, bpm, scale_name) = {
+                let eng = engine.borrow();
+                (
+                    eng.params.detune_cents,
+                    eng.params.bpm,
+                    get_scale_name(eng.params.scale),
+                )
+            };
+            overlay::update_hint(&document, detune, bpm, scale_name);
+            overlay::show_hint(&document);
+        }
+    }
+}
 
 #[inline]
 pub fn root_midi_for_key(key: &str) -> Option<i32> {
@@ -43,10 +76,12 @@ pub fn handle_global_keydown(
     let key = ev.key();
     if let Some(midi) = root_midi_for_key(&key) {
         engine.borrow_mut().params.root_midi = midi;
+        update_hint_after_change(engine);
         return;
     }
     if let Some(scale) = mode_scale_for_digit(&key) {
         engine.borrow_mut().params.scale = scale;
+        update_hint_after_change(engine);
         return;
     }
     match key.as_str() {
@@ -56,6 +91,7 @@ pub fn handle_global_keydown(
             for i in 0..voice_len {
                 eng.reseed_voice(i, None);
             }
+            log::info!("[keys] reseeded all voices");
         }
         "t" | "T" => {
             let roots: [i32; 7] = [60, 62, 64, 65, 67, 69, 71]; // C, D, E, F, G, A, B
@@ -67,21 +103,54 @@ pub fn handle_global_keydown(
             let mut eng = engine.borrow_mut();
             eng.params.root_midi = roots[ri];
             eng.params.scale = modes[mi];
+            drop(eng);
+            update_hint_after_change(engine);
         }
         " " => {
             let mut p = paused.borrow_mut();
             *p = !*p;
+            log::info!("[keys] paused={}", *p);
             ev.prevent_default();
         }
         "ArrowRight" | "+" | "=" => {
             let mut eng = engine.borrow_mut();
             let new_bpm = (eng.params.bpm + 5.0).min(240.0);
             eng.set_bpm(new_bpm);
+            drop(eng);
+            update_hint_after_change(engine);
         }
         "ArrowLeft" | "-" | "_" => {
             let mut eng = engine.borrow_mut();
             let new_bpm = (eng.params.bpm - 5.0).max(40.0);
             eng.set_bpm(new_bpm);
+            drop(eng);
+            update_hint_after_change(engine);
+        }
+        "," => {
+            let mut eng = engine.borrow_mut();
+            if ev.shift_key() {
+                eng.adjust_detune_cents(-10.0); // Fine adjustment
+            } else {
+                eng.adjust_detune_cents(-50.0); // Coarse adjustment
+            }
+            drop(eng);
+            update_hint_after_change(engine);
+        }
+        "." => {
+            let mut eng = engine.borrow_mut();
+            if ev.shift_key() {
+                eng.adjust_detune_cents(10.0); // Fine adjustment
+            } else {
+                eng.adjust_detune_cents(50.0); // Coarse adjustment
+            }
+            drop(eng);
+            update_hint_after_change(engine);
+        }
+        "/" => {
+            let mut eng = engine.borrow_mut();
+            eng.reset_detune();
+            drop(eng);
+            update_hint_after_change(engine);
         }
         "Enter" => {
             if let Some(win) = web::window() {
