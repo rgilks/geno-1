@@ -18,12 +18,13 @@ mod core {
 #[inline]
 fn root_midi_for_key(key: &str) -> Option<i32> {
     match key {
-        "a" | "A" => Some(69),
-        "b" | "B" => Some(71),
-        "c" | "C" => Some(60),
-        "d" | "D" => Some(62),
-        "e" | "E" => Some(64),
-        "f" | "F" => Some(65),
+        "a" | "A" => Some(69), // A4
+        "b" | "B" => Some(71), // B4
+        "c" | "C" => Some(60), // C4 (middle C)
+        "d" | "D" => Some(62), // D4
+        "e" | "E" => Some(64), // E4
+        "f" | "F" => Some(65), // F4
+        "g" | "G" => Some(67), // G4
         _ => None,
     }
 }
@@ -57,13 +58,13 @@ fn root_midi_for_key_valid_keys() {
     assert_eq!(root_midi_for_key("E"), Some(64)); // E4
     assert_eq!(root_midi_for_key("f"), Some(65)); // F4
     assert_eq!(root_midi_for_key("F"), Some(65)); // F4
+    assert_eq!(root_midi_for_key("g"), Some(67)); // G4
+    assert_eq!(root_midi_for_key("G"), Some(67)); // G4
 }
 
 #[test]
 fn root_midi_for_key_invalid_keys() {
     // Test invalid keys return None
-    assert_eq!(root_midi_for_key("g"), None);
-    assert_eq!(root_midi_for_key("G"), None);
     assert_eq!(root_midi_for_key("h"), None);
     assert_eq!(root_midi_for_key("H"), None);
     assert_eq!(root_midi_for_key("i"), None);

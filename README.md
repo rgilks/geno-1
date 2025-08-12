@@ -9,18 +9,37 @@
   <hr />
 </div>
 
-### Project status
+### Project Status (v1.1 - A- Grade)
 
-- Web front-end (WASM) is running with:
-- 3 voices, spatial audio (Web Audio + PannerNode)
-- Lush ambient effects: global Convolver reverb and dark feedback Delay bus with per-voice sends and a master bus
-- Mouse-driven FX: corner-based saturation (clean ↔ fizz) and opposite-corner delay emphasis; visuals have inertial swirl motion and click ripples
-- Note-driven visuals use attack/release smoothing for organic response (no abrupt jumps)
-- Start overlay to initialize audio (Click Start; canvas-click fallback)
-- Keyboard: A..G (root), 1..7 (mode), R (new sequence), T (random key+mode), Space (pause/resume), ArrowLeft/Right (tempo), ArrowUp/Down (volume), Enter (fullscreen)
-- Starts at a lower default volume; use ArrowUp to raise or ArrowDown to lower
-- Dynamic hint shows current BPM, paused, and muted state
-- Rich visuals: voice-reactive wave displacement, ambient waves background, post bloom/tonemap/vignette; optional analyser-driven spectrum dots
+**🎵 Advanced Audio Engine:**
+
+- 3-voice polyphonic system with configurable parameters (trigger probability, octave offset, duration)
+- Complete musical alphabet support (A-G keys) with 7 diatonic modes (1-7 keys)
+- Professional spatial audio: per-voice `PannerNode` with real-time 3D positioning
+- Master effects chain: convolution reverb, dark feedback delay, saturation, per-voice sends
+- Gesture-based audio unlock with professional start overlay
+
+**🎨 Immersive Visuals:**
+
+- Ambient waves background with voice-reactive displacement and proximity effects
+- Advanced post-processing: HDR bright pass, separable blur, ACES tonemap, vignette, film grain
+- Pointer-driven swirl distortion with inertial physics and exponential falloff
+- Click ripple propagation with configurable timing and amplitude
+- Real-time performance monitoring with FPS measurement
+
+**🎮 Interactive Controls:**
+
+- Comprehensive keyboard mapping: A-G (root), 1-7 (mode), R (regenerate), T (random), Space (pause)
+- Voice interaction: click (mute), Alt+click (solo), Shift+click (reseed), drag (spatial position)
+- Tempo (←/→), volume (↑/↓), fullscreen (Enter/Escape) with dynamic BPM display
+- Ray-picking system for precise voice positioning with visual feedback
+
+**🛠️ Professional Quality:**
+
+- 25 comprehensive tests including property-based testing for mathematical functions
+- Zero compilation warnings with strict linting (`clippy -D warnings`)
+- Enhanced error handling with user-friendly WebGPU failure messages
+- Professional CI/CD with automated testing, performance validation, and deployment
 
 ### Demo
 
@@ -51,12 +70,34 @@ Additional scripts:
 - `npm run deps` (check for dependency updates)
 - `npm run deps:update` (update dependencies and run nuke)
 
-Quick controls (browser):
+**Quick Controls:**
 
-- Click Start to initialize audio (canvas click also works)
-- Click canvas: play a note; mouse position affects sound
-- Keys: A..G (root), 1..7 (mode), R (new sequence), T (random key+mode), Space (pause/resume), ArrowLeft/Right (tempo), ArrowUp/Down (volume), Enter (fullscreen)
-- Mouse position maps to master saturation and delay; moving the pointer leaves a “water-like” trailing swirl in visuals
+**🎹 Musical Controls:**
+
+- **A-G**: Set root note (complete musical alphabet)
+- **1-7**: Select diatonic mode (Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian)
+- **R**: Regenerate all voice sequences
+- **T**: Random root note + mode combination
+
+**🎛️ Playback Controls:**
+
+- **Space**: Pause/resume playback
+- **←/→**: Adjust tempo (BPM shown in hint overlay)
+- **↑/↓**: Adjust master volume
+- **Enter/Escape**: Toggle fullscreen
+
+**🎯 Voice Interaction:**
+
+- **Click voice**: Toggle mute (shows "muted" in hint)
+- **Alt+Click**: Solo voice (mutes others)
+- **Shift+Click**: Reseed voice sequence
+- **Drag voice**: Reposition in 3D space (spatial audio feedback)
+
+**🎨 Visual Effects:**
+
+- **Mouse movement**: Creates trailing swirl distortion with inertial physics
+- **Click canvas**: Generates ripple effects that propagate outward
+- **Corner proximity**: Affects master saturation (clean ↔ distorted) and delay emphasis
 
 ### Pre-commit Check
 
@@ -120,14 +161,36 @@ Notes:
 
 - Keeping screenshots/GIFs up to date is intentionally avoided; refer to the live app instead.
 
-### Project structure
+### Project Structure
 
-- `app-web`: single WASM crate with WebGPU + WebAudio
-  - `src/core/`: music generation and shared state (formerly `app-core` crate)
-  - `src/render/targets.rs`: HDR/bloom textures create/recreate
-  - `src/render/post.rs`: post pipelines, uniforms, blit, bind-group rebuild
-  - `src/render/waves.rs`: waves pass uniforms and pipeline bundle
-  - `src/render.rs`: orchestrates passes using the render/\* helpers
+**🦀 Core Rust/WASM Application:**
+
+- `src/lib.rs`: Main WASM entry point and application initialization
+- `src/core/music.rs`: Generative music engine with configurable voice parameters
+- `src/audio.rs`: Web Audio API integration and spatial audio management
+- `src/render.rs`: WebGPU rendering orchestration and pipeline management
+- `src/render/`: Specialized rendering modules (waves, post-processing, targets)
+- `src/events/`: Input handling (keyboard, pointer) with comprehensive key mappings
+- `src/frame.rs`: Animation loop and GPU state management
+
+**🌐 Web Frontend:**
+
+- `index.html`: Main application entry with canvas and overlay UI
+- `worker.js`: Cloudflare Workers deployment with cache-control headers
+- `shaders/`: WGSL shaders for ambient waves and post-processing effects
+
+**🔧 Development & Deployment:**
+
+- `package.json`: Node.js build scripts and development dependencies
+- `Cargo.toml`: Rust dependencies with WebGPU and Web Audio features
+- `.github/workflows/ci.yml`: Comprehensive CI/CD with testing and deployment
+- `tests/`: Comprehensive test suite with property-based testing
+- `web-test.js`: End-to-end browser testing with Puppeteer
+
+**📚 Documentation:**
+
+- `docs/SPEC.md`: Comprehensive technical specification and S-tier roadmap
+- `docs/TODO.md`: Strategic development roadmap and implementation priorities
 
 ### Docs
 

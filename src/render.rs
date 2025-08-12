@@ -75,7 +75,15 @@ impl<'a> GpuState<'a> {
                 force_fallback_adapter: false,
             })
             .await
-            .ok_or_else(|| anyhow::anyhow!("No WebGPU adapter"))?;
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "No WebGPU adapter available. This could be due to:\n\
+                     - WebGPU not supported in this browser\n\
+                     - WebGPU disabled in browser settings\n\
+                     - Running in headless mode without GPU access\n\
+                     - Graphics drivers not compatible with WebGPU"
+                )
+            })?;
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -88,7 +96,16 @@ impl<'a> GpuState<'a> {
                 None,
             )
             .await
-            .map_err(|e| anyhow::anyhow!(format!("request_device error: {:?}", e)))?;
+            .map_err(|e| {
+                anyhow::anyhow!(
+                    "Failed to create WebGPU device: {:?}\n\
+                     This could indicate:\n\
+                     - Insufficient GPU memory\n\
+                     - Requested features not supported\n\
+                     - GPU driver issues",
+                    e
+                )
+            })?;
         let caps = surface.get_capabilities(&adapter);
         let format = caps
             .formats

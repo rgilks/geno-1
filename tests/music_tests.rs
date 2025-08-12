@@ -14,14 +14,23 @@ fn make_engine() -> MusicEngine {
         VoiceConfig {
             waveform: Waveform::Sine,
             base_position: glam::Vec3::new(-1.0, 0.0, 0.0),
+            trigger_probability: 0.4,
+            octave_offset: -1,
+            base_duration: 0.4,
         },
         VoiceConfig {
             waveform: Waveform::Saw,
             base_position: glam::Vec3::new(1.0, 0.0, 0.0),
+            trigger_probability: 0.6,
+            octave_offset: 0,
+            base_duration: 0.25,
         },
         VoiceConfig {
             waveform: Waveform::Triangle,
             base_position: glam::Vec3::new(0.0, 0.0, -1.0),
+            trigger_probability: 0.3,
+            octave_offset: 1,
+            base_duration: 0.6,
         },
     ];
     let params = EngineParams::default();
@@ -85,4 +94,94 @@ fn engine_toggle_mute_and_solo() {
     for v in engine.voices.iter() {
         assert!(!v.muted);
     }
+}
+
+// Property-based tests for midi_to_hz function
+#[test]
+fn midi_to_hz_octave_doubling_property() {
+    // Property: Adding 12 semitones (one octave) should double the frequency
+    for midi in 20..100 {
+        let freq1 = midi_to_hz(midi as f32);
+        let freq2 = midi_to_hz((midi + 12) as f32);
+        let ratio = freq2 / freq1;
+        assert!(
+            (ratio - 2.0).abs() < 1e-6,
+            "Octave doubling failed for MIDI {midi}: {freq1} -> {freq2} (ratio: {ratio})"
+        );
+    }
+}
+
+#[test]
+fn midi_to_hz_semitone_ratio_property() {
+    // Property: Each semitone should multiply frequency by 2^(1/12) ≈ 1.059463
+    let semitone_ratio = 2.0_f32.powf(1.0 / 12.0);
+
+    for midi in 30..90 {
+        let freq1 = midi_to_hz(midi as f32);
+        let freq2 = midi_to_hz((midi + 1) as f32);
+        let actual_ratio = freq2 / freq1;
+        assert!(
+            (actual_ratio - semitone_ratio).abs() < 1e-6,
+            "Semitone ratio failed for MIDI {midi} -> {}: expected {semitone_ratio}, got {actual_ratio}",
+            midi + 1
+        );
+    }
+}
+
+#[test]
+fn midi_to_hz_fractional_values() {
+    // Test that fractional MIDI values work correctly (for microtonal support)
+    let midi_60 = midi_to_hz(60.0); // C4
+    let midi_60_5 = midi_to_hz(60.5); // C4 + 50 cents
+    let midi_61 = midi_to_hz(61.0); // C#4
+
+    // 50 cents should be halfway between C4 and C#4 in log frequency space
+    let log_60 = midi_60.ln();
+    let log_60_5 = midi_60_5.ln();
+    let log_61 = midi_61.ln();
+
+    let expected_log_60_5 = (log_60 + log_61) / 2.0;
+    assert!(
+        (log_60_5 - expected_log_60_5).abs() < 1e-6,
+        "Fractional MIDI value 60.5 should be logarithmic midpoint between 60 and 61"
+    );
+}
+
+#[test]
+fn midi_to_hz_extreme_values() {
+    // Test extreme but valid MIDI values
+    let very_low = midi_to_hz(0.0); // C-1, ~8.18 Hz
+    let very_high = midi_to_hz(127.0); // G9, ~12543 Hz
+
+    assert!(
+        very_low > 0.0 && very_low < 20.0,
+        "MIDI 0 should be audible bass frequency"
+    );
+    assert!(
+        very_high > 10000.0 && very_high < 15000.0,
+        "MIDI 127 should be very high frequency"
+    );
+
+    // Test that extreme values don't cause overflow/underflow
+    assert!(
+        very_low.is_finite(),
+        "Very low MIDI should produce finite frequency"
+    );
+    assert!(
+        very_high.is_finite(),
+        "Very high MIDI should produce finite frequency"
+    );
+}
+
+#[test]
+fn midi_to_hz_negative_values() {
+    // Test that negative MIDI values work (sub-audio frequencies)
+    let neg_midi = midi_to_hz(-12.0); // One octave below MIDI 0
+    let zero_midi = midi_to_hz(0.0);
+
+    let ratio = zero_midi / neg_midi;
+    assert!(
+        (ratio - 2.0).abs() < 1e-6,
+        "MIDI -12 should be exactly one octave below MIDI 0"
+    );
 }

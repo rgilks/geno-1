@@ -8,12 +8,13 @@ use web_sys as web;
 #[inline]
 pub fn root_midi_for_key(key: &str) -> Option<i32> {
     match key {
-        "a" | "A" => Some(69),
-        "b" | "B" => Some(71),
-        "c" | "C" => Some(60),
-        "d" | "D" => Some(62),
-        "e" | "E" => Some(64),
-        "f" | "F" => Some(65),
+        "a" | "A" => Some(69), // A4
+        "b" | "B" => Some(71), // B4
+        "c" | "C" => Some(60), // C4 (middle C)
+        "d" | "D" => Some(62), // D4
+        "e" | "E" => Some(64), // E4
+        "f" | "F" => Some(65), // F4
+        "g" | "G" => Some(67), // G4
         _ => None,
     }
 }
@@ -57,7 +58,7 @@ pub fn handle_global_keydown(
             }
         }
         "t" | "T" => {
-            let roots: [i32; 7] = [60, 62, 64, 65, 67, 69, 71];
+            let roots: [i32; 7] = [60, 62, 64, 65, 67, 69, 71]; // C, D, E, F, G, A, B
             let modes: [&'static [i32]; 7] = [
                 IONIAN, DORIAN, PHRYGIAN, LYDIAN, MIXOLYDIAN, AEOLIAN, LOCRIAN,
             ];

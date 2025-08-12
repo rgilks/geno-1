@@ -17,10 +17,16 @@ pub enum Waveform {
 /// Fields:
 /// - `waveform`: oscillator type to synthesize this voice in the web frontend
 /// - `base_position`: initial engine-space position (XZ plane; Y is typically 0)
+/// - `trigger_probability`: chance (0.0-1.0) that this voice triggers on each grid step
+/// - `octave_offset`: octave adjustment relative to root note (-2 to +2)
+/// - `base_duration`: base note duration in seconds
 #[derive(Clone, Debug)]
 pub struct VoiceConfig {
     pub waveform: Waveform,
     pub base_position: Vec3,
+    pub trigger_probability: f32,
+    pub octave_offset: i32,
+    pub base_duration: f32,
 }
 
 /// A scheduled musical event produced by the engine for playback.
@@ -193,15 +199,15 @@ impl MusicEngine {
             if voice.muted {
                 continue;
             }
-            let prob = MusicEngine::voice_trigger_probability(i);
+            let prob = self.configs[i].trigger_probability;
             let rng = &mut self.rngs[i];
             if rng.gen::<f32>() < prob {
                 let degree = *self.params.scale.choose(rng).unwrap_or(&0);
-                let octave = MusicEngine::voice_octave_offset(i);
+                let octave = self.configs[i].octave_offset;
                 let midi = self.params.root_midi + degree + octave * 12;
                 let freq = midi_to_hz(midi as f32);
                 let vel = 0.4 + rng.gen::<f32>() * 0.6;
-                let dur = MusicEngine::voice_base_duration(i) + rng.gen::<f32>() * 0.2;
+                let dur = self.configs[i].base_duration + rng.gen::<f32>() * 0.2;
                 out_events.push(NoteEvent {
                     voice_index: i,
                     frequency_hz: freq,
@@ -209,33 +215,6 @@ impl MusicEngine {
                     duration_sec: dur,
                 });
             }
-        }
-    }
-
-    #[inline]
-    fn voice_trigger_probability(voice_index: usize) -> f32 {
-        match voice_index {
-            0 => 0.4,
-            1 => 0.6,
-            _ => 0.3,
-        }
-    }
-
-    #[inline]
-    fn voice_octave_offset(voice_index: usize) -> i32 {
-        match voice_index {
-            0 => -1,
-            1 => 0,
-            _ => 1,
-        }
-    }
-
-    #[inline]
-    fn voice_base_duration(voice_index: usize) -> f32 {
-        match voice_index {
-            0 => 0.4,
-            1 => 0.25,
-            _ => 0.6,
         }
     }
 }

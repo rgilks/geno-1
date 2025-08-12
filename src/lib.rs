@@ -51,14 +51,23 @@ async fn build_audio_and_engine(_document: web::Document) -> anyhow::Result<Init
         VoiceConfig {
             waveform: Waveform::Sine,
             base_position: Vec3::new(-1.0, 0.0, 0.0),
+            trigger_probability: 0.4,
+            octave_offset: -1,
+            base_duration: 0.4,
         },
         VoiceConfig {
             waveform: Waveform::Saw,
             base_position: Vec3::new(1.0, 0.0, 0.0),
+            trigger_probability: 0.6,
+            octave_offset: 0,
+            base_duration: 0.25,
         },
         VoiceConfig {
             waveform: Waveform::Triangle,
             base_position: Vec3::new(0.0, 0.0, -1.0),
+            trigger_probability: 0.3,
+            octave_offset: 1,
+            base_duration: 0.6,
         },
     ];
     let engine = Rc::new(RefCell::new(MusicEngine::new(

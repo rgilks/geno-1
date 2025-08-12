@@ -156,10 +156,107 @@ async function gotoWithRetry(
 
     if (!logs.some((l) => /\[click\] solo voice \d+/.test(l)))
       throw new Error("missing solo click log");
+
+    // Test G key support (new functionality)
+    await page.keyboard.press("KeyG");
+    await new Promise((r) => setTimeout(r, 120));
+
+    // Test root note changes A-G
+    const rootKeys = ["KeyA", "KeyB", "KeyC", "KeyD", "KeyE", "KeyF", "KeyG"];
+    for (const key of rootKeys) {
+      await page.keyboard.press(key);
+      await new Promise((r) => setTimeout(r, 50));
+    }
+
+    // Test mode changes 1-7
+    const modeKeys = [
+      "Digit1",
+      "Digit2",
+      "Digit3",
+      "Digit4",
+      "Digit5",
+      "Digit6",
+      "Digit7",
+    ];
+    for (const key of modeKeys) {
+      await page.keyboard.press(key);
+      await new Promise((r) => setTimeout(r, 50));
+    }
+
+    // Test random key+mode (T key)
+    await page.keyboard.press("KeyT");
+    await new Promise((r) => setTimeout(r, 120));
   } else {
     console.log(
       "[note] engine not started in CI (WebGPU unavailable); skipping R/Space/+/− assertions"
     );
+  }
+
+  // Performance monitoring (only if engine started)
+  if (engineStarted) {
+    console.log("[perf] measuring frame rate performance...");
+
+    const perfMetrics = await page.evaluate(() => {
+      return new Promise((resolve) => {
+        let frameCount = 0;
+        let startTime = performance.now();
+        let minFrameTime = Infinity;
+        let maxFrameTime = 0;
+        let frameTimes = [];
+
+        function measureFrame() {
+          const currentTime = performance.now();
+          const frameTime = currentTime - startTime;
+
+          if (frameCount > 0) {
+            // Skip first frame
+            frameTimes.push(frameTime);
+            minFrameTime = Math.min(minFrameTime, frameTime);
+            maxFrameTime = Math.max(maxFrameTime, frameTime);
+          }
+
+          frameCount++;
+          startTime = currentTime;
+
+          if (frameCount < 60) {
+            // Measure 60 frames (~1 second at 60fps)
+            requestAnimationFrame(measureFrame);
+          } else {
+            const avgFrameTime =
+              frameTimes.reduce((a, b) => a + b, 0) / frameTimes.length;
+            const avgFPS = 1000 / avgFrameTime;
+            const minFPS = 1000 / maxFrameTime;
+            const maxFPS = 1000 / minFrameTime;
+
+            resolve({
+              avgFPS: Math.round(avgFPS * 10) / 10,
+              minFPS: Math.round(minFPS * 10) / 10,
+              maxFPS: Math.round(maxFPS * 10) / 10,
+              frameCount: frameTimes.length,
+            });
+          }
+        }
+
+        requestAnimationFrame(measureFrame);
+      });
+    });
+
+    console.log(`[perf] Average FPS: ${perfMetrics.avgFPS}`);
+    console.log(`[perf] Min FPS: ${perfMetrics.minFPS}`);
+    console.log(`[perf] Max FPS: ${perfMetrics.maxFPS}`);
+    console.log(`[perf] Measured ${perfMetrics.frameCount} frames`);
+
+    // Warn if performance is concerning (but don't fail CI)
+    if (perfMetrics.avgFPS < 30) {
+      console.warn(
+        `[perf] WARNING: Average FPS (${perfMetrics.avgFPS}) is below 30fps`
+      );
+    }
+    if (perfMetrics.minFPS < 15) {
+      console.warn(
+        `[perf] WARNING: Minimum FPS (${perfMetrics.minFPS}) dropped below 15fps`
+      );
+    }
   }
 
   // Basic assertions

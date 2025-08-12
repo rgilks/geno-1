@@ -60,20 +60,27 @@ fn vs_fullscreen(@builtin(vertex_index) vid: u32) -> VsOut {
 // UTILITY FUNCTIONS
 // ============================================================================
 
+// Pseudo-random hash function for procedural noise generation
+// Uses a common GLSL hash technique with large primes for good distribution
 fn hash2(p: vec2<f32>) -> f32 {
     let h = dot(p, vec2<f32>(127.1, 311.7));
     return fract(sin(h) * 43758.5453123);
 }
 
+// Fractal Brownian Motion (FBM) for organic-looking wave patterns
+// Creates layered noise by accumulating multiple octaves with decreasing amplitude
+// - Each iteration doubles frequency (2.17 for slight irregularity)  
+// - Each iteration halves amplitude (0.55 for softer falloff than 0.5)
+// - Uses sin/cos combination for smoother, more wave-like patterns
 fn fbm(p: vec2<f32>) -> f32 {
-    var a = 0.0;
-    var b = 0.5;
-    var f = p;
+    var a = 0.0;      // accumulated amplitude
+    var b = 0.5;      // current octave amplitude
+    var f = p;        // current frequency
 
     for (var i = 0; i < 5; i = i + 1) {
         a += b * sin(f.x) * cos(f.y);
-        f *= 2.17;
-        b *= 0.55;
+        f *= 2.17;    // increase frequency with slight irregularity
+        b *= 0.55;    // decrease amplitude
     }
     return a;
 }
@@ -93,20 +100,22 @@ fn fs_waves(inp: VsOut) -> @location(0) vec4<f32> {
     var col = vec3<f32>(0.04, 0.055, 0.10);
 
     // Multi-layer wave rendering with depth parallax
+    // Creates 3 layers at different depths for visual richness
     for (var L = 0; L < 3; L = L + 1) {
         let depth = f32(L);
-        let par = mix(0.65, 1.25, depth / 2.0);
-        var cuv = cuv0 * par + vec2<f32>(0.0, -0.10 * depth);
+        let par = mix(0.65, 1.25, depth / 2.0);  // parallax scale: closer = larger
+        var cuv = cuv0 * par + vec2<f32>(0.0, -0.10 * depth);  // offset by depth
         
-        // Swirl effect
-        let c = (u.swirl_uv - 0.5) * vec2<f32>(aspect, 1.0) * par;
-        let v = cuv - c;
-        let r = length(v);
-        let ang = u.swirl_strength * 2.5 * exp(-1.8 * r);
+        // Pointer-driven swirl distortion effect
+        // Creates a vortex-like distortion around the mouse/pointer position
+        let c = (u.swirl_uv - 0.5) * vec2<f32>(aspect, 1.0) * par;  // swirl center in layer space
+        let v = cuv - c;                                            // vector from center
+        let r = length(v);                                          // distance from center
+        let ang = u.swirl_strength * 2.5 * exp(-1.8 * r);         // rotation angle (exponential falloff)
         let cs = cos(ang);
         let sn = sin(ang);
-        let rot = vec2<f32>(v.x * cs - v.y * sn, v.x * sn + v.y * cs);
-        cuv = c + rot;
+        let rot = vec2<f32>(v.x * cs - v.y * sn, v.x * sn + v.y * cs);  // 2D rotation matrix
+        cuv = c + rot;                                              // apply rotation
         
         // Voice displacement
         var disp = vec2<f32>(0.0);

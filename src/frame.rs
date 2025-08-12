@@ -16,6 +16,7 @@ pub struct FrameContext<'a> {
     pub engine: Rc<RefCell<MusicEngine>>,
     pub paused: Rc<RefCell<bool>>,
     pub pulses: Rc<RefCell<Vec<f32>>>,
+    #[allow(dead_code)] // Used in pointer events, not directly in frame module
     pub hover_index: Rc<RefCell<Option<usize>>>,
 
     pub canvas: web::HtmlCanvasElement,
@@ -277,9 +278,21 @@ pub async fn init_gpu(canvas: &web::HtmlCanvasElement) -> Option<render::GpuStat
     // leak a canvas clone to satisfy 'static lifetime for surface
     let leaked_canvas = Box::leak(Box::new(canvas.clone()));
     match render::GpuState::new(leaked_canvas, CAMERA_Z).await {
-        Ok(g) => Some(g),
+        Ok(g) => {
+            log::info!("WebGPU initialized successfully");
+            Some(g)
+        }
         Err(e) => {
             log::error!("WebGPU init error: {:?}", e);
+
+            // Try to show user-friendly message in DOM
+            if let Some(window) = web_sys::window() {
+                if let Some(document) = window.document() {
+                    if let Some(error_div) = document.get_element_by_id("no-webgpu") {
+                        _ = error_div.set_attribute("style", "display: block");
+                    }
+                }
+            }
             None
         }
     }
