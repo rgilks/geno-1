@@ -271,63 +271,40 @@ fn engine_detune_methods() {
 
 #[test]
 fn engine_schedule_with_detune() {
-    let mut engine = make_engine();
-    println!("Initial engine detune: {}¢", engine.params.detune_cents);
+    // Deterministic: 1 voice, prob=1.0, scale=[0], root=C4
+    let configs = vec![VoiceConfig {
+        waveform: Waveform::Sine,
+        base_position: glam::Vec3::new(0.0, 0.0, 0.0),
+        trigger_probability: 1.0,
+        octave_offset: 0,
+        base_duration: 0.25,
+    }];
+    let params = EngineParams {
+        scale: &[0],
+        root_midi: 60,
+        ..EngineParams::default()
+    };
+    let mut engine = MusicEngine::new(configs, params, 12345);
 
-    engine.set_detune_cents(50.0); // +50¢ detune
-    println!(
-        "After set_detune_cents(50.0): {}¢",
-        engine.params.detune_cents
-    );
-
-    // Test the detune function directly
-    let test_midi = 48.0;
-    let test_detune = 50.0;
-    let direct_result = midi_to_hz_with_detune(test_midi, test_detune);
-    let expected_result = midi_to_hz(test_midi + test_detune / 100.0);
-    println!(
-        "Direct test: MIDI {test_midi:.1} + {test_detune}¢ = {direct_result:.6} Hz (expected: {expected_result:.6})"
-    );
-
-    // Let's test a single event generation to isolate the issue
+    engine.set_detune_cents(50.0);
     let mut events = Vec::new();
     let seconds_per_beat = 60.0 / engine.params.bpm as f64;
-
-    // Generate just one event
     engine.tick(Duration::from_secs_f64(seconds_per_beat / 2.0), &mut events);
 
-    println!("Generated {} events", events.len());
-
-    if let Some(event) = events.first() {
-        let voice_config = &engine.configs[event.voice_index];
-        let degree = engine.params.scale[0];
-        let octave = voice_config.octave_offset;
-        let midi = engine.params.root_midi + degree + octave * 12;
-        let expected_freq = midi_to_hz(midi as f32);
-        let expected_detuned = midi_to_hz_with_detune(midi as f32, engine.params.detune_cents);
-
-        let voice_index = event.voice_index;
-        let base_freq = expected_freq;
-        let detuned_freq = event.frequency_hz;
-
-        println!(
-            "Single event: voice={voice_index}, degree={degree}, octave={octave}, midi={midi}, base_freq={base_freq:.6}, detuned_freq={detuned_freq:.6}, expected_detuned={expected_detuned:.6}"
-        );
-
-        // Check if the event frequency matches what we expect
-        if (event.frequency_hz - expected_detuned).abs() > 1e-6 {
-            println!("  MISMATCH: Event frequency doesn't match expected detuned frequency!");
-            println!("  This suggests the engine is not using midi_to_hz_with_detune correctly");
-        } else {
-            println!("  SUCCESS: Event frequency matches expected detuned frequency");
-        }
-    }
-
-    // For now, let's just verify that the engine detune setting is correct
-    assert_eq!(
-        engine.params.detune_cents, 50.0,
-        "Engine detune should be 50¢"
+    assert!(
+        !events.is_empty(),
+        "expected at least one event with probability=1.0"
     );
+
+    let expected = midi_to_hz_with_detune(60.0, engine.params.detune_cents);
+    for ev in &events {
+        assert!(
+            (ev.frequency_hz - expected).abs() < 1e-6,
+            "scheduled freq does not include detune: got {:.6}, expected {:.6}",
+            ev.frequency_hz,
+            expected
+        );
+    }
 }
 
 #[test]

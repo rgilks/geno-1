@@ -12,7 +12,7 @@ This document outlines the path from the current **A-** grade to **S-tier** stat
 - [x] Property-based testing for mathematical functions
 - [x] Improved WebGPU error handling with user feedback
 - [x] Comprehensive shader documentation
-- [x] 25 total tests passing with zero warnings
+- [x] 31 tests passing with zero warnings
 
 ---
 
@@ -22,11 +22,11 @@ This document outlines the path from the current **A-** grade to **S-tier** stat
 
 #### 1.1 Foundation
 
-- [ ] **Add microtonal detune support**
-  - [ ] Add `detune_cents: f32` to `EngineParams` (default 0.0, range ±200¢)
-  - [ ] Update `midi_to_hz()` to accept fractional MIDI values for cent precision
-  - [ ] Unit tests: verify 50¢ detune accuracy, round-trip expectations, extreme values
-  - [ ] Integration test: ensure detune affects all generated notes consistently
+- [x] **Add microtonal detune support**
+  - [x] Add `detune_cents: f32` to `EngineParams` (default 0.0, range ±200¢)
+  - [x] Update `midi_to_hz()` to accept fractional MIDI values for cent precision
+  - [x] Unit tests: verify 50¢ detune accuracy, round-trip expectations, extreme values
+  - [x] Integration test: ensure detune affects all generated notes consistently
 
 #### 1.2 Alternative Tuning Systems
 
@@ -42,11 +42,11 @@ This document outlines the path from the current **A-** grade to **S-tier** stat
 
 #### 1.3 User Interface
 
-- [ ] **Keyboard controls for microtonality**
-  - [ ] `,` key: decrease global detune by 50¢ (Shift+`,` for 10¢ fine adjustment)
-  - [ ] `.` key: increase global detune by 50¢ (Shift+`.` for 10¢ fine adjustment)
-  - [ ] `/` key: reset detune to 0¢
-  - [ ] Update hint overlay: "Detune: +50¢" or "Scale: 24-TET pentatonic"
+- [x] **Keyboard controls for microtonality**
+  - [x] `,` key: decrease global detune by 50¢ (Shift+`,` for 10¢ fine adjustment)
+  - [x] `.` key: increase global detune by 50¢ (Shift+`.` for 10¢ fine adjustment)
+  - [x] `/` key: reset detune to 0¢
+  - [x] Update hint overlay: shows "Detune: ±N¢" and BPM/Scale
 - [ ] **Scale selection shortcuts**
   - [ ] `8` key → 19-TET pentatonic
   - [ ] `9` key → 24-TET pentatonic
