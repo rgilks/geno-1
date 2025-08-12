@@ -1,5 +1,6 @@
 use glam::Vec3;
 use rand::prelude::*;
+use rand::seq::SliceRandom;
 use std::time::Duration;
 
 /// Basic oscillator shape used by synths in the web front-end.

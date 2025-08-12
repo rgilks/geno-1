@@ -165,7 +165,7 @@ graph TD
 
 - **Parameter Controls:**
 
-  - Per-voice mute/solo via click/Alt+Click; Shift+Click reseeds a voice; `R` reseeds all; `Space` toggles pause; `O` toggles orbit.
+  - Per-voice mute/solo via click/Alt+Click; Shift+Click reseeds a voice; `R` reseeds all; `Space` toggles pause;
   - These changes should take effect seamlessly: if user changes tempo, new notes should align to the new tempo. If user regenerates, the old pattern can either stop immediately or finish the measure then switch, depending on desired effect.
 
 - **Polyphony Performance:** The audio system must handle multiple simultaneous sounds efficiently. Using the Web Audio API’s built-in nodes is quite efficient in the browser. But we must be cautious not to create too many nodes unbounded (which could use too much CPU). Reusing nodes or limiting polyphony per voice (e.g., each voice usually just plays one note at a time in our design) helps. If chords are needed, that’s essentially multiple voices.
@@ -348,7 +348,7 @@ We identify the key interactions the user needs and map them to in-scene control
 To ensure a "fantastic result", the development should proceed in stages, verifying each piece:
 
 1. **Initial Setup:** Get a basic Rust+WASM project running with WebGPU rendering something simple (like a triangle or cube on screen) and Web Audio playing a test tone. This ensures the environment and build pipeline are correct (WebGPU initialization, etc.). Use this to verify browser compatibility (e.g., test in Chrome Canary or current stable with proper flags if needed).
-2. **Basic 3D Scene:** Create the scene with a few placeholder objects for voices. Render them without audio-driven changes initially. Implement camera and perhaps allow simple orbit or mouse-look to test interaction.
+2. **Basic 3D Scene (implemented):** The scene is in place with an ambient waves fullscreen pass and three instanced voice markers representing voices. There are no placeholder objects. The camera is fixed (the `AudioListener` tracks it for spatial audio). Interaction testing is via pointer hover/drag and keyboard; orbit/mouselook is not used.
 3. **Audio Generation:** Implement the audio engine’s core:
 
    - Pick a scale (e.g., C major pentatonic) and generate a repeating random sequence for one voice. Use an OscillatorNode to play it. Ensure timing is consistent.
