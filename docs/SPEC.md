@@ -297,8 +297,16 @@ What the user sees:
 **Philosophy:**
 The UI is minimalist and embedded in the 3D world. The goal is that the user sees a beautiful scene that also _is_ the control surface. We avoid traditional HTML panels, buttons, sliders. Instead, the user interacts directly with visual elements to control the music. This requires careful design so that the controls are discoverable enough without labels.
 
-**Possible UI Elements/Controls:**
-We identify the key interactions the user needs and map them to in-scene controls:
+**UI Controls (current implementation):**
+
+- **Play/Pause:** Space key toggles pause/resume. No in-scene play/pause icon yet.
+- **Regenerate:** `R` reseeds all voices. Per-voice: Shift+Click reseeds, Alt+Click solos, Click toggles mute.
+- **Position Adjustment:** Click+drag a voice object to move it on the horizontal plane; movement is clamped to a radius. Positions update the corresponding `PannerNode` in real time.
+- **Tempo:** ArrowRight/ArrowLeft adjust BPM.
+- **Overlay:** Start overlay for audio unlock; `H` toggles visibility. It does not show live BPM/Paused/Muted state.
+
+**Possible UI Elements/Controls (future):**
+We identify additional interactions that could be mapped to in-scene controls:
 
 - **Play/Pause:** If the system allows stopping the music, a control to pause or resume generation. Perhaps the music runs by default and maybe we don’t need an explicit play (it starts immediately), but pause could be useful. Implement as an icon (e.g., a play/pause symbol) floating in a corner of the scene or as part of an object (maybe a central orb that stops/starts everything when clicked).
 - **Regenerate (Randomize):** A control to generate a new musical sequence (either for all voices at once, or maybe separate control per voice). For all-at-once, an icon like 🔄 could be placed somewhere in view. For per-voice regeneration, perhaps clicking an individual voice object could trigger it to come up with a new pattern.
