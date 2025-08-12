@@ -17,7 +17,7 @@
 
 ### Demo
 
-- Local: see Run (Web) below. After `npm run dev`, open `http://localhost:8080`.
+- Local: see Run (Web) below. After `npm run dev`, open `http://localhost:8787`.
 - Hosted: [https://geno-1.tre.systems/](https://geno-1.tre.systems/)
 
 ### Requirements
@@ -35,7 +35,7 @@ Notes:
 
 ### Run
 
-- `npm run dev` (builds, serves at http://localhost:8080, and opens the browser)
+- `npm run dev` (builds, serves at http://localhost:8787, and opens the browser)
 
 Quick controls (browser):
 

@@ -5,9 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "wasm-pack build --target web --out-dir pkg --out-name app_web --release && node scripts/gen-env.js && rm -rf dist && mkdir -p dist/pkg && cp pkg/app_web.js dist/pkg/ && cp pkg/app_web_bg.wasm dist/pkg/ && cp pkg/env.js dist/pkg/env.js && cp index.html dist/index.html && cp favicon.svg dist/favicon.svg",
-    "serve": "http-server -p 8080 -c-1 .",
-    "dev": "open https://localhost:8787 & wrangler dev --local --persist-to .wrangler/state --live-reload",
-    "open": "open http://localhost:8080",
+    "dev": "wrangler dev --local --persist-to .wrangler/state --live-reload",
     "test": "node web-test.js",
     "ci": "npm run build && (http-server -p 8080 -c-1 . >/dev/null 2>&1 & SERVER_PID=$!; trap 'kill $SERVER_PID 2>/dev/null || true' EXIT; node web-test.js)",
     "clean": "cargo clean && rm -rf pkg",
