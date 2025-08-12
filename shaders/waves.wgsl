@@ -3,6 +3,10 @@
 // Audio-reactive ribbon/heightfield aesthetic rendered in a single fullscreen pass.
 // Inspired by smooth velvet waves with golden accents.
 
+// ============================================================================
+// STRUCTS & BINDINGS
+// ============================================================================
+
 struct VsOut {
     @builtin(position) pos: vec4<f32>,
     @location(0) uv: vec2<f32>,
@@ -29,23 +33,32 @@ struct WaveUniforms {
 
 @group(0) @binding(0) var<uniform> u: WaveUniforms;
 
+// ============================================================================
+// VERTEX SHADER
+// ============================================================================
+
 @vertex
 fn vs_fullscreen(@builtin(vertex_index) vid: u32) -> VsOut {
-    var pos = array<vec2<f32>, 3>(
+    let pos = array<vec2<f32>, 3>(
         vec2<f32>(-1.0, -3.0),
         vec2<f32>(-1.0, 1.0),
         vec2<f32>(3.0, 1.0),
     );
-    var uv = array<vec2<f32>, 3>(
+    let uv = array<vec2<f32>, 3>(
         vec2<f32>(0.0, 2.0),
         vec2<f32>(0.0, 0.0),
         vec2<f32>(2.0, 0.0),
     );
+
     var out: VsOut;
     out.pos = vec4<f32>(pos[vid], 0.0, 1.0);
     out.uv = uv[vid];
     return out;
 }
+
+// ============================================================================
+// UTILITY FUNCTIONS
+// ============================================================================
 
 fn hash2(p: vec2<f32>) -> f32 {
     let h = dot(p, vec2<f32>(127.1, 311.7));
@@ -56,6 +69,7 @@ fn fbm(p: vec2<f32>) -> f32 {
     var a = 0.0;
     var b = 0.5;
     var f = p;
+
     for (var i = 0; i < 5; i = i + 1) {
         a += b * sin(f.x) * cos(f.y);
         f *= 2.17;
@@ -64,68 +78,9 @@ fn fbm(p: vec2<f32>) -> f32 {
     return a;
 }
 
-// --- Wireframe helpers and layered waves version ---
-fn sd_segment(p: vec2<f32>, a: vec2<f32>, b: vec2<f32>) -> f32 {
-    let pa = p - a;
-    let ba = b - a;
-    let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-    return length(pa - ba * h);
-}
-
-// Returns a stylized intensity (0..1) for animated rings and lines.
-// It adds subtle orbital drift, pulsing radii, and moving dash highlights.
-fn wireframe_styled(p: vec2<f32>, t: f32) -> f32 {
-    var m = 0.0;
-    let base_centers = array<vec2<f32>, 3>(
-        vec2<f32>(0.62, 0.28),
-        vec2<f32>(0.80, 0.44),
-        vec2<f32>(0.70, 0.72),
-    );
-    let base_radii = array<f32, 3>(0.28, 0.18, 0.12);
-    for (var i = 0; i < 3; i = i + 1) {
-        let w = 0.7 + 0.3 * f32(i);
-        let c = base_centers[i] + 0.01 * vec2<f32>(
-            sin(t * (0.8 + 0.1 * f32(i)) + 3.0 * f32(i)),
-            cos(t * (0.7 + 0.13 * f32(i)) + 1.7 * f32(i)),
-        );
-        let r = base_radii[i] + 0.03 * sin(t * (0.9 + 0.17 * f32(i)) + 2.1 * f32(i)) + 0.015 * sin(5.0 * t + 0.7 * f32(i));
-        let v = p - c;
-        let ed = abs(length(v) - r);
-        let ang = atan2(v.y, v.x);
-        let dash = 0.5 + 0.5 * sin(ang * 14.0 - t * (1.6 + 0.2 * f32(i)) + f32(i));
-        let thickness = mix(0.010, 0.004, 0.5 + 0.5 * sin(t * 1.2 + f32(i)));
-        let mask = smoothstep(thickness, 0.0, ed) * pow(dash, 1.1);
-        m = max(m, mask * w);
-    }
-
-    let segs_a = array<vec2<f32>, 3>(
-        vec2<f32>(0.55, 0.20),
-        vec2<f32>(0.62, 0.28),
-        vec2<f32>(0.72, 0.70),
-    );
-    let segs_b = array<vec2<f32>, 3>(
-        vec2<f32>(0.85, 0.50),
-        vec2<f32>(0.80, 0.44),
-        vec2<f32>(0.86, 0.52),
-    );
-    for (var i = 0; i < 3; i = i + 1) {
-        let a = segs_a[i] + 0.01 * vec2<f32>(sin(t * 0.6 + f32(i)), cos(t * 0.7 + 2.1 * f32(i)));
-        let b = segs_b[i] + 0.01 * vec2<f32>(cos(t * 0.5 + 1.3 * f32(i)), sin(t * 0.65 + f32(i)));
-        let pa = p - a;
-        let ba = b - a;
-        let h = clamp(dot(pa, ba) / dot(ba, ba), 0.0, 1.0);
-        let q = a + ba * h;
-        let ed = length(p - q);
-        let along = h;
-        let dash = 0.5 + 0.5 * sin(along * 30.0 - t * (2.3 + 0.2 * f32(i)));
-        let glint = smoothstep(0.96, 1.0, sin(along * 6.28318 - t * 1.8 + f32(i)));
-        let thickness = 0.006;
-        let mask = smoothstep(thickness, 0.0, ed) * (0.65 * dash + 0.35 * glint);
-        m = max(m, mask * (0.85 + 0.15 * f32(i)));
-    }
-
-    return clamp(m, 0.0, 1.0);
-}
+// ============================================================================
+// FRAGMENT SHADER
+// ============================================================================
 
 @fragment
 fn fs_waves(inp: VsOut) -> @location(0) vec4<f32> {
@@ -137,10 +92,13 @@ fn fs_waves(inp: VsOut) -> @location(0) vec4<f32> {
     let gold = vec3<f32>(1.00, 0.86, 0.46);
     var col = vec3<f32>(0.04, 0.055, 0.10);
 
+    // Multi-layer wave rendering with depth parallax
     for (var L = 0; L < 3; L = L + 1) {
         let depth = f32(L);
         let par = mix(0.65, 1.25, depth / 2.0);
         var cuv = cuv0 * par + vec2<f32>(0.0, -0.10 * depth);
+        
+        // Swirl effect
         let c = (u.swirl_uv - 0.5) * vec2<f32>(aspect, 1.0) * par;
         let v = cuv - c;
         let r = length(v);
@@ -149,6 +107,8 @@ fn fs_waves(inp: VsOut) -> @location(0) vec4<f32> {
         let sn = sin(ang);
         let rot = vec2<f32>(v.x * cs - v.y * sn, v.x * sn + v.y * cs);
         cuv = c + rot;
+        
+        // Voice displacement
         var disp = vec2<f32>(0.0);
         for (var i = 0; i < 3; i = i + 1) {
             let v = u.voices[i];
@@ -160,13 +120,19 @@ fn fs_waves(inp: VsOut) -> @location(0) vec4<f32> {
             disp += dir * str;
         }
         cuv += disp;
+        
+        // Wave heightfield generation
         let tt = t * (0.30 + 0.08 * depth);
         let amp = mix(1.0, 2.2, depth / 2.0);
         var h = 0.0;
+        
+        // Primary wave patterns
         h += amp * (1.05 * sin((6.0 + 1.0 * depth) * cuv.x - 1.2 * tt));
         h += amp * (0.65 * sin((9.0 + 1.5 * depth) * cuv.x + 0.8 * tt + 0.7 * cuv.y));
         h *= (1.0 - 0.25 * abs(cuv.y));
         h += 0.35 * fbm(cuv * 2.4 + vec2<f32>(0.22 * tt, -0.16 * tt));
+        
+        // Voice-reactive wave modulation
         for (var i = 0; i < 3; i = i + 1) {
             let v = u.voices[i];
             let p = vec2<f32>(v.pos_pulse.x, v.pos_pulse.z) * 0.33;
@@ -176,31 +142,46 @@ fn fs_waves(inp: VsOut) -> @location(0) vec4<f32> {
             h += 0.22 * (1.0 / (1.0 + 6.0 * dd)) * sin(7.0 * (cuv.x - p.x) + 1.5 * tt);
         }
 
+        // Click/tap ripple effect
         let ruv_c = (u.ripple_uv - 0.5) * vec2<f32>(aspect, 1.0) * par;
         let rv = cuv - ruv_c;
         let rr = length(rv);
         let age = max(0.0, t - u.ripple_t0);
         let ripple_env = u.ripple_amp * exp(-2.0 * age) * exp(-3.0 * rr);
         h += ripple_env * sin(18.0 * rr - 6.0 * age);
+        
+        // Normal calculation for lighting
         let e = 0.002;
         let hx = h - (0.55 * sin(6.0 * (cuv.x - e) - 1.4 * tt) + 0.35 * sin(10.0 * (cuv.x - e) + 0.9 * tt + 0.8 * cuv.y) + 0.25 * fbm((cuv - vec2<f32>(e, 0.0)) * 2.5 + vec2<f32>(0.2 * tt, -0.15 * tt)));
         let hy = h - (0.55 * sin(6.0 * cuv.x - 1.4 * tt) + 0.35 * sin(10.0 * cuv.x + 0.9 * tt + 0.8 * (cuv.y - e)) + 0.25 * fbm((cuv - vec2<f32>(0.0, e)) * 2.5 + vec2<f32>(0.2 * tt, -0.15 * tt)));
         let n = normalize(vec3<f32>(hx, hy, e));
+        
+        // Lighting setup
         let l1 = normalize(vec3<f32>(-0.4, 0.3, 0.85));
         let l2 = normalize(vec3<f32>(0.6, -0.2, 0.75));
         let diff = 0.65 * max(dot(n, l1), 0.0) + 0.35 * max(dot(n, l2), 0.0);
+        
+        // Base material colors
         let base = mix(vec3<f32>(0.03, 0.04, 0.08), vec3<f32>(0.12, 0.14, 0.26), diff + 0.15 * u.ambient);
         let cool = vec3<f32>(0.18, 0.45, 1.05);
         let warm = vec3<f32>(1.08, 0.86, 0.40);
         let k = clamp(0.5 + 1.1 * h, 0.0, 1.0);
         var lay = base + mix(cool * 0.45, warm * 0.55, k);
+        
+        // Golden stripe patterns
         let stripes = smoothstep(0.45, 0.5, abs(fract(h * 8.0) - 0.5));
         lay += (1.0 - stripes) * gold * (0.18 + 0.30 * u.ambient);
+        
+        // Specular highlights
         let view = vec3<f32>(0.0, 0.0, 1.0);
         let h1 = normalize(l1 + view);
         lay += vec3<f32>(1.0) * (0.18 * pow(max(dot(n, h1), 0.0), 72.0));
+        
+        // Wave crest highlights
         let crest = smoothstep(0.84, 0.98, k);
         lay += gold * crest * (0.75 + 1.4 * u.ambient);
+        
+        // Voice proximity highlights
         for (var i = 0; i < 3; i = i + 1) {
             let v = u.voices[i];
             let p = vec2<f32>(v.pos_pulse.x, v.pos_pulse.z) * 0.33;
@@ -209,13 +190,17 @@ fn fs_waves(inp: VsOut) -> @location(0) vec4<f32> {
             lay += gold * exp(-40.0 * dd * dd) * (0.30 + 0.35 * pulse);
         }
 
+        // Ripple ring highlights
         let ring = smoothstep(0.010, 0.002, abs(rr - (0.20 * age + 0.02)));
         let ring_emiss = clamp(u.ripple_amp * exp(-1.4 * age) * ring, 0.0, 1.0);
         lay += gold * ring_emiss * 0.6;
+        
+        // Layer blending
         let a = mix(0.55, 0.28, depth / 2.0);
         col = col * (1.0 - a) + lay * a;
     }
 
+    // Film grain effect
     let s = hash2(cuv0 * 600.0 + t);
     col += (step(0.992, s) * (s - 0.992) * 240.0) * gold * (0.35 + 0.55 * u.ambient);
 
