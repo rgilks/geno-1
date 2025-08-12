@@ -1,7 +1,5 @@
-pub mod constants;
 pub mod music;
 
-pub use constants::*;
 pub use music::*;
 
 // Shaders bundled as string constants

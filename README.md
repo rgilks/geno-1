@@ -1,9 +1,9 @@
-# Geno-1 : Generative Music Visualizer (Rust + WebGPU + WebAudio)
+# Geno-1: Generative Music Visualizer (Rust + WebGPU + WebAudio)
 
 [![CI](https://github.com/rgilks/geno-1/actions/workflows/ci.yml/badge.svg)](https://github.com/rgilks/geno-1/actions/workflows/ci.yml)
 
 <div align="center">
- <img src="/docs/screenshot.png" alt="rgou Screenshot" width="626" />
+ <img src="/docs/screenshot.png" alt="geno-1 Screenshot" width="626" />
   <br />
   <a href='https://ko-fi.com/N4N31DPNUS' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi2.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
   <hr />
@@ -17,7 +17,7 @@
 - Mouse-driven FX: corner-based saturation (clean ↔ fizz) and opposite-corner delay emphasis; visuals have inertial swirl motion and click ripples
 - Note-driven visuals use attack/release smoothing for organic response (no abrupt jumps)
 - Start overlay to initialize audio (Click Start; canvas-click fallback)
-- Keyboard: A..F (root), 1..7 (mode), R (new sequence), T (random key+mode), Space (pause/resume), ArrowLeft/Right (tempo), ArrowUp/Down (volume), Enter (fullscreen)
+- Keyboard: A..G (root), 1..7 (mode), R (new sequence), T (random key+mode), Space (pause/resume), ArrowLeft/Right (tempo), ArrowUp/Down (volume), Enter (fullscreen)
 - Starts at a lower default volume; use ArrowUp to raise or ArrowDown to lower
 - Dynamic hint shows current BPM, paused, and muted state
 - Rich visuals: voice-reactive wave displacement, ambient waves background, post bloom/tonemap/vignette; optional analyser-driven spectrum dots
@@ -53,8 +53,10 @@ Additional scripts:
 
 Quick controls (browser):
 
-- A..F: root • 1..7: mode • R: new seq • T: random key+mode • Space: pause/resume • ArrowLeft/Right: tempo • ArrowUp/Down: volume • Enter: fullscreen
+- Click Start to initialize audio (canvas click also works)
 - Click canvas: play a note; mouse position affects sound
+- Keys: A..G (root), 1..7 (mode), R (new sequence), T (random key+mode), Space (pause/resume), ArrowLeft/Right (tempo), ArrowUp/Down (volume), Enter (fullscreen)
+- Mouse position maps to master saturation and delay; moving the pointer leaves a “water-like” trailing swirl in visuals
 
 ### Pre-commit Check
 
@@ -97,13 +99,6 @@ This repo is configured to deploy via Cloudflare Workers; cache-control headers 
 
 - The build generates `pkg/env.js` with a `version` derived from the current git commit (short SHA, with CI env fallbacks). `index.html` appends `?v=<version>` to the dynamic import of `app_web.js` to ensure deterministic cache busting across deploys.
 
-Controls in browser:
-
-- Click Start to initialize audio (canvas click also works)
-- Click canvas: play a note; mouse position affects sound
-- Keys: A..F (root), 1..7 (mode), R (new sequence), T (random key+mode), Space (pause/resume), ArrowLeft/Right (tempo), ArrowUp/Down (volume), Enter (fullscreen)
-- Mouse position maps to master saturation and delay; moving the pointer leaves a “water-like” trailing swirl in visuals
-
 Headless test:
 
 - `npm run ci` builds, serves, and runs a Puppeteer test locally
@@ -116,8 +111,6 @@ Headless test:
   - Requires repo secrets: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`
   - Workflow file: `.github/workflows/ci.yml`
   - CI tolerates missing WebGPU in headless by skipping engine-coupled assertions
-
-<!-- Desktop run instructions removed -->
 
 ### Live Demo
 

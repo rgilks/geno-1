@@ -9,7 +9,6 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use wasm_bindgen_futures::spawn_local;
 use web_sys as web;
-// (DeviceExt no longer needed; legacy vertex buffers removed)
 
 mod audio;
 mod camera;
@@ -21,9 +20,7 @@ mod frame;
 mod input;
 mod overlay;
 mod render;
-// ui module removed; overlay is controlled directly from here
 
-// Rendering/picking shared constants live in `constants.rs`
 fn wire_canvas_resize(canvas: &web::HtmlCanvasElement) {
     dom::sync_canvas_backing_size(canvas);
     let canvas_resize = canvas.clone();
@@ -119,16 +116,6 @@ fn wire_overlay_buttons(audio_ctx: &web::AudioContext, paused: &Rc<RefCell<bool>
         });
     }
 }
-// noisy helper remnants removed
-
-// analyser creation moved to audio::create_analyser
-
-// global keydown moved to events.rs
-
-// Create a GainNode with an initial value; logs on failure and returns None
-// create_gain moved to audio.rs
-
-// (use overlay::hide instead of local helper)
 
 #[wasm_bindgen(start)]
 pub fn start() -> Result<(), JsValue> {
@@ -296,5 +283,3 @@ async fn init() -> anyhow::Result<()> {
 
     Ok(())
 }
-
-// (local GpuState definition removed; use `render::GpuState` exclusively)

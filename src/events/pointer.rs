@@ -1,8 +1,6 @@
 use crate::audio;
-use crate::constants::CAMERA_Z;
-use crate::core::{
-    midi_to_hz, MusicEngine, ENGINE_DRAG_MAX_RADIUS, PICK_SPHERE_RADIUS, SPREAD, Z_OFFSET,
-};
+use crate::constants::{CAMERA_Z, ENGINE_DRAG_MAX_RADIUS, PICK_SPHERE_RADIUS, SPREAD, Z_OFFSET};
+use crate::core::{midi_to_hz, MusicEngine};
 use crate::input;
 use crate::render;
 use std::cell::RefCell;
@@ -114,7 +112,7 @@ fn wire_pointerdown(w: &InputWiring) {
             let mut ds = w.drag_state.borrow_mut();
             ds.active = true;
             ds.voice = i;
-            ds.plane_z_world = w.engine.borrow().voices[i].position.z * SPREAD + Z_OFFSET.z;
+            ds.plane_z_world = w.engine.borrow().voices[i].position.z * SPREAD.z + Z_OFFSET.z;
             log::info!("[mouse] begin drag on voice {}", i);
         }
         w.mouse_state.borrow_mut().down = true;

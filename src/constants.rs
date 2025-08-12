@@ -2,6 +2,8 @@
 ///
 /// These constants express intended behavior (e.g., time constants, clamp
 /// limits) and keep magic numbers out of the code, improving readability.
+use glam::Vec3;
+
 // Exponential decay rate for internal pulse energy
 pub const PULSE_ENERGY_DECAY_PER_SEC: f32 = 1.6;
 
@@ -61,6 +63,12 @@ pub const LEVEL_SPAN: f32 = 0.45;
 // Camera
 // Z distance used by both picking and audio listener alignment.
 pub const CAMERA_Z: f32 = 6.0;
+
+// Voice interaction
+pub const PICK_SPHERE_RADIUS: f32 = 0.5;
+pub const SPREAD: Vec3 = glam::Vec3::new(3.0, 3.0, 3.0);
+pub const Z_OFFSET: Vec3 = glam::Vec3::new(0.0, 0.0, -1.5);
+pub const ENGINE_DRAG_MAX_RADIUS: f32 = 1.0;
 
 // Post-processing defaults
 pub const BLOOM_STRENGTH: f32 = 0.9;
