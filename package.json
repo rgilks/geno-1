@@ -4,7 +4,7 @@
   "description": "Web (WASM): uses `wasm-pack` to build and a static `index.html` to run",
   "main": "index.js",
   "scripts": {
-    "build": "wasm-pack build --target web --out-dir pkg --out-name app_web --release && cp env.js pkg/env.js && rm -rf dist && mkdir -p dist/pkg && cp pkg/app_web.js dist/pkg/ && cp pkg/app_web_bg.wasm dist/pkg/ && cp env.js dist/pkg/env.js && cp index.html dist/index.html && cp favicon.svg dist/favicon.svg",
+    "build": "wasm-pack build --target web --out-dir pkg --out-name app_web --release && node scripts/gen-env.js && rm -rf dist && mkdir -p dist/pkg && cp pkg/app_web.js dist/pkg/ && cp pkg/app_web_bg.wasm dist/pkg/ && cp pkg/env.js dist/pkg/env.js && cp index.html dist/index.html && cp favicon.svg dist/favicon.svg",
     "serve": "http-server -p 8080 -c-1 .",
     "dev": "npm run build && (http-server -p 8080 -c-1 . & SERVER_PID=$!; npm run open; wait $SERVER_PID)",
     "open": "open http://localhost:8080",

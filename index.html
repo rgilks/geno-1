@@ -240,7 +240,8 @@
       Try Chrome 113+ or Edge 113+ with WebGPU enabled.
     </div>
     <script type="module">
-      const v = Date.now();
+      import { version as versionTag } from "env";
+      const v = versionTag || Date.now();
       console.log("[index] dynamic import cache-bust tag:", v);
       if (!("gpu" in navigator)) {
         const el = document.getElementById("no-webgpu");

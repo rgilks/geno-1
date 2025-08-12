@@ -79,6 +79,10 @@ This repo is configured to deploy via Cloudflare Workers; cache-control headers 
   - Build populates `dist/` with only production runtime files: `index.html` and `pkg/{app_web.js, app_web_bg.wasm, env.js}`
 - Worker sets cache-control headers for `.wasm`/`.js`/HTML
 
+#### Build cache-busting
+
+- The build generates `pkg/env.js` with a `version` derived from the current git commit (short SHA, with CI env fallbacks). `index.html` appends `?v=<version>` to the dynamic import of `app_web.js` to ensure deterministic cache busting across deploys.
+
 Controls in browser:
 
 - Click Start to initialize audio (canvas click also works)
