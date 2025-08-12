@@ -57,12 +57,18 @@ function handleRequest(req, res) {
 
   if (pathname === "/") pathname = "/index.html";
   if (pathname === "/favicon.ico") {
-    res.writeHead(200, {
-      "Content-Type": "image/svg+xml",
-      ...SECURITY_HEADERS,
+    const svgPath = path.join(ROOT, "favicon.svg");
+    return fs.access(svgPath, fs.constants.F_OK, (err) => {
+      if (err) {
+        res.writeHead(200, {
+          "Content-Type": "image/svg+xml",
+          ...SECURITY_HEADERS,
+        });
+        res.end('<svg xmlns="http://www.w3.org/2000/svg"/>');
+      } else {
+        serveFile(svgPath, res);
+      }
     });
-    res.end('<svg xmlns="http://www.w3.org/2000/svg"/>');
-    return;
   }
 
   // Prefer pkg (built wasm/js)

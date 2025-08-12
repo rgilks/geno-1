@@ -1,25 +1,4 @@
-## Git hooks (local safety checks)
-
-This repo uses native Git hooks in `.githooks` (no Husky dependency). Enable them once per clone:
-
-```
-git config core.hooksPath .githooks
-```
-
-Or run the convenience script (also ensures hooks are executable):
-
-```
-npm run setup:hooks
-```
-
-Hooks provided:
-
-- `pre-commit`: runs fast Rust checks (`npm run check:rust`) to keep commits quick
-- `pre-push`: runs the full project check (`npm run check`) before code leaves your machine
-
-The full check enforces Rust fmt/clippy, runs unit tests, builds the web bundle, serves it, and executes the headless Puppeteer test. If any step fails, Git aborts the commit/push.
-
-## Generative 3D Music Visualizer (Rust + WebGPU + WebAudio)
+# Geno-1 : Generative Music Visualizer (Rust + WebGPU + WebAudio)
 
 [![Web build and headless test](https://github.com/rgilks/geno-1/actions/workflows/web-ci.yml/badge.svg)](https://github.com/rgilks/geno-1/actions/workflows/web-ci.yml)
 
@@ -31,18 +10,15 @@ The full check enforces Rust fmt/clippy, runs unit tests, builds the web bundle,
 - Mouse-driven FX: corner-based saturation (clean ↔ fizz) and opposite-corner delay emphasis; visuals have inertial swirl motion and click ripples
 - Note-driven visuals use attack/release smoothing for organic response (no abrupt jumps)
 - Start overlay to initialize audio (Click Start; canvas-click fallback)
-- Drag voices in XZ plane; click to mute, Shift+Click reseed, Alt+Click solo
 - Keyboard: A..F (root), 1..7 (mode), R (new sequence), T (random key+mode), Space (pause/resume), ArrowLeft/Right (tempo), ArrowUp/Down (volume), Enter (fullscreen)
 - Starts at a lower default volume; use ArrowUp to raise or ArrowDown to lower
 - Dynamic hint shows current BPM, paused, and muted state
 - Rich visuals: instanced voice markers with emissive pulses, ambient waves background, post bloom/tonemap/vignette; optional analyser-driven spectrum dots
 
-Note: Desktop UI has been removed to simplify the project; the focus is the web build.
-
 ### Demo
 
-- Local: see Run (Web) below. After `npm run dev:web`, open `http://localhost:8080`.
-- Hosted: deploy with Cloudflare Workers (see Deploy). A public demo link can be added here when available.
+- Local: see Run (Web) below. After `npm run dev`, open `http://localhost:8080`.
+- Hosted: [https://geno-1.tre.systems/](https://geno-1.tre.systems/)
 
 ### Requirements
 
@@ -57,12 +33,9 @@ Notes:
 - If audio does not start, click the Start overlay.
 - Input coordinates: canvas UV origin is top-left (uv.y = 0 at top). Pointer-driven swirl and click ripple use this convention.
 
-### Run (Web)
+### Run
 
-- Build: `npm run build:web`
-- Serve: `node server.js` (serves `crates/app-web` with correct headers)
-- Open: visit `http://localhost:8080`
-- Dev shortcut: `npm run dev:web` then `npm run open:web`
+- `npm run dev` then `npm run open`
 
 Quick controls (browser):
 
@@ -75,11 +48,32 @@ Quick controls (browser):
   - Rust: `cargo fmt --check`, `cargo clippy` (deny warnings), `cargo test` (workspace)
   - Web: build, serve, and execute the headless browser test
 
+## Git hooks (local safety checks)
+
+This repo uses native Git hooks in `.githooks` (no Husky dependency). Enable them once per clone:
+
+```
+git config core.hooksPath .githooks
+```
+
+Or run the convenience script (also ensures hooks are executable):
+
+```
+npm run setup
+```
+
+Hooks provided:
+
+- `pre-commit`: runs fast Rust checks (`npm run check:rust`) to keep commits quick
+- `pre-push`: runs the full project check (`npm run check`) before code leaves your machine
+
+The full check enforces Rust fmt/clippy, runs unit tests, builds the web bundle, serves it, and executes the headless Puppeteer test. If any step fails, Git aborts the commit/push.
+
 ### Deploy (Cloudflare Workers)
 
 This repo is configured to deploy via Cloudflare Workers; headers (COOP/COEP/CORP) are set in `worker.js`.
 
-- Build: `npm run build:web`
+- Build: `npm run build`
 - Deploy: `npx --yes wrangler deploy`
   - Config: `wrangler.toml` (assets directory is `dist/`)
   - Build populates `dist/` with only production runtime files: `index.html` and `pkg/{app_web.js, app_web_bg.wasm, env.js}`
@@ -94,7 +88,7 @@ Controls in browser:
 
 Headless test:
 
-- `npm run ci:web` builds, serves, and runs a Puppeteer test locally
+- `npm run ci` builds, serves, and runs a Puppeteer test locally
 
 ### Continuous Integration
 

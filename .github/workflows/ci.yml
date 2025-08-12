@@ -43,9 +43,6 @@ jobs:
           sudo apt-get update
           # Common Chromium deps for Puppeteer
           sudo apt-get install -y libgtk-3-0 libgbm1
-          # ALSA renamed on Ubuntu 24.04 to libasound2t64; fall back to libasound2 on older images
-          sudo apt-get install -y libasound2t64 || sudo apt-get install -y libasound2 || true
-
       - name: Install wasm-pack
         run: curl -sSfL https://rustwasm.github.io/wasm-pack/installer/init.sh | sh
 

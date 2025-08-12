@@ -1,6 +1,6 @@
 [package]
 name = "app-web"
-version = "0.1.0"
+version = "1.0.0"
 edition = "2021"
 license = "MIT"
 description = "Web front-end (WASM) using WebGPU and WebAudio for geno-1"
@@ -9,34 +9,24 @@ repository = "https://github.com/rgilks/geno-1"
 [lib]
 crate-type = ["cdylib", "rlib"]
 
-[workspace.package]
-authors = ["Robert Gilks"]
-edition = "2021"
-license = "MIT"
-version = "0.1.0"
-description = "Generative 3D music visualizer using Rust, WebGPU (wgpu v24), and WebAudio"
-repository = "https://github.com/rgilks/geno-1"
 
 [dependencies]
 anyhow = "1.0"
 log = "0.4"
 console_log = { version = "1.0", features = ["color"] }
 console_error_panic_hook = "0.1"
-wasm-bindgen = { version = "0.2", features = ["serde-serialize"] }
+wasm-bindgen = "0.2"
 wasm-bindgen-futures = "0.4"
 js-sys = "0.3"
 web-sys = { version = "0.3", features = [
   "Window",
   "Document",
   "HtmlCanvasElement",
-  "HtmlElement",
   "DomTokenList",
   "Element",
   "EventTarget",
-  "MouseEvent",
   "PointerEvent",
   "KeyboardEvent",
-  "CanvasRenderingContext2d",
   "DomRect",
   "AudioContext",
   "AudioDestinationNode",
@@ -58,13 +48,11 @@ web-sys = { version = "0.3", features = [
   "BiquadFilterType",
 ] }
 wgpu = { version = "24.0", features = ["webgpu"] }
-glam = { version = "0.27", features = ["bytemuck"] }
+glam = "0.27"
 bytemuck = { version = "1.16", features = ["derive"] }
 instant = "0.1"
 rand = "0.8"
 getrandom = { version = "0.2", features = ["js"] }
-smallvec = "1.13"
-fnv = "1.0"
 
 
 [profile.release]

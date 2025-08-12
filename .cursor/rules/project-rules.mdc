@@ -23,7 +23,7 @@ alwaysApply: true
 ## Testing
 
 - Rust unit tests live alongside code: run `cargo test`.
-- Headless web test: `npm run ci:web` (builds WASM, serves, runs Puppeteer `web-test.js`).
+- Headless web test: `npm run ci` (builds WASM, serves, runs Puppeteer `web-test.js`).
 - Full check: `npm run check` runs:
   - `cargo fmt --check` and `cargo clippy -D warnings`
   - `cargo test` (workspace, excluding `app-web`)

@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <defs>
+    <style>
+      text { font: 52px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","EmojiOne Color","Twemoji Mozilla",sans-serif; }
+    </style>
+  </defs>
+  <rect width="64" height="64" fill="none"/>
+  <!-- Yellow wave icon -->
+  <path d="M0 40 Q 8 32 16 40 T 32 40 T 48 40 T 64 40 L64 64 L0 64 Z" fill="#FFD54F"/>
+  <path d="M0 34 Q 8 26 16 34 T 32 34 T 48 34 T 64 34 L64 40 L0 40 Z" fill="#FFE082"/>
+</svg>
+
