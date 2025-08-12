@@ -6,10 +6,6 @@ export default {
 
     const res = new Response(response.body, response);
 
-    res.headers.set("Cross-Origin-Opener-Policy", "same-origin");
-    res.headers.set("Cross-Origin-Embedder-Policy", "require-corp");
-    res.headers.set("Cross-Origin-Resource-Policy", "cross-origin");
-
     const url = new URL(request.url);
 
     if (url.pathname.endsWith(".wasm")) {

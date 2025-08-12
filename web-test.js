@@ -1,5 +1,29 @@
 const puppeteer = require("puppeteer");
 
+const TARGET_URL = process.env.TEST_URL || "http://localhost:8080";
+
+async function gotoWithRetry(
+  page,
+  url,
+  totalTimeoutMs = 15000,
+  intervalMs = 300
+) {
+  const start = Date.now();
+  for (;;) {
+    try {
+      await page.goto(url, { waitUntil: "networkidle2", timeout: 5000 });
+      return;
+    } catch (_) {
+      if (Date.now() - start > totalTimeoutMs) {
+        throw new Error(
+          `Server did not become ready at ${url} within ${totalTimeoutMs}ms`
+        );
+      }
+      await new Promise((r) => setTimeout(r, intervalMs));
+    }
+  }
+}
+
 (async () => {
   const browser = await puppeteer.launch({
     headless: "new",
@@ -23,10 +47,7 @@ const puppeteer = require("puppeteer");
     console.log("[console]", t);
   });
 
-  await page.goto("http://localhost:8080", {
-    waitUntil: "networkidle2",
-    timeout: 30000,
-  });
+  await gotoWithRetry(page, TARGET_URL);
 
   await page.waitForSelector("#app-canvas", { timeout: 10000 });
 

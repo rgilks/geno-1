@@ -35,7 +35,7 @@ Notes:
 
 ### Run
 
-- `npm run dev` then `npm run open`
+- `npm run dev` (builds, serves at http://localhost:8080, and opens the browser)
 
 Quick controls (browser):
 
@@ -71,13 +71,13 @@ The full check enforces Rust fmt/clippy, runs unit tests, builds the web bundle,
 
 ### Deploy (Cloudflare Workers)
 
-This repo is configured to deploy via Cloudflare Workers; headers (COOP/COEP/CORP) are set in `worker.js`.
+This repo is configured to deploy via Cloudflare Workers; cache-control headers for static assets are set in `worker.js`.
 
 - Build: `npm run build`
 - Deploy: `npx --yes wrangler deploy`
   - Config: `wrangler.toml` (assets directory is `dist/`)
   - Build populates `dist/` with only production runtime files: `index.html` and `pkg/{app_web.js, app_web_bg.wasm, env.js}`
-  - Worker sets COOP/COEP/CORP and cache-control headers for `.wasm`/`.js`/HTML
+- Worker sets cache-control headers for `.wasm`/`.js`/HTML
 
 Controls in browser:
 

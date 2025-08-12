@@ -1,12 +1,39 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
   <defs>
-    <style>
-      text { font: 52px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji","EmojiOne Color","Twemoji Mozilla",sans-serif; }
-    </style>
+    <!-- Subtle grain pattern -->
+    <pattern id="grain" width="3" height="3" patternUnits="userSpaceOnUse">
+      <circle cx="0.5" cy="0.5" r="0.3" fill="#000" opacity="0.06"/>
+      <circle cx="2.2" cy="1.8" r="0.25" fill="#000" opacity="0.05"/>
+      <circle cx="1.2" cy="2.5" r="0.2" fill="#000" opacity="0.05"/>
+    </pattern>
+    <!-- Gentle contour lines -->
+    <mask id="contours">
+      <rect width="64" height="64" fill="black"/>
+      <g stroke="white" stroke-width="0.4" fill="none" opacity="0.5">
+        <path d="M-6,58 C14,44 28,40 40,36 C52,32 66,22 74,6"/>
+        <path d="M-8,50 C10,40 26,34 38,30 C50,26 66,18 76,2"/>
+        <path d="M-10,42 C8,36 24,28 36,24 C48,20 64,14 78,-4"/>
+      </g>
+    </mask>
+    <clipPath id="round">
+      <rect x="0" y="0" width="64" height="64" rx="12" ry="12"/>
+    </clipPath>
   </defs>
-  <rect width="64" height="64" fill="none"/>
-  <!-- Yellow wave icon -->
-  <path d="M0 40 Q 8 32 16 40 T 32 40 T 48 40 T 64 40 L64 64 L0 64 Z" fill="#FFD54F"/>
-  <path d="M0 34 Q 8 26 16 34 T 32 34 T 48 34 T 64 34 L64 40 L0 40 Z" fill="#FFE082"/>
+
+  <g clip-path="url(#round)">
+    <!-- Background -->
+    <rect width="64" height="64" fill="#e9e2bf"/>
+
+    <!-- Swirling bands -->
+    <path fill="#d9cfaa" d="M-6 50 C 8 44 14 40 24 38 C 34 36 44 32 56 22 C 64 16 70 8 74 0 L 74 74 L -6 74 Z"/>
+    <path fill="#274f9e" d="M-6 66 C 6 58 18 54 30 50 C 44 46 54 40 62 32 C 68 26 74 16 78 6 L 78 78 L -6 78 Z"/>
+    <path fill="#ece5c7" d="M-10 58 C 2 52 10 48 22 44 C 36 40 44 36 54 28 C 60 24 66 16 70 8 L 70 70 L -10 70 Z"/>
+
+    <!-- Grain overlay -->
+    <rect width="64" height="64" fill="url(#grain)" opacity="0.6"/>
+
+    <!-- Contour highlight with mask -->
+    <rect width="64" height="64" fill="#ffffff" opacity="0.06" mask="url(#contours)"/>
+  </g>
 </svg>
 

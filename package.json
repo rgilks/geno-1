@@ -6,10 +6,10 @@
   "scripts": {
     "build": "wasm-pack build --target web --out-dir pkg --out-name app_web --release && cp env.js pkg/env.js && rm -rf dist && mkdir -p dist/pkg && cp pkg/app_web.js dist/pkg/ && cp pkg/app_web_bg.wasm dist/pkg/ && cp env.js dist/pkg/env.js && cp index.html dist/index.html && cp favicon.svg dist/favicon.svg",
     "serve": "http-server -p 8080 -c-1 .",
-    "dev": "npm run build && npm run serve",
+    "dev": "npm run build && (http-server -p 8080 -c-1 . & SERVER_PID=$!; npm run open; wait $SERVER_PID)",
     "open": "open http://localhost:8080",
     "test": "node web-test.js",
-    "ci": "npm run build && node server.js & SERVER_PID=$!; node scripts/wait-for-server.js && node web-test.js; kill $SERVER_PID 2>/dev/null || true",
+    "ci": "npm run build && (http-server -p 8080 -c-1 . >/dev/null 2>&1 & SERVER_PID=$!; trap 'kill $SERVER_PID 2>/dev/null || true' EXIT; node web-test.js)",
     "clean": "cargo clean && rm -rf pkg",
     "check:rust": "cargo fmt --all -- --check && cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace --all-targets",
     "check": "npm run check:rust && npm run ci",
