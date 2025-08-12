@@ -27,7 +27,6 @@ pub fn ray_sphere(ray_origin: Vec3, ray_dir: Vec3, center: Vec3, radius: f32) ->
     (t >= 0.0).then_some(t)
 }
 
-// ---------------- Pointer helpers (moved from lib.rs) ----------------
 #[inline]
 pub fn pointer_canvas_px(ev: &web::PointerEvent, canvas: &web::HtmlCanvasElement) -> Vec2 {
     let el: web::Element = canvas.clone().unchecked_into();

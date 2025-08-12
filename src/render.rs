@@ -10,8 +10,6 @@ use targets::RenderTargets;
 
 pub use crate::camera::screen_to_world_ray;
 
-// ===================== WebGPU state (moved from lib.rs) =====================
-
 use waves::{create_waves_resources, VoicePacked, WavesResources, WavesUniforms};
 
 #[repr(C)]
