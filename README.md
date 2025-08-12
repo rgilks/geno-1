@@ -3,18 +3,19 @@
 [![CI](https://github.com/rgilks/geno-1/actions/workflows/ci.yml/badge.svg)](https://github.com/rgilks/geno-1/actions/workflows/ci.yml)
 
 <div align="center">
- <img src="/docs/screenshot.png" alt="geno-1 Screenshot" width="626" />
+ <img src="/docs/screenshot.png" alt="geno-1 Screenshot" width="902" />
   <br />
   <a href='https://ko-fi.com/N4N31DPNUS' target='_blank'><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi2.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
   <hr />
 </div>
 
-### Project Status (v1.1 - A- Grade)
+### Project Status (v1.2 - A Grade)
 
 **🎵 Advanced Audio Engine:**
 
 - 3-voice polyphonic system with configurable parameters (trigger probability, octave offset, duration)
 - Complete musical alphabet support (A-G keys) with 7 diatonic modes (1-7 keys)
+- **Microtonality system**: global detune (±200¢), alternative tuning systems (19-TET, 24-TET, 31-TET)
 - Professional spatial audio: per-voice `PannerNode` with real-time 3D positioning
 - Master effects chain: convolution reverb, dark feedback delay, saturation, per-voice sends
 - Gesture-based audio unlock with professional start overlay
@@ -36,7 +37,7 @@
 
 **🛠️ Professional Quality:**
 
-- 25 comprehensive tests including property-based testing for mathematical functions
+- 31 comprehensive tests including property-based testing for mathematical functions
 - Zero compilation warnings with strict linting (`clippy -D warnings`)
 - Enhanced error handling with user-friendly WebGPU failure messages
 - Professional CI/CD with automated testing, performance validation, and deployment
@@ -76,8 +77,15 @@ Additional scripts:
 
 - **A-G**: Set root note (complete musical alphabet)
 - **1-7**: Select diatonic mode (Ionian, Dorian, Phrygian, Lydian, Mixolydian, Aeolian, Locrian)
+- **8-0**: Alternative tuning systems (8=19-TET, 9=24-TET, 0=31-TET pentatonic)
 - **R**: Regenerate all voice sequences
 - **T**: Random root note + mode combination
+
+**🎵 Microtonality Controls:**
+
+- **,**: Decrease global detune by 50¢ (Shift+, for 10¢ fine adjustment)
+- **.**: Increase global detune by 50¢ (Shift+. for 10¢ fine adjustment)
+- **/**: Reset detune to 0¢
 
 **🎛️ Playback Controls:**
 
