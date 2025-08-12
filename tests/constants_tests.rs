@@ -54,8 +54,6 @@ fn fx_weights_sum_to_reasonable_values() {
 #[allow(clippy::assertions_on_constants)]
 fn core_constants_are_positive() {
     assert!(SPREAD > 0.0);
-    assert!(BASE_SCALE > 0.0);
-    assert!(SCALE_PULSE_MULTIPLIER > 0.0);
     assert!(PICK_SPHERE_RADIUS > 0.0);
     assert!(ENGINE_DRAG_MAX_RADIUS > 0.0);
 }

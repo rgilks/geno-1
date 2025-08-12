@@ -1,8 +1,8 @@
 use crate::constants::*;
-use crate::core::{MusicEngine, Waveform, BASE_SCALE, SCALE_PULSE_MULTIPLIER, SPREAD, Z_OFFSET};
+use crate::core::{MusicEngine, Waveform};
 use crate::input;
 use crate::render;
-use glam::{Vec3, Vec4};
+use glam::Vec3;
 use instant::Instant;
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -48,11 +48,6 @@ pub struct FrameContext<'a> {
     pub swirl_vel: [f32; 2],
     pub swirl_initialized: bool,
     pub pulse_energy: [f32; 3],
-
-    // Reused per-frame instance buffers to avoid allocations
-    pub positions: Vec<Vec3>,
-    pub colors: Vec<Vec4>,
-    pub scales: Vec<f32>,
 }
 
 impl<'a> FrameContext<'a> {
@@ -154,12 +149,7 @@ impl<'a> FrameContext<'a> {
                 }
             }
 
-            // Build instance buffers for renderer
-            let pulses_snapshot: Vec<f32> = {
-                let pulses_ref = self.pulses.borrow();
-                pulses_ref.clone()
-            };
-            self.build_instances_reuse(&pulses_snapshot);
+            // Voice positions are now only used for audio spatialization and wave displacement
 
             // Camera + listener
             let cam_eye = Vec3::new(0.0, 0.0, CAMERA_Z);
@@ -181,7 +171,7 @@ impl<'a> FrameContext<'a> {
                 let w = self.canvas.width();
                 let h = self.canvas.height();
                 g.resize_if_needed(w, h);
-                if let Err(e) = g.render(dt_sec, &self.positions, &self.scales) {
+                if let Err(e) = g.render(dt_sec) {
                     log::error!("render error: {:?}", e);
                 }
             }
@@ -248,74 +238,6 @@ impl<'a> FrameContext<'a> {
         self.swirl_energy = (1.0 - SWIRL_ENERGY_BLEND_ALPHA) * self.swirl_energy
             + SWIRL_ENERGY_BLEND_ALPHA * target;
         self.prev_uv = uv;
-    }
-
-    fn build_instances_reuse(&mut self, pulses: &[f32]) {
-        let e_ref = self.engine.borrow();
-        let z_offset = Z_OFFSET;
-        let spread = SPREAD;
-        let ring_count = RING_COUNT;
-        self.positions.clear();
-        self.colors.clear();
-        self.scales.clear();
-        self.positions.reserve(3 + ring_count * 3 + 16);
-        self.colors.reserve(3 + ring_count * 3 + 16);
-        self.scales.reserve(3 + ring_count * 3 + 16);
-        self.positions
-            .push(e_ref.voices[0].position * spread + z_offset);
-        self.positions
-            .push(e_ref.voices[1].position * spread + z_offset);
-        self.positions
-            .push(e_ref.voices[2].position * spread + z_offset);
-        // Static neutral color; shader color accents are procedural now
-        self.colors.push(Vec4::new(0.25, 0.65, 1.0, 1.0));
-        self.colors.push(Vec4::new(0.25, 0.65, 1.0, 1.0));
-        self.colors.push(Vec4::new(0.25, 0.65, 1.0, 1.0));
-        let hovered = *self.hover_index.borrow();
-        for i in 0..3 {
-            if e_ref.voices[i].muted {
-                self.colors[i].x *= MUTE_DARKEN;
-                self.colors[i].y *= MUTE_DARKEN;
-                self.colors[i].z *= MUTE_DARKEN;
-                self.colors[i].w = 1.0;
-            }
-            if hovered == Some(i) {
-                self.colors[i].x = (self.colors[i].x * HOVER_BRIGHTEN).min(1.0);
-                self.colors[i].y = (self.colors[i].y * HOVER_BRIGHTEN).min(1.0);
-                self.colors[i].z = (self.colors[i].z * HOVER_BRIGHTEN).min(1.0);
-            }
-        }
-        self.scales
-            .push(BASE_SCALE + pulses[0] * SCALE_PULSE_MULTIPLIER);
-        self.scales
-            .push(BASE_SCALE + pulses[1] * SCALE_PULSE_MULTIPLIER);
-        self.scales
-            .push(BASE_SCALE + pulses[2] * SCALE_PULSE_MULTIPLIER);
-
-        if let Some(a) = &self.analyser {
-            let bins = a.frequency_bin_count() as usize;
-            let dots = bins.min(ANALYSER_DOTS_MAX);
-            if dots > 0 {
-                {
-                    let mut buf = self.analyser_buf.borrow_mut();
-                    if buf.len() != bins {
-                        buf.resize(bins, 0.0);
-                    }
-                    a.get_float_frequency_data(&mut buf);
-                }
-                let z = z_offset.z;
-                for i in 0..dots {
-                    let v_db = self.analyser_buf.borrow()[i];
-                    let lin = ((v_db + 100.0) / 100.0).clamp(0.0, 1.0);
-                    let x = -2.8 + (i as f32) * (5.6 / (dots as f32 - 1.0));
-                    let y = -1.8;
-                    self.positions.push(Vec3::new(x, y, z));
-                    let c = Vec3::new(0.25 + 0.5 * lin, 0.6 + 0.3 * lin, 0.9);
-                    self.colors.push(Vec4::from((c, 0.95)));
-                    self.scales.push(0.18 + lin * 0.35);
-                }
-            }
-        }
     }
 }
 

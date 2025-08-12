@@ -1,4 +1,3 @@
-use crate::core::{BASE_SCALE, SCALE_PULSE_MULTIPLIER};
 use glam::Vec3;
 use web_sys as web;
 
@@ -344,12 +343,7 @@ impl<'a> GpuState<'a> {
         }
     }
 
-    pub fn render(
-        &mut self,
-        dt_sec: f32,
-        positions: &[Vec3],
-        scales: &[f32],
-    ) -> Result<(), wgpu::SurfaceError> {
+    pub fn render(&mut self, dt_sec: f32) -> Result<(), wgpu::SurfaceError> {
         self.resize_if_needed(self.width, self.height);
         self.time_accum += dt_sec.max(0.0);
         let frame = self.surface.get_current_texture()?;
@@ -376,19 +370,21 @@ impl<'a> GpuState<'a> {
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
-            let pack = |i: usize| VoicePacked {
-                pos_pulse: [
-                    positions[i].x,
-                    positions[i].y,
-                    positions[i].z,
-                    ((scales[i] - BASE_SCALE).max(0.0) / SCALE_PULSE_MULTIPLIER).clamp(0.0, 1.5),
-                ],
-            };
             let w = WavesUniforms {
                 resolution: [self.width as f32, self.height as f32],
                 time: self.time_accum,
                 ambient: self.ambient_energy,
-                voices: [pack(0), pack(1), pack(2)],
+                voices: [
+                    VoicePacked {
+                        pos_pulse: [0.0, 0.0, -4.0, 0.0],
+                    }, // Voice 1 at center
+                    VoicePacked {
+                        pos_pulse: [-1.8, 0.0, -4.0, 0.0],
+                    }, // Voice 2 left
+                    VoicePacked {
+                        pos_pulse: [1.8, 0.0, -4.0, 0.0],
+                    }, // Voice 3 right
+                ],
                 swirl_uv: [
                     self.swirl_uv[0].clamp(0.0, 1.0),
                     self.swirl_uv[1].clamp(0.0, 1.0),

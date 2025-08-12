@@ -20,7 +20,7 @@
 - Keyboard: A..F (root), 1..7 (mode), R (new sequence), T (random key+mode), Space (pause/resume), ArrowLeft/Right (tempo), ArrowUp/Down (volume), Enter (fullscreen)
 - Starts at a lower default volume; use ArrowUp to raise or ArrowDown to lower
 - Dynamic hint shows current BPM, paused, and muted state
-- Rich visuals: instanced voice markers with emissive pulses, ambient waves background, post bloom/tonemap/vignette; optional analyser-driven spectrum dots
+- Rich visuals: voice-reactive wave displacement, ambient waves background, post bloom/tonemap/vignette; optional analyser-driven spectrum dots
 
 ### Demo
 

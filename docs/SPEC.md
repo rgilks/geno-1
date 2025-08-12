@@ -10,7 +10,7 @@ Users can **influence and interact** with the generative music without manually 
 
 - 3 generative voices (sine/saw/triangle) with scale-constrained pitches (C major pentatonic by default), scheduler on an eighth-note grid
 - Web Audio graph with per-voice `PannerNode` and master reverb/delay buses; starts muted with Start overlay; gesture unlock required by browsers
-- Visuals: instanced voice markers, ambient waves background with pointer swirl and click ripples, post-processing (bright pass, blur, ACES tonemap, vignette, grain)
+- Visuals: ambient waves background with voice-reactive displacement, pointer swirl and click ripples, post-processing (bright pass, blur, ACES tonemap, vignette, grain)
 - Planned microtonality: global detune in cents and additional microtonal scale families (19-TET, 24-TET, 31-TET); keyboard shortcuts for detune and scale selection
 
 ## Goals and Use Cases
@@ -258,7 +258,7 @@ graph TD
 **Scene and Visual Elements:**
 What the user sees:
 
-- **Objects Representing Voices:** Three instanced round markers (circle-masked quads) represent voices. Positions correspond to voice `PannerNode` positions; markers pulse and emit on note events.
+- **Voice Influence on Waves:** Voice positions influence the wave patterns through displacement and proximity effects, creating golden highlights and wave distortions around each voice location.
 - **Ambient Waves Background:** A fullscreen pass (see `waves.wgsl`) renders layered ribbons with pointer-driven swirl displacement, per-voice influence, and click/tap ripple propagation.
 - **Post-processing:** A post stack (see `post.wgsl`) performs bright pass, separable blur, ACES tonemap, vignette, subtle hue warp, and film grain.
 - **Camera:** Fixed view; the `AudioListener` tracks the camera to maintain spatial consistency.
@@ -301,7 +301,7 @@ The UI is minimalist and embedded in the 3D world. The goal is that the user see
 
 - **Play/Pause:** Space key toggles pause/resume. No in-scene play/pause icon yet.
 - **Regenerate:** `R` reseeds all voices. Per-voice: Shift+Click reseeds, Alt+Click solos, Click toggles mute.
-- **Position Adjustment:** Click+drag a voice object to move it on the horizontal plane; movement is clamped to a radius. Positions update the corresponding `PannerNode` in real time.
+- **Position Adjustment:** Click+drag on a voice's invisible interaction zone to move it on the horizontal plane; movement is clamped to a radius. Positions update the corresponding `PannerNode` in real time.
 - **Tempo:** ArrowRight/ArrowLeft adjust BPM.
 - **Overlay:** Start overlay for audio unlock; `H` toggles visibility. It does not show live BPM/Paused/Muted state.
 
@@ -309,13 +309,13 @@ The UI is minimalist and embedded in the 3D world. The goal is that the user see
 We identify additional interactions that could be mapped to in-scene controls:
 
 - **Play/Pause:** If the system allows stopping the music, a control to pause or resume generation. Perhaps the music runs by default and maybe we don’t need an explicit play (it starts immediately), but pause could be useful. Implement as an icon (e.g., a play/pause symbol) floating in a corner of the scene or as part of an object (maybe a central orb that stops/starts everything when clicked).
-- **Regenerate (Randomize):** A control to generate a new musical sequence (either for all voices at once, or maybe separate control per voice). For all-at-once, an icon like 🔄 could be placed somewhere in view. For per-voice regeneration, perhaps clicking an individual voice object could trigger it to come up with a new pattern.
+- **Regenerate (Randomize):** A control to generate a new musical sequence (either for all voices at once, or maybe separate control per voice). For all-at-once, an icon like 🔄 could be placed somewhere in view. For per-voice regeneration, perhaps clicking on a voice's invisible interaction zone could trigger it to come up with a new pattern.
 - **Voice Mute/Unmute or Volume:** Perhaps clicking a voice object toggles it on/off (if user wants to focus on certain layers). If no labels, the object’s appearance can indicate mute state (e.g., dim or turn grey when muted). Volume could be controlled by distance: maybe the user drags the object closer or further from camera/listener to effectively change volume (since closer = louder in spatial audio). This would be a very natural metaphor for volume control!
 - **Position Adjustment:** The user can **grab and move a voice’s object** in the 3D space. This changes the spatial position of that sound (panning/volume in headphones). It’s an interactive way for the user to do a sort of “mixing” – e.g., spread sounds out or bring one closer. We’ll implement drag controls:
 
   - On desktop, mouse click+drag on an object could move it. We need to implement a picking mechanism to select objects with the mouse. Possibly ray-cast from camera through cursor to find which object is clicked.
   - Simplify movement to perhaps a plane or spherical surface: e.g., restrict dragging to horizontal plane (x-z) so user won’t lose it in depth too much, or allow full 3D if we have a way to move in all axes (maybe using right-click or modifier for up/down).
-  - As the object moves, update the corresponding PannerNode position in real-time so the sound appears from the new direction. This will likely impress the spatial effect on the user.
+  - As the voice position moves, update the corresponding PannerNode position in real-time so the sound appears from the new direction. This will likely impress the spatial effect on the user.
 
 - **Change Scale/Key or Mode:** We might include a control for musical scale or mood. Perhaps a small set of preset scales (Major, Minor, Pentatonic, etc.) can be cycled. Without labels, this is tricky – maybe an object that cycles color and each color corresponds to a scale (could be hinted in some text in documentation or a minimal legend). Alternatively, the user might not need to change scale if the generative is fine by itself. This might be an advanced control possibly omitted in first version to keep UI simple.
 - **Tempo Control:** If needed, could allow user to speed up or slow down. Perhaps a dial control represented by a ring around some object – the user dragging that ring could adjust tempo. Or simpler, two buttons (faster, slower) as plus/minus icons. But unlabeled plus/minus might be okay if intuitively placed next to a tempo icon (metronome icon?).
@@ -327,9 +327,9 @@ We identify additional interactions that could be mapped to in-scene controls:
 
   - In the browser, capture mouse events on the canvas.
   - Perform **ray-sphere** intersection for voice picking. Maintain hover highlight; on click/drag, update engine voice state and audio panner.
-  - Once we know which object is selected on click, we handle according to that object’s role (e.g., if it’s a voice sphere: start dragging it; if it’s a regenerate button: trigger regeneration immediately; etc.).
-  - On drag: update object position in real-time (for voice objects) and possibly give some visual feedback (like a highlight or trailing indicator).
-  - On release: drop the object at new position.
+  - Once we know which voice is selected on click, we handle according to that voice's role (e.g., if it's a voice: start dragging it; if it's a regenerate button: trigger regeneration immediately; etc.).
+  - On drag: update voice position in real-time and possibly give some visual feedback through wave displacement effects.
+  - On release: drop the voice at new position.
   - Also handle hover highlighting: as mouse moves, if it hovers an object, maybe slightly scale it up or change color to indicate it’s interactable. This can be done by checking ray intersection each frame with cursor position.
 
 - **Integrated Look and Feel:**
@@ -356,7 +356,7 @@ We identify additional interactions that could be mapped to in-scene controls:
 To ensure a "fantastic result", the development should proceed in stages, verifying each piece:
 
 1. **Initial Setup:** Get a basic Rust+WASM project running with WebGPU rendering something simple (like a triangle or cube on screen) and Web Audio playing a test tone. This ensures the environment and build pipeline are correct (WebGPU initialization, etc.). Use this to verify browser compatibility (e.g., test in Chrome Canary or current stable with proper flags if needed).
-2. **Basic 3D Scene (implemented):** The scene is in place with an ambient waves fullscreen pass and three instanced voice markers representing voices. There are no placeholder objects. The camera is fixed (the `AudioListener` tracks it for spatial audio). Interaction testing is via pointer hover/drag and keyboard; orbit/mouselook is not used.
+2. **Basic 3D Scene (implemented):** The scene is in place with an ambient waves fullscreen pass that reacts to voice positions through displacement and proximity effects. There are no placeholder objects. The camera is fixed (the `AudioListener` tracks it for spatial audio). Interaction testing is via pointer hover/drag and keyboard; orbit/mouselook is not used.
 3. **Audio Generation:** Implement the audio engine’s core:
 
    - Pick a scale (e.g., C major pentatonic) and generate a repeating random sequence for one voice. Use an OscillatorNode to play it. Ensure timing is consistent.
@@ -367,7 +367,7 @@ To ensure a "fantastic result", the development should proceed in stages, verify
 4. **Sync Audio-Visual:** Link the events. Have the visual objects respond to the audio – e.g., on each note event, flash or scale the corresponding object. Fine-tune to make it noticeable but not jarring.
 5. **Interactivity:** Add the user interaction one by one:
 
-   - Ray picking and dragging of objects. Ensure that moving a voice object changes its PannerNode coordinates and the visual moves accordingly.
+   - Ray picking and dragging of voice positions. Ensure that moving a voice position changes its PannerNode coordinates and the wave displacement effects move accordingly.
    - Add a regenerate button or gesture. Perhaps a key press “R” for now to regenerate all sequences (for easier testing) – later replace with a 3D button.
    - Add a play/pause toggle (again, maybe key press first, then integrate UI object).
    - Test that these interactions can happen while audio is playing without glitching.

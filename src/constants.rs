@@ -41,8 +41,6 @@ pub const FX_SAT_WET_BASE: f32 = 0.15;
 pub const FX_SAT_WET_SPAN: f32 = 0.85;
 
 // Visual build parameters
-pub const RING_COUNT: usize = 48;
-pub const ANALYSER_DOTS_MAX: usize = 16;
 
 // Per-voice spatial sends mapping
 pub const DIST_NORM_DIVISOR: f32 = 2.5;
@@ -59,8 +57,6 @@ pub const LEVEL_BASE: f32 = 0.55;
 pub const LEVEL_SPAN: f32 = 0.45;
 
 // Color adjustments
-pub const MUTE_DARKEN: f32 = 0.35;
-pub const HOVER_BRIGHTEN: f32 = 1.4;
 
 // Camera
 // Z distance used by both picking and audio listener alignment.
