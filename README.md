@@ -1,10 +1,14 @@
 # Geno-1: Generative Music Visualizer
 
-![Rust](https://img.shields.io/badge/rust-%23000000.svg?style=for-the-badge&logo=rust&logoColor=white)
+<div align="center">
+
+![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white)
 ![WebAssembly](https://img.shields.io/badge/WebAssembly-654FF0?style=for-the-badge&logo=webassembly&logoColor=white)
 ![WebGPU](https://img.shields.io/badge/WebGPU-005A9C?style=for-the-badge&logo=gpu&logoColor=white)
-<br />
+
 [![CI](https://github.com/rgilks/geno-1/actions/workflows/ci.yml/badge.svg)](https://github.com/rgilks/geno-1/actions/workflows/ci.yml)
+
+</div>
 
 <div align="center">
  <img src="/docs/screenshot.png" alt="geno-1 Screenshot" width="902" />
